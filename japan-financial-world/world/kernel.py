@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 from world.balance_sheet import BalanceSheetProjector
 from world.clock import Clock
+from world.constraints import ConstraintBook, ConstraintEvaluator
 from world.contracts import ContractBook
 from world.event_bus import EventBus
 from world.ledger import Ledger
@@ -30,9 +31,11 @@ class WorldKernel:
     contracts: ContractBook = field(default_factory=ContractBook)
     prices: PriceBook = field(default_factory=PriceBook)
     balance_sheets: BalanceSheetProjector | None = None
+    constraints: ConstraintBook = field(default_factory=ConstraintBook)
+    constraint_evaluator: ConstraintEvaluator | None = None
 
     def __post_init__(self) -> None:
-        for book in (self.ownership, self.contracts, self.prices):
+        for book in (self.ownership, self.contracts, self.prices, self.constraints):
             if book.ledger is None:
                 book.ledger = self.ledger
             if book.clock is None:
@@ -44,6 +47,14 @@ class WorldKernel:
                 contracts=self.contracts,
                 prices=self.prices,
                 registry=self.registry,
+                clock=self.clock,
+                ledger=self.ledger,
+            )
+
+        if self.constraint_evaluator is None:
+            self.constraint_evaluator = ConstraintEvaluator(
+                book=self.constraints,
+                projector=self.balance_sheets,
                 clock=self.clock,
                 ledger=self.ledger,
             )

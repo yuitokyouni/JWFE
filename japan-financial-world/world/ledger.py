@@ -29,6 +29,8 @@ class RecordType(str, Enum):
     OWNERSHIP_POSITION_ADDED = "ownership_position_added"
     OWNERSHIP_TRANSFERRED = "ownership_transferred"
     BALANCE_SHEET_VIEW_CREATED = "balance_sheet_view_created"
+    CONSTRAINT_ADDED = "constraint_added"
+    CONSTRAINT_EVALUATED = "constraint_evaluated"
     STATE_SNAPSHOT_CREATED = "state_snapshot_created"
     WARNING = "warning"
     ERROR = "error"

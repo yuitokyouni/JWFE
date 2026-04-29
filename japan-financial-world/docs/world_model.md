@@ -1468,3 +1468,141 @@ v0.5 is complete when **all** of the following hold:
 7. The projector mutates none of `OwnershipBook`, `ContractBook`, or `PriceBook`.
 8. The kernel exposes `kernel.balance_sheets` with default wiring.
 9. All previous milestones (v0, v0.2, v0.3, v0.4) continue to pass.
+
+---
+
+## 25. Constraint Skeleton (v0.6)
+
+The v0.6 milestone introduces a declarative constraint layer on top of the balance sheet view. Constraints describe what to check; v0.6 evaluators report ok / warning / breached / unknown but never act on the result.
+
+### 25.1 Why a constraint layer
+
+Once balance sheets exist (§24), the world needs a way to assert structural invariants — leverage limits, capital floors, concentration caps, collateral coverage requirements. These invariants are domain-defined but their *evaluation* is purely structural: derive a number from the view, compare it to a threshold.
+
+v0.6 separates the *declaration* of these invariants from their *consequences*. A breach is an observation, not an action. Whether a breach should trigger a margin call, a downgrade, a covenant test, or a liquidation is a business decision belonging to a future milestone.
+
+### 25.2 ConstraintRecord
+
+`ConstraintRecord` fields:
+
+- `constraint_id` — stable unique identifier.
+- `owner_id` — the agent the constraint applies to.
+- `constraint_type` — one of the supported types listed in §25.5 (or any custom string; unsupported types resolve to `status="unknown"`).
+- `threshold` — the boundary used by the comparison.
+- `comparison` — one of `"<="`, `"<"`, `">="`, `">"`, `"=="`.
+- `target_ids` — optional tuple of WorldIDs the constraint is scoped to (e.g., specific assets for a concentration check).
+- `warning_threshold` — optional second boundary that produces `status="warning"` when crossed but not yet at the breach line.
+- `severity` — string label (default `"warning"`).
+- `source` — string identifying the constraint's origin (default `"system"`).
+- `metadata` — optional mapping for non-standard attributes.
+
+ConstraintRecords are immutable.
+
+### 25.3 ConstraintEvaluation
+
+`ConstraintEvaluation` fields:
+
+- `constraint_id`, `owner_id`, `as_of_date`, `threshold`
+- `status` — `"ok"`, `"warning"`, `"breached"`, or `"unknown"`.
+- `current_value` — the derived value, or `None` when status is `"unknown"`.
+- `message` — human-readable summary.
+- `related_ids` — copied from the constraint's `target_ids` for traceability.
+- `metadata` — includes `reason` when status is `"unknown"`.
+
+Status semantics:
+
+- `ok` — the current value satisfies the constraint with margin.
+- `warning` — the threshold is satisfied but `warning_threshold` was crossed (closer to the breach boundary).
+- `breached` — the current value violates the constraint.
+- `unknown` — the current value cannot be derived (missing data, divide-by-zero, or unsupported `constraint_type`). The reason is recorded in `metadata["reason"]` and `message`.
+
+### 25.4 ConstraintBook and ConstraintEvaluator
+
+`ConstraintBook` API:
+
+- `add_constraint(record)` — store; rejects duplicates; emits `constraint_added` to the ledger.
+- `get_constraint(constraint_id)`
+- `list_by_owner(owner_id)` / `list_by_type(constraint_type)`
+- `all_constraints()`
+- `snapshot()` — sorted, JSON-friendly list of all constraints.
+
+`ConstraintEvaluator` API:
+
+- `evaluate_constraint(constraint, balance_sheet_view)` — evaluate one constraint against an already-built view; emits `constraint_evaluated` to the ledger when present.
+- `evaluate_owner(owner_id, *, as_of_date=None)` — build the owner's view once and evaluate all of that owner's constraints.
+- `evaluate_all(*, as_of_date=None)` — discover every owner that has any constraint, evaluate everything.
+- `snapshot(*, as_of_date=None)` — wrapper around `evaluate_all` returning JSON-friendly evaluations.
+
+The evaluator must not mutate `OwnershipBook`, `ContractBook`, `PriceBook`, or `ConstraintBook`. Test [`test_evaluator_does_not_mutate_source_books`](../tests/test_constraints.py) enforces this.
+
+### 25.5 Supported constraint types
+
+Each supported type maps a `BalanceSheetView` to a single derived number. The evaluator then compares this number against the constraint's `threshold` and `warning_threshold`.
+
+| `constraint_type`                   | Derived value                                            | Natural comparison |
+| ----------------------------------- | -------------------------------------------------------- | ------------------ |
+| `max_leverage`                      | `liabilities / asset_value`                              | `<=`               |
+| `min_net_asset_value`               | `net_asset_value`                                        | `>=`               |
+| `min_cash_like_assets`              | `cash_like_assets` (registry-derived)                    | `>=`               |
+| `min_collateral_coverage`           | `collateral_value / debt_principal`                      | `>=`               |
+| `max_single_asset_concentration`    | `max(asset_value across target_ids) / asset_value`       | `<=`               |
+
+Each derivation reports `(None, reason)` when the value cannot be computed. The most common unknown cases are:
+
+- `max_leverage`: `asset_value == 0`.
+- `min_cash_like_assets`: registry not provided or no cash-typed asset registered.
+- `min_collateral_coverage`: `collateral_value` or `debt_principal` unavailable, or `debt_principal == 0`.
+- `max_single_asset_concentration`: `asset_breakdown` empty, or `target_ids` set but none of the named assets are owned.
+
+Unsupported `constraint_type` strings are not errors. They resolve to `status="unknown"` with `metadata["reason"] == "unsupported_constraint_type"`. This lets the codebase carry forward declarative constraints that later milestones will teach the evaluator to interpret.
+
+### 25.6 Comparison and warning logic
+
+The evaluator uses a single helper `_classify(current, threshold, warning_threshold, comparison)`:
+
+1. If `current` violates the constraint relative to `threshold` under `comparison`, return `"breached"`.
+2. Else if `warning_threshold is not None` and `current` violates the constraint relative to `warning_threshold` under the same `comparison`, return `"warning"`.
+3. Otherwise return `"ok"`.
+
+Convention: for `<=` constraints, `warning_threshold < threshold`. For `>=` constraints, `warning_threshold > threshold`. The classifier does not enforce this convention; it simply applies the same comparison to both boundaries.
+
+### 25.7 Ledger event types
+
+- `constraint_added` — emitted by `ConstraintBook.add_constraint` when a ledger is configured.
+- `constraint_evaluated` — emitted by `ConstraintEvaluator.evaluate_constraint` for every evaluation. Higher-level methods (`evaluate_owner`, `evaluate_all`, `snapshot`) compose on `evaluate_constraint`, so they automatically log every evaluation.
+
+### 25.8 Kernel wiring
+
+`WorldKernel` exposes:
+
+- `kernel.constraints: ConstraintBook` — storage.
+- `kernel.constraint_evaluator: ConstraintEvaluator` — runner, wired to `kernel.balance_sheets`.
+
+Both are constructed in `__post_init__` with the kernel's `clock` and `ledger`.
+
+### 25.9 What v0.6 does not do
+
+v0.6 must not introduce:
+
+- automated reactions to breaches (no margin calls, no downgrades, no liquidations, no covenant trips)
+- regulatory threshold catalogs
+- cross-constraint dependency resolution
+- time-windowed or path-dependent constraints (e.g., "leverage above 0.7 for 90 consecutive days")
+- agents that read their own evaluations and act on them
+- price formation, market clearing, or balance-sheet mutation triggered by constraint state
+
+These are deliberate omissions. The evaluator reports state; consequence-engineering belongs to later milestones.
+
+### 25.10 v0.6 success criteria
+
+v0.6 is complete when **all** of the following hold:
+
+1. `ConstraintRecord` and `ConstraintEvaluation` exist with all required fields and are immutable.
+2. `ConstraintBook` provides `add_constraint`, `get_constraint`, `list_by_owner`, `list_by_type`, and `snapshot`.
+3. `ConstraintEvaluator` provides `evaluate_constraint`, `evaluate_owner`, `evaluate_all`, and `snapshot`.
+4. The five supported constraint types in §25.5 produce correct ok / warning / breached classifications under the standard derivations.
+5. Missing values and unsupported types resolve to `status="unknown"` with a reason; nothing crashes.
+6. `constraint_added` and `constraint_evaluated` are recorded to the ledger when configured.
+7. The evaluator does not mutate any source book (ownership, contracts, prices, constraints).
+8. The kernel exposes `kernel.constraints` and `kernel.constraint_evaluator` with default wiring.
+9. All previous milestones (v0, v0.2, v0.3, v0.4, v0.5) continue to pass.
