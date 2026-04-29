@@ -1352,3 +1352,119 @@ v0.4 is complete when **all** of the following hold:
 5. All three books expose deterministic, JSON-friendly snapshots.
 6. The empty world can hold assets, ownership links, contracts, and prices without any economic behavior being implemented.
 7. All previous milestones (v0, v0.2, v0.3) continue to pass.
+
+---
+
+## 24. Balance Sheet View (v0.5)
+
+The v0.5 milestone adds the first cross-book *projection*: a read-only view that combines `OwnershipBook`, `ContractBook`, and `PriceBook` into a per-agent balance sheet. The projection is derived state, not stored state.
+
+### 24.1 Why a projection layer
+
+The network layer (§23) records facts: who owns what, who has a contract with whom, what the latest observed price of an asset is. Those facts are atomic and additive. They do not, on their own, answer the question "what is this agent worth right now?".
+
+A balance sheet view answers that question by combining the three books. It does so without owning any of its own state, without enforcing any economic rule, and without mutating the books it reads from.
+
+The projection is the model's answer to:
+
+> Given the current ownership records, contracts, and observed prices, what does an agent's financial position look like?
+
+It is not the model's opinion. It is a deterministic readout of the books.
+
+### 24.2 BalanceSheetView
+
+`BalanceSheetView` fields:
+
+- `agent_id` — the agent the view describes.
+- `as_of_date` — ISO date the view was computed for.
+- `asset_value` — total of all valued assets (held assets + financial-asset contracts).
+- `liabilities` — total of all priced liabilities.
+- `net_asset_value` — `asset_value - liabilities`.
+- `cash_like_assets` — optional total of cash-typed holdings (only populated when a registry is available).
+- `debt_principal` — optional total face value of borrower-side principals.
+- `collateral_value` — optional total of collateral-asset prices, attached only to the borrower view.
+- `asset_breakdown` — mapping of `asset_id` (or `contract_id` for receivables) to value.
+- `liability_breakdown` — mapping of `contract_id` to face-value liability.
+- `metadata` — optional bag for warnings such as `missing_prices`.
+
+A `BalanceSheetView` is immutable. Mutating the view, or any of its dictionaries, has no effect on the source books.
+
+### 24.3 BalanceSheetProjector
+
+`BalanceSheetProjector` API:
+
+- `build_view(agent_id, *, as_of_date=None)` — recompute the view from current book contents.
+- `build_views(agent_ids, *, as_of_date=None)` — convenience wrapper.
+- `snapshot(*, as_of_date=None)` — discover all known agents from `OwnershipBook` owners and `ContractBook` parties, build views for each, and emit `balance_sheet_view_created` ledger records.
+
+The projector holds references only. It must not mutate `OwnershipBook`, `ContractBook`, or `PriceBook`. Test [`test_build_view_does_not_mutate_source_books`](../tests/test_balance_sheet.py) enforces this.
+
+### 24.4 Borrower / lender identification
+
+A contract opts into balance-sheet treatment by setting role keys in its metadata:
+
+```python
+metadata = {"borrower_id": "agent:firm_x", "lender_id": "agent:bank_a"}
+```
+
+Without these keys, the contract is recorded in `ContractBook` but contributes nothing to any agent's balance sheet view. v0.5 deliberately does not infer roles from `parties` order or from `contract_type`.
+
+When `principal` is set:
+
+- if `agent_id == metadata["borrower_id"]`, the principal is added to liabilities.
+- if `agent_id == metadata["lender_id"]`, the principal is added to financial assets.
+
+When `collateral_asset_ids` is set, the borrower view sums the latest prices of those collateral assets into `collateral_value`. The lender view does not include collateral_value (the lender does not own the collateral).
+
+### 24.5 Cash-like asset detection
+
+`cash_like_assets` is computed only when a `Registry` is provided to the projector. An asset is cash-like when its registered `type` field equals `"cash"`. Without a registry, `cash_like_assets` stays `None`.
+
+This avoids encoding a list of asset-id prefixes or other heuristics inside the projector. Whether something is cash is a registration-time fact, not a projection-time guess.
+
+### 24.6 Missing prices
+
+A position with no observed price does **not** crash `build_view`. The asset is skipped (contributes 0 to `asset_value`) and its id is recorded in `view.metadata["missing_prices"]`. Collateral assets without prices are also recorded there.
+
+This rule is intentional: the projector reports what it can compute and is honest about what it cannot.
+
+### 24.7 v0.5 simplifications
+
+These simplifications are intentional and must be preserved until later milestones explicitly relax them:
+
+- Asset value is `quantity × latest_price`. No model price, no time-weighted average.
+- Loan principal is treated as undiscounted face value. No present value, no amortization, no accrued interest.
+- Collateral value is the sum of latest prices of `collateral_asset_ids`. Collateral quantities are not modeled.
+- Status filtering is not applied. Settled or defaulted contracts are still visible to the projector. Pre-filter contracts upstream if a different rule is required.
+- The projector knows nothing about leverage limits, capital requirements, default thresholds, or solvency rules.
+
+### 24.8 Kernel wiring
+
+`WorldKernel` exposes `kernel.balance_sheets: BalanceSheetProjector`, constructed in `__post_init__` with the kernel's `ownership`, `contracts`, `prices`, `registry`, `clock`, and `ledger`. `as_of_date` defaults to `kernel.clock.current_date` when not explicitly provided.
+
+### 24.9 What v0.5 does not do
+
+v0.5 must not introduce:
+
+- balance-sheet-driven decisions (no agent reads its own NAV to choose actions)
+- solvency or capital-adequacy checks
+- regulatory ratio computation
+- portfolio aggregation across spaces
+- present-value or yield computation
+- automatic balance-sheet consolidation between related entities
+
+These remain explicitly out of scope.
+
+### 24.10 v0.5 success criteria
+
+v0.5 is complete when **all** of the following hold:
+
+1. `BalanceSheetView` exists with all required fields.
+2. `BalanceSheetProjector` provides `build_view`, `build_views`, and `snapshot`.
+3. Asset values are derived from `OwnershipBook` × `PriceBook`.
+4. Borrower-role contracts contribute `principal` to liabilities; lender-role contracts contribute `principal` as financial assets.
+5. Collateral values are summed from latest prices on the borrower view.
+6. Missing prices do not crash; affected ids appear in `metadata["missing_prices"]`.
+7. The projector mutates none of `OwnershipBook`, `ContractBook`, or `PriceBook`.
+8. The kernel exposes `kernel.balance_sheets` with default wiring.
+9. All previous milestones (v0, v0.2, v0.3, v0.4) continue to pass.

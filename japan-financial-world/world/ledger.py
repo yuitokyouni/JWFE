@@ -28,6 +28,7 @@ class RecordType(str, Enum):
     CONTRACT_COVENANT_BREACHED = "contract_covenant_breached"
     OWNERSHIP_POSITION_ADDED = "ownership_position_added"
     OWNERSHIP_TRANSFERRED = "ownership_transferred"
+    BALANCE_SHEET_VIEW_CREATED = "balance_sheet_view_created"
     STATE_SNAPSHOT_CREATED = "state_snapshot_created"
     WARNING = "warning"
     ERROR = "error"

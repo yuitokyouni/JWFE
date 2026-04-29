@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from world.balance_sheet import BalanceSheetProjector
 from world.clock import Clock
 from world.contracts import ContractBook
 from world.event_bus import EventBus
@@ -28,6 +29,7 @@ class WorldKernel:
     ownership: OwnershipBook = field(default_factory=OwnershipBook)
     contracts: ContractBook = field(default_factory=ContractBook)
     prices: PriceBook = field(default_factory=PriceBook)
+    balance_sheets: BalanceSheetProjector | None = None
 
     def __post_init__(self) -> None:
         for book in (self.ownership, self.contracts, self.prices):
@@ -35,6 +37,16 @@ class WorldKernel:
                 book.ledger = self.ledger
             if book.clock is None:
                 book.clock = self.clock
+
+        if self.balance_sheets is None:
+            self.balance_sheets = BalanceSheetProjector(
+                ownership=self.ownership,
+                contracts=self.contracts,
+                prices=self.prices,
+                registry=self.registry,
+                clock=self.clock,
+                ledger=self.ledger,
+            )
 
     def register_object(self, obj: RegisteredObject) -> None:
         self.registry.register(obj)

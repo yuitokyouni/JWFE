@@ -133,6 +133,9 @@ class OwnershipBook:
     def get_position(self, owner_id: str, asset_id: str) -> OwnershipRecord | None:
         return self._positions.get((owner_id, asset_id))
 
+    def all_positions(self) -> tuple[OwnershipRecord, ...]:
+        return tuple(self._positions.values())
+
     def transfer(
         self,
         asset_id: str,
