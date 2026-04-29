@@ -1225,3 +1225,130 @@ v0.3 is complete when **all** of the following hold:
 5. Targeted events reach only their named targets; broadcasts reach every other space.
 6. The ledger records `event_published` and `event_delivered` for every transport event.
 7. Same-tick delivery is impossible — delivery is always at least one tick after publication.
+
+---
+
+## 23. Asset / Contract / Ownership / Price Network (v0.4)
+
+The v0.4 milestone introduces the structural data layer that records who owns what, who owes whom, and what prices are attached to which assets and contracts. It is the substrate that future economic behavior will sit on top of — but in v0.4 itself, it contains no behavior.
+
+### 23.1 Why a network layer
+
+§14 forbids hidden cross-space mutation. §22 introduced the message channel. But messages alone cannot represent ongoing economic *state*: who currently owns asset X, what loan exists between bank A and firm Y, what the latest observed price of an asset is.
+
+The v0.4 layer adds three explicit, queryable books for that purpose:
+
+- `OwnershipBook` — positions of (owner, asset, quantity)
+- `ContractBook` — explicit obligations between parties
+- `PriceBook` — versioned price observations
+
+Each book is a structured store. Each emits ledger records on mutation. None of them decides anything.
+
+### 23.2 OwnershipBook
+
+`OwnershipRecord` fields:
+
+- `owner_id` — WorldID of the owner.
+- `asset_id` — WorldID of the asset.
+- `quantity` — current accumulated quantity (positive number).
+- `acquisition_price` — optional reference price for the most recent acquisition.
+- `metadata` — optional mapping for non-standard attributes.
+
+`OwnershipBook` API:
+
+- `add_position(owner_id, asset_id, quantity, *, acquisition_price=None, metadata=None)` — create or accumulate a position. Subsequent calls aggregate quantity; the latest `acquisition_price` and `metadata` win. v0.4 deliberately does not implement weighted-average lot accounting — that is a domain decision.
+- `get_positions(owner_id)` — all positions held by an owner.
+- `get_owners(asset_id)` — all owners that hold an asset.
+- `transfer(asset_id, from_owner, to_owner, quantity)` — move quantity. Rejects insufficient balance, unknown source, or self-transfer. Removes a position when its quantity drops to zero.
+- `snapshot()` — sorted, JSON-friendly view of all current positions.
+
+### 23.3 ContractBook
+
+`ContractRecord` fields:
+
+- `contract_id` — stable unique identifier.
+- `contract_type` — domain-neutral string tag (e.g., `"loan"`, `"lease"`, `"bond"`).
+- `parties` — tuple of party WorldIDs (at least one required).
+- `principal` — optional principal amount.
+- `rate` — optional rate (interpretation deferred to domain layer).
+- `maturity_date` — optional ISO date.
+- `collateral_asset_ids` — optional tuple of WorldIDs.
+- `status` — string (`"active"`, `"settled"`, `"defaulted"`, etc.). v0.4 does not enumerate valid statuses.
+- `metadata` — optional mapping for non-standard attributes.
+
+`ContractBook` API:
+
+- `add_contract(record)` — store a new contract; rejects duplicates.
+- `get_contract(contract_id)` — lookup by id.
+- `list_by_party(party_id)` — all contracts where this party appears.
+- `list_by_type(contract_type)` — all contracts of a given type.
+- `update_status(contract_id, new_status)` — replace status; preserves all other fields.
+- `snapshot()` — sorted, JSON-friendly view of all contracts.
+
+### 23.4 PriceBook
+
+`PriceRecord` fields:
+
+- `asset_id` — WorldID of the priced object.
+- `price` — observed value.
+- `simulation_date` — ISO date of the observation.
+- `source` — string identifying the observation source (e.g., `"exchange"`, `"appraisal"`, `"model"`).
+- `metadata` — optional mapping for non-standard attributes.
+
+`PriceBook` API:
+
+- `set_price(asset_id, price, simulation_date, source, *, metadata=None)` — append an observation. History is preserved.
+- `get_latest_price(asset_id)` — most recent observation, or `None`.
+- `get_price_history(asset_id)` — chronological tuple of observations.
+- `snapshot()` — latest price per asset plus history-length summary.
+
+`PriceBook` does not decide which source is authoritative when multiple sources exist. It only stores what each source claims.
+
+### 23.5 Ledger event types
+
+v0.4 introduces the following ledger record types:
+
+- `ownership_position_added`
+- `ownership_transferred`
+- `contract_created` (already existed; now emitted by `ContractBook.add_contract`)
+- `contract_status_updated`
+- `price_updated` (already existed; now emitted by `PriceBook.set_price`)
+
+Every mutation through these books writes one ledger record. Reads do not.
+
+### 23.6 Kernel wiring
+
+`WorldKernel` exposes three book attributes:
+
+- `kernel.ownership: OwnershipBook`
+- `kernel.contracts: ContractBook`
+- `kernel.prices: PriceBook`
+
+When the kernel is constructed, it shares its `ledger` and `clock` references with the books so that ledger records carry the correct simulation date automatically. Books constructed independently (e.g., in unit tests) can operate without ledger or clock — they then act as plain in-memory stores.
+
+### 23.7 What v0.4 does not do
+
+v0.4 must not introduce:
+
+- valuation logic (how to derive value from price + quantity)
+- balance-sheet construction
+- credit risk analysis
+- collateral valuation or LTV calculations
+- contract-default detection
+- price formation, market clearing, or model-based valuation
+- portfolio-level aggregation across spaces
+- domain-specific contract types or status transitions
+
+These belong to future agent or scenario code, not to the network layer.
+
+### 23.8 v0.4 success criteria
+
+v0.4 is complete when **all** of the following hold:
+
+1. `OwnershipBook` records positions, transfers, and snapshots without business logic.
+2. `ContractBook` stores contracts, supports lookup by party and by type, and supports status updates.
+3. `PriceBook` stores chronological observations per asset and exposes the latest price.
+4. The ledger records `ownership_position_added`, `ownership_transferred`, `contract_created`, `contract_status_updated`, and `price_updated` on the corresponding mutations.
+5. All three books expose deterministic, JSON-friendly snapshots.
+6. The empty world can hold assets, ownership links, contracts, and prices without any economic behavior being implemented.
+7. All previous milestones (v0, v0.2, v0.3) continue to pass.
