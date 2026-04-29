@@ -386,7 +386,7 @@ They change what agents may observe, believe, or decide.
 A signal should define:
 
 - source
-- timestamp
+- `timestamp`
 - target or topic
 - content
 - credibility
@@ -574,7 +574,7 @@ If this order is not explicit, the simulation becomes impossible to interpret.
 
 ## 12. Ledger Responsibilities
 
-The `Ledger` records state-changing events.
+The `Ledger` records state-changing records.
 
 It is the memory of what changed, when it changed, and why it changed.
 
@@ -594,18 +594,61 @@ Ledgers should support:
 ### 12.1 Ledger is not just accounting
 
 The ledger is broader than financial accounting.  
-It records world-level events that matter for reproducibility and explanation.
+It records world-level records that matter for reproducibility and explanation.
 
-A ledger entry should ideally include:
+Every material ledger record should include these core fields:
 
+- `record_id`
+- `sequence`
 - timestamp
-- event type
-- affected object IDs
-- source
-- cause or reference
-- previous state reference
-- new state reference
-- validation status
+- `simulation_date`
+- `record_type`
+- `source`
+- `target`
+- `object_id`
+- `parent_record_ids`
+- `correlation_id`
+- `payload`
+- `metadata`
+
+`parent_record_ids` is mandatory for explainability. It is the field that turns
+the ledger from "many things happened on the same day" into a causal graph of
+how stress propagated.
+
+Example chain:
+
+```text
+signal_emitted
+  -> perceived_state_updated
+  -> order_submitted
+  -> price_updated
+  -> bank_warning
+  -> contract_covenant_breached
+  -> state_snapshot_created
+```
+
+Each record after the first should reference the prior relevant record in
+`parent_record_ids`. If multiple records jointly caused a transition, all of
+them should be listed.
+
+Optional fields that are useful for future replay, experiments, and graph
+analysis:
+
+- `causation_id`: the single most direct parent record when one exists.
+- `scenario_id`: the experiment or scenario that produced the record.
+- `run_id`: the simulation run.
+- `seed`: random seed used for reproducibility.
+- `space_id`: space that produced the record.
+- `agent_id`: decision maker, if any.
+- `snapshot_id`: state snapshot used as input.
+- `state_hash`: state integrity or diff reference.
+- `schema_version`: record and payload version.
+- `visibility`: public, private, or internal.
+- `confidence`: confidence in a signal or perceived state.
+
+Not every optional field must be populated immediately. If a value is important
+for querying or graph reconstruction, prefer a top-level field. Otherwise place
+it in `metadata`.
 
 ### 12.2 Ledger must support replay and audit
 
@@ -618,6 +661,8 @@ For any state at time `t`, we should eventually be able to ask:
 - who caused it?
 - through which permitted interaction channel?
 - which previous state did it depend on?
+- which parent records caused this record?
+- what downstream records did this record trigger?
 
 v0 does not need complete replay infrastructure, but the model should not block it.
 

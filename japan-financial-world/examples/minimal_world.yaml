@@ -1,0 +1,20 @@
+agents:
+  - id: agent:dummy_firm
+    type: firm
+    space: corporate
+    attributes:
+      name: Dummy Firm
+
+assets:
+  - id: asset:dummy_asset
+    type: generic_asset
+    space: market
+    attributes:
+      name: Dummy Asset
+
+markets:
+  - id: market:dummy_market
+    type: generic_market
+    space: market
+    attributes:
+      currency: JPY
