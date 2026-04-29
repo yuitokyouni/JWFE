@@ -1,0 +1,60 @@
+schema: bank
+version: 0.1
+description: Bank or bank aggregate that extends credit and faces constraints.
+
+required:
+  - id
+  - type
+  - tier
+
+fields:
+  id:
+    type: string
+  type:
+    type: string
+    examples: [mega_bank, regional_bank_group, credit_market_aggregate]
+  tier:
+    type: integer
+    allowed: [1, 2, 3]
+  capital_ratio:
+    type: number
+    unit: ratio
+    frequency: quarterly
+  loan_book:
+    type: map
+    key: contract_id
+    value: exposure
+    network: debt_contract_network
+  real_estate_exposure:
+    type: number
+    unit: jpy
+  risk_appetite:
+    type: number
+    unit: score
+    range: [0, 1]
+  funding_cost:
+    type: number
+    unit: annual_rate
+    frequency: monthly
+  collateral_policy:
+    type: string
+    examples: [conservative, neutral, aggressive]
+  lending_standards:
+    type: number
+    unit: score
+    range: [0, 1]
+    description: Higher means tighter credit standards.
+
+observes:
+  - borrower_disclosure
+  - collateral_market_price
+  - credit_rating
+  - funding_cost
+  - capital_constraint
+
+decisions:
+  - approve_loan
+  - roll_loan
+  - tighten_terms
+  - demand_collateral
+  - reduce_sector_exposure

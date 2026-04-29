@@ -1,0 +1,90 @@
+schema: firm
+version: 0.1
+description: Stateful corporate subject used by the corporate space.
+
+required:
+  - id
+  - name
+  - sector
+  - tier
+
+fields:
+  id:
+    type: string
+    description: Stable internal identifier.
+  name:
+    type: string
+    description: Display name. May be synthetic in v0.
+  sector:
+    type: string
+    description: Industry or sector bucket.
+  tier:
+    type: integer
+    allowed: [1, 2, 3]
+    description: 1 core firm, 2 sector representative, 3 background firm.
+  revenue:
+    type: number
+    unit: jpy
+    frequency: quarterly
+  operating_margin:
+    type: number
+    unit: ratio
+    frequency: quarterly
+  cash:
+    type: number
+    unit: jpy
+    frequency: daily
+  debt:
+    type: number
+    unit: jpy
+    frequency: monthly
+  equity_market_cap:
+    type: number
+    unit: jpy
+    source: market_price_network
+    frequency: daily
+  real_estate_assets:
+    type: number
+    unit: jpy
+    source: asset_ownership_network
+    frequency: monthly
+  overseas_revenue_ratio:
+    type: number
+    unit: ratio
+  oil_sensitivity:
+    type: number
+    description: Earnings sensitivity to oil price moves.
+  fx_sensitivity:
+    type: number
+    description: Earnings sensitivity to JPY moves.
+  rate_sensitivity:
+    type: number
+    description: Cash flow or valuation sensitivity to interest rates.
+  domestic_demand_sensitivity:
+    type: number
+  credit_dependency:
+    type: number
+    unit: ratio
+    description: Reliance on rolling external credit.
+  pricing_power:
+    type: number
+    unit: score
+    range: [0, 1]
+  liquidity_buffer:
+    type: number
+    unit: months
+  disclosure_quality:
+    type: number
+    unit: score
+    range: [0, 1]
+
+relationships:
+  assets:
+    schema: asset
+    network: asset_ownership_network
+  contracts:
+    schema: contract
+    network: debt_contract_network
+  disclosures:
+    schema: information_signal
+    network: information_network

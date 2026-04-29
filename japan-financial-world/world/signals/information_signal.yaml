@@ -1,0 +1,55 @@
+schema: information_signal
+version: 0.1
+description: Observable signal produced from state changes, disclosures, prices, or narratives.
+
+required:
+  - id
+  - source
+  - signal_type
+  - timestamp
+  - subject_ids
+
+fields:
+  id:
+    type: string
+  source:
+    type: string
+    examples: [firm_disclosure, media, analyst, rating_agency, market_price, rumor, policy]
+  signal_type:
+    type: string
+    examples: [earnings, guidance, downgrade, liquidity, scandal, macro, price_move]
+  timestamp:
+    type: datetime
+  subject_ids:
+    type: list
+    items: string
+  observed_value:
+    type: map
+    description: Signal payload as observed by agents.
+  true_state_ref:
+    type: string
+    nullable: true
+    description: Optional internal reference. Agents should not read this directly.
+  lag_days:
+    type: integer
+  noise:
+    type: number
+    unit: score
+    range: [0, 1]
+  credibility:
+    type: number
+    unit: score
+    range: [0, 1]
+  interpretation_bias:
+    type: number
+    unit: score
+    range: [-1, 1]
+  visibility:
+    type: string
+    allowed: [public, restricted, private, leaked]
+
+consumed_by:
+  - investor
+  - bank
+  - firm
+  - real_estate_agent

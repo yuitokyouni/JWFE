@@ -1,0 +1,45 @@
+schema: property_market
+version: 0.1
+description: Regional property market bucket.
+
+required:
+  - region
+  - asset_type
+
+fields:
+  region:
+    type: string
+    examples: [tokyo_cbd, osaka, nagoya, regional_city, logistics_corridor]
+  asset_type:
+    type: string
+    examples: [office, residential, retail, logistics, hotel, land]
+  cap_rate:
+    type: number
+    unit: annual_rate
+    frequency: monthly
+  rent_level:
+    type: number
+    unit: jpy_per_area
+    frequency: monthly
+  vacancy_rate:
+    type: number
+    unit: ratio
+    frequency: monthly
+  transaction_liquidity:
+    type: number
+    unit: score
+    range: [0, 1]
+  buyer_depth:
+    type: number
+    unit: score
+    range: [0, 1]
+  bank_lending_appetite:
+    type: number
+    unit: score
+    range: [0, 1]
+
+connects_to:
+  - firm.real_estate_assets
+  - bank.collateral_policy
+  - market.reit
+  - information_signal.property_news

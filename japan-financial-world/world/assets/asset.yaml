@@ -1,0 +1,56 @@
+schema: asset
+version: 0.1
+description: Ownable economic object with value and exposure.
+
+required:
+  - id
+  - asset_type
+  - issuer_or_owner_ref
+
+fields:
+  id:
+    type: string
+  asset_type:
+    type: string
+    examples: [cash, equity, corporate_bond, bank_loan_asset, real_estate, reit_unit, commodity_exposure, fx_exposure, derivative]
+  issuer_or_owner_ref:
+    type: string
+  currency:
+    type: string
+    default: JPY
+  book_value:
+    type: number
+    unit: jpy
+  market_value:
+    type: number
+    unit: jpy
+    nullable: true
+    network: market_price_network
+  liquidity:
+    type: number
+    unit: score
+    range: [0, 1]
+  income_yield:
+    type: number
+    unit: annual_rate
+    nullable: true
+  duration:
+    type: number
+    unit: years
+    nullable: true
+  risk_bucket:
+    type: string
+    examples: [cash, equity_risk, credit_risk, real_asset, macro_exposure]
+  underlying_ref:
+    type: string
+    nullable: true
+
+ownership:
+  network: asset_ownership_network
+  holder_id:
+    type: string
+  quantity:
+    type: number
+  acquisition_cost:
+    type: number
+    unit: jpy

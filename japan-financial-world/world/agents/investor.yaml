@@ -1,0 +1,69 @@
+schema: investor
+version: 0.1
+description: Investor type or individual investor subject.
+
+required:
+  - id
+  - type
+  - tier
+  - aum
+
+fields:
+  id:
+    type: string
+  type:
+    type: string
+    examples: [gpif_like, passive, retail, insurer, hedge_fund, activist, noise]
+  tier:
+    type: integer
+    allowed: [1, 2, 3]
+  aum:
+    type: number
+    unit: jpy
+  risk_tolerance:
+    type: number
+    unit: score
+    range: [0, 1]
+  investment_horizon:
+    type: string
+    allowed: [daily, monthly, quarterly, yearly, multi_year]
+  information_speed:
+    type: number
+    unit: score
+    range: [0, 1]
+  leverage:
+    type: number
+    unit: ratio
+  mandate:
+    type: string
+    examples: [long_only, passive_index, absolute_return, credit, real_assets]
+  portfolio:
+    type: map
+    key: asset_id
+    value: position
+    network: asset_ownership_network
+  reaction_to_news:
+    type: number
+    unit: score
+    range: [-1, 1]
+  reaction_to_price:
+    type: number
+    unit: score
+    range: [-1, 1]
+  reaction_to_valuation:
+    type: number
+    unit: score
+    range: [-1, 1]
+
+observes:
+  - information_signal
+  - market_price
+  - liquidity
+  - constraints
+
+decisions:
+  - rebalance
+  - buy
+  - sell
+  - hold_cash
+  - reduce_leverage

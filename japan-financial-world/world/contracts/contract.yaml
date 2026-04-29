@@ -1,0 +1,56 @@
+schema: contract
+version: 0.1
+description: Relationship creating future obligations between subjects.
+
+required:
+  - id
+  - contract_type
+  - parties
+  - notional
+
+fields:
+  id:
+    type: string
+  contract_type:
+    type: string
+    examples: [bank_loan, corporate_bond, lease, rental, collateral, derivative]
+  parties:
+    type: list
+    items:
+      subject_id: string
+      role: string
+  notional:
+    type: number
+    unit: jpy
+  currency:
+    type: string
+    default: JPY
+  interest_rate:
+    type: number
+    unit: annual_rate
+    nullable: true
+  spread:
+    type: number
+    unit: basis_points
+    nullable: true
+  maturity_date:
+    type: date
+    nullable: true
+  collateral_asset_ids:
+    type: list
+    items: string
+  covenant:
+    type: map
+    nullable: true
+  seniority:
+    type: string
+    examples: [secured, senior_unsecured, subordinated]
+  mark_to_market:
+    type: number
+    unit: jpy
+    nullable: true
+  status:
+    type: string
+    allowed: [active, rolled, breached, defaulted, matured, terminated]
+
+network: debt_contract_network
