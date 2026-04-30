@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date
 from typing import Any
 
 from spaces.banking.state import (
@@ -9,28 +8,21 @@ from spaces.banking.state import (
     DuplicateBankStateError,
     LendingExposure,
 )
-from spaces.base import BaseSpace
-from world.balance_sheet import BalanceSheetProjector, BalanceSheetView
-from world.clock import Clock
-from world.constraints import ConstraintEvaluation, ConstraintEvaluator
+from spaces.domain import DomainSpace
 from world.contracts import ContractBook, ContractRecord
-from world.ledger import Ledger
-from world.registry import Registry
 from world.scheduler import Frequency
-from world.signals import InformationSignal, SignalBook
 
 
 @dataclass
-class BankSpace(BaseSpace):
+class BankSpace(DomainSpace):
     """
     Banking Space — minimum internal state for banks.
 
     v0.9 scope:
         - hold a mapping of bank_id -> BankState (identity-level only)
-        - read kernel-level projections (contracts, balance sheets,
-          constraints, signals) without mutating any source book
+        - read kernel-level projections via DomainSpace accessors
         - expose lending exposures derived from ContractBook by
-          filtering on metadata["lender_id"] == bank_id
+          filtering on ``metadata["lender_id"] == bank_id``
         - log bank_state_added when a bank enters the space
 
     v0.9 explicitly does NOT implement:
@@ -38,15 +30,11 @@ class BankSpace(BaseSpace):
         - credit tightening, spread updates, or rate adjustments
         - default detection or non-performing classification
         - collateral haircut or LTV breach reactions
-        - any mutation of OwnershipBook / ContractBook / PriceBook /
-          ConstraintBook / SignalBook
-        - any mutation of other spaces (CorporateSpace, InvestorSpace,
-          ExchangeSpace, RealEstateSpace, etc.)
+        - any mutation of source books or other spaces
 
-    Pattern note: BankSpace mirrors CorporateSpace from §27. The same
-    bind() contract applies. The only structural difference is that
-    BankSpace also captures `kernel.contracts` so it can derive
-    LendingExposure views.
+    Beyond the common refs supplied by :class:`DomainSpace`, BankSpace
+    captures :attr:`contracts` so it can derive
+    :class:`LendingExposure` views.
     """
 
     space_id: str = "banking"
@@ -54,44 +42,18 @@ class BankSpace(BaseSpace):
         Frequency.DAILY,
         Frequency.QUARTERLY,
     )
-    registry: Registry | None = None
     contracts: ContractBook | None = None
-    balance_sheets: BalanceSheetProjector | None = None
-    constraint_evaluator: ConstraintEvaluator | None = None
-    signals: SignalBook | None = None
-    ledger: Ledger | None = None
-    clock: Clock | None = None
     _banks: dict[str, BankState] = field(default_factory=dict)
 
     # ------------------------------------------------------------------
-    # Lifecycle hook
+    # Lifecycle hook — extends DomainSpace.bind() with bank-specific refs
     # ------------------------------------------------------------------
 
     def bind(self, kernel: Any) -> None:
-        """
-        Capture kernel references the space needs to read projections.
-
-        Contract (see BaseSpace.bind for the full statement):
-            - Idempotent: every assignment is gated on ``is None``, so a
-              second call leaves the space in the same state as the first.
-            - Fill-only: explicit refs supplied via the constructor are
-              never overwritten.
-            - Hot-swap / reload is out of scope.
-        """
-        if self.registry is None:
-            self.registry = kernel.registry
+        """Extend DomainSpace.bind() to also capture ``contracts``."""
+        super().bind(kernel)
         if self.contracts is None:
             self.contracts = kernel.contracts
-        if self.balance_sheets is None:
-            self.balance_sheets = kernel.balance_sheets
-        if self.constraint_evaluator is None:
-            self.constraint_evaluator = kernel.constraint_evaluator
-        if self.signals is None:
-            self.signals = kernel.signals
-        if self.ledger is None:
-            self.ledger = kernel.ledger
-        if self.clock is None:
-            self.clock = kernel.clock
 
     # ------------------------------------------------------------------
     # Bank state CRUD
@@ -135,59 +97,6 @@ class BankSpace(BaseSpace):
         :meth:`snapshot` for a deterministic id-keyed ordering.
         """
         return tuple(self._banks.values())
-
-    # ------------------------------------------------------------------
-    # Read-only world projections
-    # ------------------------------------------------------------------
-
-    def get_balance_sheet_view(
-        self,
-        bank_id: str,
-        *,
-        as_of_date: date | str | None = None,
-    ) -> BalanceSheetView | None:
-        if self.balance_sheets is None:
-            return None
-        try:
-            return self.balance_sheets.build_view(bank_id, as_of_date=as_of_date)
-        except ValueError:
-            return None
-
-    def get_constraint_evaluations(
-        self,
-        bank_id: str,
-        *,
-        as_of_date: date | str | None = None,
-    ) -> tuple[ConstraintEvaluation, ...]:
-        if self.constraint_evaluator is None:
-            return ()
-        try:
-            return self.constraint_evaluator.evaluate_owner(
-                bank_id, as_of_date=as_of_date
-            )
-        except ValueError:
-            return ()
-
-    def get_visible_signals(
-        self,
-        observer_id: str,
-        *,
-        as_of_date: date | str | None = None,
-    ) -> tuple[InformationSignal, ...]:
-        """
-        Return signals visible to ``observer_id``.
-
-        In BankSpace the natural caller is querying "what does
-        bank X see?", so ``observer_id`` is typically a bank id (e.g.,
-        ``"bank:mufg"``). The argument is named generically because the
-        underlying check is :meth:`SignalBook.list_visible_to`, which
-        is observer-agnostic — any agent or space id is valid.
-
-        Returns an empty tuple if no SignalBook is bound.
-        """
-        if self.signals is None:
-            return ()
-        return self.signals.list_visible_to(observer_id, as_of_date=as_of_date)
 
     # ------------------------------------------------------------------
     # Contract-derived views

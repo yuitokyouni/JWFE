@@ -2089,3 +2089,113 @@ v0.10 is complete when **all** of the following hold:
 8. `InvestorSpace.bind` follows the four-property contract from §27.4.
 9. v0.2 scheduler integration still works: a populated `InvestorSpace` runs for one year and is invoked at its declared frequencies (DAILY × 365, MONTHLY × 12).
 10. All previous milestones (v0 through v0.9) continue to pass.
+
+---
+
+## 30. DomainSpace Extraction (v0.10.1)
+
+After v0.10 introduced the third concrete domain space, the read-only-accessor and `bind()` boilerplate had been written three times in nearly identical form. v0.10.1 is a pure refactor that extracts the duplicated parts into a `DomainSpace` base class without changing any observable behavior.
+
+### 30.1 Review result
+
+The duplication was real and mechanical:
+
+| Concern                              | Before                                     | After                                |
+| ------------------------------------ | ------------------------------------------ | ------------------------------------ |
+| Common ref fields                    | declared in 3 dataclasses                  | declared once on `DomainSpace`       |
+| `bind()` for common refs             | 3 near-identical implementations           | one canonical implementation         |
+| `get_balance_sheet_view` accessor    | 3 copies (different param names)           | one accessor on `DomainSpace`        |
+| `get_constraint_evaluations` accessor | 3 copies                                   | one accessor on `DomainSpace`        |
+| `get_visible_signals` accessor       | 3 copies                                   | one accessor on `DomainSpace`        |
+
+Net effect:
+
+- `spaces/corporate/space.py`: 203 → 110 lines (−93)
+- `spaces/banking/space.py`: 271 → 180 lines (−91)
+- `spaces/investors/space.py`: 305 → 210 lines (−95)
+- `spaces/domain.py`: new, 167 lines
+- Total: 779 → 667 lines (−112, −14%)
+
+All 266 tests pass after the refactor (10 new contract tests for DomainSpace itself, 256 inherited from previous milestones).
+
+### 30.2 What DomainSpace owns
+
+```python
+@dataclass
+class DomainSpace(BaseSpace):
+    registry: Registry | None = None
+    balance_sheets: BalanceSheetProjector | None = None
+    constraint_evaluator: ConstraintEvaluator | None = None
+    signals: SignalBook | None = None
+    ledger: Ledger | None = None
+    clock: Clock | None = None
+
+    def bind(self, kernel) -> None: ...
+    def get_balance_sheet_view(self, agent_id, *, as_of_date=None): ...
+    def get_constraint_evaluations(self, agent_id, *, as_of_date=None): ...
+    def get_visible_signals(self, observer_id, *, as_of_date=None): ...
+```
+
+The accessors take a generic `agent_id` (or `observer_id`) parameter. Per-domain documentation explains that the natural caller passes their own domain id (firm_id / bank_id / investor_id), but the underlying projectors are agent-agnostic, so a unified parameter name is honest.
+
+### 30.3 What DomainSpace deliberately does NOT own
+
+The extraction was kept narrow on purpose. The following stayed in concrete spaces:
+
+- **Domain-specific state records**: `FirmState`, `BankState`, `InvestorState`, and their `Duplicate*StateError` exception classes. Each captures a different vocabulary (sector / bank_type / investor_type) and merging would either lose that or force a generic field name that reads worse at every call site.
+- **Domain-specific CRUD**: `add_firm_state` / `add_bank_state` / `add_investor_state`, etc. Naming these `add_state` would erase the type-level distinction.
+- **`list_*` and `snapshot()` semantics**: each space's snapshot has a different shape (`firms` / `banks` / `investors`) and naming is informative.
+- **Domain-specific projections**: `LendingExposure` (BankSpace) and `PortfolioExposure` (InvestorSpace) live alongside their owning spaces. CorporateSpace has none.
+- **Additional kernel refs that only some spaces need**: `contracts` for BankSpace; `ownership` and `prices` for InvestorSpace. Subclasses extend `bind()` by calling `super().bind(kernel)` first and then capturing their own refs.
+
+### 30.4 The bind() extension pattern
+
+Subclass `bind()` overrides are now reduced to two patterns:
+
+**No additional refs (CorporateSpace):**
+
+```python
+# CorporateSpace inherits DomainSpace.bind() unchanged.
+# No bind() override needed.
+```
+
+**Additional refs (BankSpace, InvestorSpace):**
+
+```python
+def bind(self, kernel):
+    super().bind(kernel)
+    if self.contracts is None:
+        self.contracts = kernel.contracts
+```
+
+The four-property contract from §27.4 (idempotent / fill-only / explicit refs win / no hot-swap) is now enforced once on `DomainSpace.bind` and inherited by every subclass.
+
+### 30.5 Why the extraction was safe
+
+Three conditions held, and all three were verified:
+
+1. **No keyword-arg callers of the renamed parameters**: a grep over the test suite confirmed no test called `get_balance_sheet_view(firm_id=...)` or similar. All call sites are positional.
+2. **No introspection on subclass-declared fields**: the existing tests assert on attribute *values* (e.g., `space.balance_sheets is kernel.balance_sheets`), not on which class declared the field. Inheritance is transparent here.
+3. **Behavior preserved**: `pytest -q` reports the same 256-pass result before and after the refactor (now 266 with the 10 new DomainSpace contract tests).
+
+### 30.6 Why we did not abstract more
+
+The temptation when a third repetition appears is to factor everything that *can* be factored. We deliberately resisted in two places:
+
+- **State CRUD**: collapsing `add_firm_state` / `add_bank_state` / `add_investor_state` into a single `add_state` method on a generic Mapping[id, State] would compile, but every call site would lose the per-domain naming that makes test code self-explanatory. The cost (call-site clarity) outweighed the benefit (~30 lines saved).
+- **Snapshot shape**: each space's snapshot returns `{firms: [...]}`, `{banks: [...]}`, or `{investors: [...]}`. Renaming the inner key to a generic `entries` or `items` would force every consumer to know which space they're reading. This is a serialization contract, and serialization contracts deserve specific names.
+
+Both decisions are reversible. If consumer code grows large enough that the per-domain naming becomes friction, the call-site cost is what to measure first.
+
+### 30.7 v0.10.1 success criteria
+
+v0.10.1 is complete when **all** of the following hold:
+
+1. `DomainSpace` exists, inherits `BaseSpace`, owns the six common ref fields, and implements `bind()` plus the three read-only accessors.
+2. CorporateSpace, BankSpace, and InvestorSpace inherit from `DomainSpace` instead of `BaseSpace`.
+3. CorporateSpace has no `bind()` override (inherits `DomainSpace.bind` directly).
+4. BankSpace and InvestorSpace `bind()` overrides call `super().bind(kernel)` and capture only their additional refs.
+5. The three duplicated kernel-projection accessor methods have been removed from each subclass.
+6. State CRUD, projections, and snapshot semantics remain in their respective concrete spaces.
+7. Test count grows by exactly the number of new DomainSpace contract tests; all previously passing tests continue to pass without modification.
+8. No call site is broken: no positional or keyword-arg callers needed to be rewritten.
