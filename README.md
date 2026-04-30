@@ -24,6 +24,12 @@ Only v0 is implemented today. Despite the project name, no Japan-specific
 calibration is built into v0 — the kernel is fully neutral and could be
 calibrated to any jurisdiction. Japan-specific work begins in v2.
 
+**v0 is frozen.** v1 design has begun; implementation has not. The v1 design
+gate is documented in
+[`docs/v1_reference_system_design.md`](japan-financial-world/docs/v1_reference_system_design.md)
+along with three companion documents covering invariants, the module plan,
+and the behavior-introduction policy.
+
 ## What v0 is
 
 - A `WorldKernel` containing Registry, Scheduler, Clock, Ledger, State, EventBus
@@ -59,12 +65,24 @@ calibration).
 
 Start here, in order:
 
+**v0 (frozen):**
+
 - [docs/v0_release_summary.md](japan-financial-world/docs/v0_release_summary.md) — what v0 delivered, what it verifies, what is out of scope
 - [docs/architecture_v0.md](japan-financial-world/docs/architecture_v0.md) — module stack and a simple text diagram of how v0 actually fits together
 - [docs/v0_scope.md](japan-financial-world/docs/v0_scope.md) — the explicit in/out scope boundary for v0
-- [docs/v1_roadmap.md](japan-financial-world/docs/v1_roadmap.md) — what v1 will add (reference behavior, valuation, intraday, etc.)
 - [docs/test_inventory.md](japan-financial-world/docs/test_inventory.md) — the 444 tests grouped by component
-- [docs/world_model.md](japan-financial-world/docs/world_model.md) — the long-form constitutional design document; every milestone has a section
+
+**v1 design gate (no implementation yet):**
+
+- [docs/v1_reference_system_design.md](japan-financial-world/docs/v1_reference_system_design.md) — v1 design statement, position vs v0/v2/v3
+- [docs/v1_design_principles.md](japan-financial-world/docs/v1_design_principles.md) — invariants every v1 module must preserve
+- [docs/v1_module_plan.md](japan-financial-world/docs/v1_module_plan.md) — v1.1 → v1.6 module sequence with per-module scope boundaries
+- [docs/v1_behavior_boundary.md](japan-financial-world/docs/v1_behavior_boundary.md) — policy for how v1 introduces behavior
+- [docs/v1_roadmap.md](japan-financial-world/docs/v1_roadmap.md) — earlier high-level overview of v1 themes (kept for reference)
+
+**Long-form design:**
+
+- [docs/world_model.md](japan-financial-world/docs/world_model.md) — the constitutional design document; every milestone has a section
 
 The original ambition documents are kept for reference and represent the long-
 term goal rather than the current v0 implementation:
