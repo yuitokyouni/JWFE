@@ -3060,3 +3060,94 @@ construct exactly that scenario by assigning a past value to `clock.current_date
 The v1.2.1 success condition is:
 
 12. The two execution paths remain backward-compatible but cannot be silently mixed on the same simulation date. Mixing raises `RuntimeError` with a message that names both modes and the date, and the guard resets naturally when the clock moves to the next date.
+
+---
+
+## 38. Institutional Decomposition and Action Contract (v1.3)
+
+The v1.3 milestone adds **institutions, mandates, instrument profiles, and recorded institutional actions** as kernel-level objects, plus the **4-property action contract** that every future v1 behavior module must follow when it produces an action record. v1.3 introduces the *recording schema* for institutional behavior — but explicitly not the behavior itself.
+
+For the full design rationale (institutions vs PolicySpace, why behavior is deferred, why Japan-specific institutions belong to v2/v3, examples of future use), see [`v1_institutional_decomposition_design.md`](v1_institutional_decomposition_design.md).
+
+### 38.1 Why a kernel-level institution layer
+
+PolicySpace (§34.2) classifies which policy authorities and which instruments exist as *domain-space facts*. v1.3's `InstitutionBook` operates one layer up: it represents institutions as **kernel-level actors with mandates and a recorded action history**, not as classifications living inside one space. The two layers coexist; v1.3 does not replace PolicySpace.
+
+The institution layer is needed because action recording must be reusable across spaces. A reference policy reaction in PolicySpace, a reference supervisory review in a regulator (which has no v0 space yet), a reference exchange announcement in ExchangeSpace — all want to record actions with the same shape: explicit inputs, explicit outputs, ledger trail, no cross-space mutation. Promoting the recording schema to a kernel-level book lets a single contract serve all of them.
+
+### 38.2 The four record types
+
+v1.3 ships four immutable dataclasses in `world/institutions.py`:
+
+- **`InstitutionProfile`** — `institution_id`, `institution_type`, `jurisdiction_label`, `mandate_summary`, `authority_scope`, `status`, `metadata`. The `jurisdiction_label` is a free-form string; v1.3 does not validate it. Tests verify the field accepts any label, including the empty string, so v1 stays jurisdiction-neutral and v2 can populate real labels later.
+- **`MandateRecord`** — `mandate_id`, `institution_id`, `mandate_type`, `description`, `priority`, `status`, `metadata`. An institution may carry multiple mandates that interact (price stability, financial stability, etc.); each is its own record.
+- **`PolicyInstrumentProfile`** — `instrument_id`, `institution_id`, `instrument_type`, `target_domain`, `status`, `metadata`. Distinct from v0.14's `PolicyInstrumentState`, which is a domain-space classification; the two layers can coexist on the same instrument id.
+- **`InstitutionalActionRecord`** — `action_id`, `institution_id`, `action_type`, `as_of_date`, optional `phase_id`, `input_refs`, `output_refs`, `target_ids`, `instrument_ids`, `payload`, `parent_record_ids`, `metadata`.
+
+All four are frozen dataclasses with `to_dict()` for serialization. Validation rejects empty required fields.
+
+### 38.3 InstitutionBook API
+
+- Institution profiles: `add_institution_profile`, `get_institution_profile`, `list_by_type`, `all_institutions`.
+- Mandates: `add_mandate`, `list_mandates_by_institution`.
+- Instrument profiles: `add_instrument_profile`, `list_instruments_by_institution`.
+- Action records: `add_action_record`, `get_action_record`, `list_actions_by_institution`, `all_actions`.
+- `snapshot()` returns a sorted, JSON-friendly view of all four entity types.
+
+Duplicate ids in any bucket are rejected with the appropriate `Duplicate*Error`. `get_*` methods raise `Unknown*Error` when the id is not found, matching the kernel-book convention from v0.4 (`ContractBook`) and v1.1 (`ValuationBook`).
+
+### 38.4 The 4-property action contract
+
+This is the load-bearing contract for v1.3 and beyond. Every `InstitutionalActionRecord` must satisfy:
+
+1. **Explicit inputs.** `input_refs` lists the WorldIDs / record IDs the action consumed (prices, valuations, signals, ownership entries, etc.). Empty tuple is allowed; `None` is not.
+2. **Explicit outputs.** `output_refs` lists what the action produced. Empty tuple is allowed.
+3. **Ledger record.** `add_action_record` emits an `institution_action_recorded` ledger record. The action's `parent_record_ids` are preserved verbatim onto the ledger record so the audit trail forms a causal graph (per v1 design principle 6).
+4. **No direct cross-space mutation.** The action record's storage and ledger emission are the only side effects. If a real action *should* produce a price observation, a contract update, or a signal, the consuming behavior module must mutate the relevant book through its own API and then record the action with `output_refs` pointing to the resulting records — the action record itself never drives the mutation.
+
+The contract is the schema every v1.3+ behavioral module follows when it produces an action. Test `test_action_record_does_not_mutate_other_books` enforces property 4 by snapshotting every kernel-level book before and after recording an action and verifying byte-equality.
+
+### 38.5 Recorded actions vs decided actions
+
+v1.3 distinguishes:
+
+- A **decided action** is the output of a reaction function or decision rule. v1.3 implements **none**.
+- A **recorded action** is a fact stored after the decision (or after a routine non-decision event). v1.3 ships only the recording mechanism.
+
+A future v1.3+ module that introduces a reference policy reaction function, for example, will read mandates from `InstitutionBook`, reference instruments from there, and call `add_action_record(...)` with `parent_record_ids` linking to the inputs that triggered the action. v1.3 itself only ensures the recording shape works.
+
+### 38.6 Ledger event types
+
+- `institution_profile_added`
+- `institution_mandate_added`
+- `institution_instrument_added`
+- `institution_action_recorded` — preserves `parent_record_ids` from the source action record onto the ledger record.
+
+All four use `space_id="institutions"`.
+
+### 38.7 Kernel wiring
+
+`WorldKernel` exposes `kernel.institutions: InstitutionBook`. The book's `ledger` and `clock` are propagated in `__post_init__`, alongside the existing books (`ownership`, `contracts`, `prices`, `constraints`, `signals`, `valuations`).
+
+### 38.8 What v1.3 does not do
+
+- No central bank reaction function, policy rate setting, liquidity operation, or regulatory impact.
+- No decision logic that creates `InstitutionalActionRecord`s from world state. Future v1.3+ modules will create records as outputs of their own decision rules; v1.3 itself never creates an action automatically.
+- No country-specific institutions or jurisdiction-calibrated behavior. `jurisdiction_label` is a free-form string with no validation.
+- No automatic signal emission, EventBus delivery, contract creation, price update, or any other cross-space side effect from action records.
+- No external shock generation, scenarios, or Japan calibration.
+
+### 38.9 v1.3 success criteria
+
+v1.3 is complete when **all** of the following hold:
+
+1. The four immutable dataclasses exist with all documented fields and reject empty required fields.
+2. `InstitutionBook` provides the full CRUD surface (`add_institution_profile`, `get_institution_profile`, `list_by_type`, `add_mandate`, `list_mandates_by_institution`, `add_instrument_profile`, `list_instruments_by_institution`, `add_action_record`, `get_action_record`, `list_actions_by_institution`) plus `snapshot()`.
+3. Duplicate ids in each bucket are rejected with the appropriate dedicated error.
+4. `InstitutionalActionRecord` enforces the 4-property action contract: inputs / outputs / ledger / no cross-space mutation.
+5. `institution_action_recorded` ledger records preserve `parent_record_ids` from the source action record.
+6. The four ledger record types are emitted on the corresponding `add_*` calls when a ledger is configured.
+7. `kernel.institutions` is exposed with default wiring (clock and ledger propagated in `__post_init__`).
+8. Adding an action record does not mutate any other source-of-truth book.
+9. `jurisdiction_label` accepts any free-form string without validation.
+10. All previous milestones (v0 through v1.2.1) continue to pass.

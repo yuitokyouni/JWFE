@@ -148,8 +148,35 @@ state change and comparison, reads are non-mutating). Those are
 
 The reason for this carve-out is to keep v1.1 from being delayed by
 behavior discussions that don't apply. Picking which valuation method
-drives a bank's credit decision is a v1.3 question. v1.1 only ships
-the valuations that v1.3 will later choose between.
+drives a bank's credit decision is a later-v1 question. v1.1 only
+ships the valuations that later modules will choose between.
+
+## v1.3 ships the action contract; behavior comes later
+
+v1.3 (Institutional Decomposition and Action Contract) introduces
+`InstitutionalActionRecord` — the first record type whose existence
+explicitly anticipates *behavior*. The four-property contract above
+is implemented as the schema of that record:
+
+- `input_refs` is the explicit-inputs property.
+- `output_refs` is the explicit-outputs property.
+- The `institution_action_recorded` ledger event with preserved
+  `parent_record_ids` is the ledger-record property.
+- `InstitutionBook.add_action_record` writing only to its own
+  store and the ledger is the no-cross-space-mutation property.
+
+But v1.3 itself does **not** generate any actions. It ships the
+*recording schema* so future v1 behavior modules — a reference
+policy reaction function in PolicySpace, a reference supervisory
+review in a regulator, a reference exchange announcement in
+ExchangeSpace — all use the same contract when they create action
+records. v1.3 is to v1 behavior what v0 was to v1 as a whole: the
+shape comes first; the behavior arrives in later milestones.
+
+This means that adding v1.3 does not add any of the items in the
+out-of-scope table below. Those items remain owned by their
+respective future modules. v1.3 only widens the data layer to make
+recording them auditable when they finally arrive.
 
 ## Out-of-scope behaviors with their owning module
 
