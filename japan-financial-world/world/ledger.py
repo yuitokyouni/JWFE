@@ -38,6 +38,8 @@ class RecordType(str, Enum):
     INVESTOR_STATE_ADDED = "investor_state_added"
     MARKET_STATE_ADDED = "market_state_added"
     LISTING_ADDED = "listing_added"
+    PROPERTY_MARKET_STATE_ADDED = "property_market_state_added"
+    PROPERTY_ASSET_STATE_ADDED = "property_asset_state_added"
     STATE_SNAPSHOT_CREATED = "state_snapshot_created"
     WARNING = "warning"
     ERROR = "error"

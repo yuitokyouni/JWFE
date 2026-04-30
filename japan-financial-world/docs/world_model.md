@@ -2323,3 +2323,129 @@ v0.11 is complete when **all** of the following hold:
 11. Missing-price queries return `None` / `()` and do not crash.
 12. v0.2 scheduler integration still works: a populated `ExchangeSpace` runs for one year and is invoked at its declared frequency (DAILY × 365).
 13. All previous milestones (v0 through v0.10.1) continue to pass.
+
+---
+
+## 32. Minimum Real Estate State (v0.12)
+
+The v0.12 milestone adds `RealEstateSpace`, the fifth concrete domain space and the second to use a two-entity internal state shape. Like ExchangeSpace (§31), it captures `PriceBook` and exposes price-derived helpers — but it differs structurally in how property assets relate to property markets.
+
+### 32.1 Foreign-key vs composite-key relations
+
+ExchangeSpace and RealEstateSpace both hold two entity types: a market record and an asset-level record. The relationship between them is shaped differently in each:
+
+| Aspect                    | ExchangeSpace (§31)                              | RealEstateSpace (v0.12)                           |
+| ------------------------- | ------------------------------------------------ | ------------------------------------------------- |
+| Asset → market cardinality | many-to-many (cross-listing allowed)             | one-to-one (a property is in exactly one market)  |
+| Asset record key          | `(market_id, asset_id)` composite                | `asset_id` primary, `property_market_id` foreign  |
+| Asset record name         | `ListingState`                                   | `PropertyAssetState`                              |
+| Storage map               | `dict[tuple[str, str], ListingState]`            | `dict[str, PropertyAssetState]`                   |
+
+This is not a stylistic preference — it reflects a real-world distinction. Equity instruments are routinely cross-listed across exchanges. A specific office building, by contrast, exists in one regional / typological property market at a time. Modeling that asymmetry in keys keeps the data shape honest.
+
+### 32.2 PropertyMarketState
+
+`PropertyMarketState` is an immutable record. Its fields:
+
+- `property_market_id` — WorldID of the market segment.
+- `region` — domain-neutral string label (default `"unspecified"`). Examples: `"tokyo_central"`, `"osaka_central"`, `"fukuoka"`.
+- `property_type` — domain-neutral string label (default `"unspecified"`). Examples: `"office"`, `"residential"`, `"logistics"`, `"hotel"`, `"retail"`.
+- `tier` — domain-neutral string label (default `"unspecified"`). Examples: `"prime"`, `"secondary"`.
+- `status` — domain-neutral string label (default `"active"`).
+- `metadata` — bag for non-standard attributes.
+
+There is no `cap_rate`, `vacancy_rate`, `rent_index`, `transaction_volume`, or `comparable_sales` field. These are the foundation of real-estate market behavior and v0.12 does not implement that behavior.
+
+### 32.3 PropertyAssetState
+
+`PropertyAssetState` is an immutable record. Its fields:
+
+- `asset_id` — WorldID of the property (primary key).
+- `property_market_id` — the market this property belongs to (foreign key).
+- `asset_type` — domain-neutral string label (default `"unspecified"`). Examples: `"office_building"`, `"apartment_complex"`, `"warehouse"`, `"hotel"`, `"land_parcel"`.
+- `status` — domain-neutral string label (default `"active"`). Examples: `"under_construction"`, `"under_renovation"`, `"demolished"`.
+- `metadata` — bag for non-standard attributes.
+
+There is no `noi`, `rent_roll`, `lease_schedule`, `valuation`, `cap_rate`, or `comparable_sales` field. These are valuation / income / underwriting concerns deferred to later milestones.
+
+v0.12 deliberately does **not** validate that the referenced `property_market_id` is registered in the space. An asset may declare a market that has not been added (and may never be). This mirrors the v0.11 / v0.5 pattern: cross-references are recorded as data, not enforced as invariants. If callers care, they validate themselves.
+
+### 32.4 RealEstateSpace API
+
+RealEstateSpace inherits from `DomainSpace` (§30) and adds:
+
+**Lifecycle:**
+
+- `bind(kernel)` — extends `DomainSpace.bind()` to also capture `kernel.prices`. All four properties of the bind contract (§27.4) are preserved.
+
+**Property market CRUD:**
+
+- `add_property_market_state(market_state)` — register; rejects duplicates; emits `property_market_state_added` to the ledger.
+- `get_property_market_state(property_market_id)` — returns `PropertyMarketState` or `None`.
+- `list_property_markets()` — tuple of all markets in **insertion order**.
+
+**Property asset CRUD:**
+
+- `add_property_asset_state(asset_state)` — register; rejects duplicate `asset_id`; emits `property_asset_state_added` to the ledger with `target = property_market_id` so the relationship is reconstructable from the ledger entry.
+- `get_property_asset_state(asset_id)` — returns `PropertyAssetState` or `None`.
+- `list_property_assets()` — tuple of all property assets in **insertion order**.
+- `list_assets_in_property_market(property_market_id)` — filter to one market.
+
+**Price-derived views:**
+
+- `get_latest_price(asset_id)` — wraps `PriceBook.get_latest_price`. Returns `None` when unbound or no price observed. Independent of whether the asset is registered in the space.
+- `get_price_history(asset_id)` — wraps `PriceBook.get_price_history`. Returns `()` when unbound.
+
+**Inherited from DomainSpace:**
+
+- `get_balance_sheet_view(agent_id)`, `get_constraint_evaluations(agent_id)`, `get_visible_signals(observer_id)`.
+
+**Snapshot:**
+
+- `snapshot()` — returns `{"space_id", "property_market_count", "property_asset_count", "property_markets", "property_assets"}`. Markets sorted by `property_market_id`. Assets sorted by `asset_id`.
+
+### 32.5 Frequencies
+
+`RealEstateSpace` declares `(MONTHLY, QUARTERLY)` as its scheduler frequencies. Real-estate observation cadences are typically slower than equity exchange cadences (DAILY) — appraisals and market reports come monthly or quarterly, not daily. v0.12 does not implement any task body at these frequencies; the scheduler simply invokes the inherited no-op step. The frequencies are declared so that future milestones have a natural place to attach behavior.
+
+### 32.6 What RealEstateSpace must not do
+
+v0.12 explicitly forbids the following inside `RealEstateSpace`:
+
+- mutating `OwnershipBook`, `ContractBook`, `PriceBook`, `ConstraintBook`, or `SignalBook`
+- mutating `CorporateSpace`, `BankSpace`, `InvestorSpace`, `ExchangeSpace`, or any other space's internal state
+- implementing real-estate price formation, appraisal logic, or model marks
+- implementing cap rate updates, rent updates, or vacancy dynamics
+- implementing transaction matching, property auctions, or distressed sale dynamics
+- implementing fire sale logic or forced liquidation
+- implementing collateral haircut or LTV breach reactions
+- implementing REIT NAV computation or fund-level valuation
+- implementing scenario logic
+- producing `WorldEvent`s that carry property-market-decision payloads (transport-level events for testing remain fine)
+
+The space classifies property markets and property assets. It surfaces prices and signals on request. It does not value or transact.
+
+### 32.7 Ledger event types
+
+- `property_market_state_added` — emitted by `add_property_market_state` when a ledger is configured.
+- `property_asset_state_added` — emitted by `add_property_asset_state`. Records `object_id = asset_id` and `target = property_market_id`, so the relationship is fully reconstructable from a single ledger entry.
+
+`get_latest_price`, `get_price_history`, and other queries produce no ledger record.
+
+### 32.8 v0.12 success criteria
+
+v0.12 is complete when **all** of the following hold:
+
+1. `PropertyMarketState` exists with all required fields and is immutable.
+2. `PropertyAssetState` exists with all required fields and is immutable; `property_market_id` is required, but the referenced market is not validated for existence.
+3. `RealEstateSpace` inherits from `DomainSpace`.
+4. `RealEstateSpace.bind` extends `DomainSpace.bind` to capture `prices`, following the four-property contract from §27.4.
+5. `RealEstateSpace` exposes the property-market CRUD, the property-asset CRUD, the per-market filter (`list_assets_in_property_market`), and the two price-derived views.
+6. Duplicate `property_market_id` is rejected; duplicate `asset_id` is rejected.
+7. A property asset may declare a `property_market_id` that has not been registered in the space.
+8. `property_market_state_added` and `property_asset_state_added` are recorded to the ledger when configured.
+9. `RealEstateSpace` does not mutate any source book or any other space.
+10. Price queries do not depend on property-asset registration; both work independently.
+11. Missing-price queries return `None` / `()` and do not crash.
+12. v0.2 scheduler integration still works: a populated `RealEstateSpace` runs for one year and is invoked at its declared frequencies (MONTHLY × 12, QUARTERLY × 4).
+13. All previous milestones (v0 through v0.11) continue to pass.
