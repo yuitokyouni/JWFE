@@ -1965,3 +1965,127 @@ v0.9 is complete when **all** of the following hold:
 8. `BankSpace.bind` follows the four-property contract from §27.4.
 9. v0.2 scheduler integration still works: a populated `BankSpace` runs for one year and is invoked at its declared frequencies (DAILY × 365, QUARTERLY × 4).
 10. All previous milestones (v0 through v0.8) continue to pass.
+
+---
+
+## 29. Minimum Investor State (v0.10)
+
+The v0.10 milestone applies the same domain-space template (§27 / §28) to `InvestorSpace`, with one structural addition: a **portfolio-exposure projection** derived from `OwnershipBook` × `PriceBook` × `Registry`. v0.10 does not add trading behavior.
+
+### 29.1 Three examples is the threshold
+
+v0.10 is the third domain space to follow the same pattern: an immutable identity record (`InvestorState`), a `bind()` override, kernel-projection accessors, insertion-ordered `list_*`, id-sorted `snapshot()`, one ledger record type, and one new domain-specific projection. The first three concrete examples are:
+
+| Space            | Identity     | Domain-specific projection |
+| ---------------- | ------------ | -------------------------- |
+| CorporateSpace   | FirmState    | (none)                     |
+| BankSpace        | BankState    | LendingExposure            |
+| InvestorSpace    | InvestorState | PortfolioExposure         |
+
+Three is the threshold. After v0.10 the structural similarity is unmistakable: the only meaningful variations are which kernel refs to capture and which derived projection to expose. This makes a future `DomainSpace` mixin or template a defensible refactor — but that abstraction is **out of scope for v0.10**. The pattern is established here in concrete, repeatable form, and the call to factor it can be made later when the costs of repetition (boilerplate, drift between spaces) are clearly visible.
+
+### 29.2 InvestorState
+
+`InvestorState` is an immutable record. Its fields:
+
+- `investor_id` — WorldID of the investor.
+- `investor_type` — domain-neutral string label (default `"unspecified"`). Examples: `"pension_fund"`, `"hedge_fund"`, `"insurer"`, `"retail"`, `"sovereign_wealth_fund"`. v0.10 enumerates none of these.
+- `tier` — domain-neutral string label (default `"unspecified"`).
+- `status` — domain-neutral string label (default `"active"`).
+- `metadata` — bag for non-standard attributes.
+
+Like `FirmState` and `BankState`, `InvestorState` deliberately omits everything derivable. There is no `aum`, `nav`, `target_allocation`, `risk_budget`, or `mandate` field. Anything computable from `OwnershipBook` × `PriceBook` × `ContractBook` is computed, not stored.
+
+### 29.3 PortfolioExposure
+
+`PortfolioExposure` is the v0.10 addition. It is a *projection* — rebuilt on every query, never stored.
+
+Its fields:
+
+- `investor_id` — the investor the projection was built for.
+- `asset_id` — the WorldID of the held asset.
+- `quantity` — copied from the underlying `OwnershipRecord`.
+- `latest_price` — most recent price from `PriceBook`, or `None` if no observation exists.
+- `market_value` — `quantity × latest_price` when both are present; `None` otherwise.
+- `asset_type` — taken from `Registry.get(asset_id).type` if the asset is registered, else `None`.
+- `metadata` — bag containing `{"missing_price": True}` and/or `{"missing_asset_type": True}` flags so callers can detect gaps without re-querying.
+
+PortfolioExposure is intentionally narrow. It is what InvestorSpace needs to answer "what does this investor hold, and what is each position worth right now?" without forcing every caller to join three books themselves. It is **not** an allocation report, a target/actual comparison, a risk decomposition, or a P&L view. Those are deferred.
+
+Specifically, v0.10 does **not**:
+
+- compute portfolio-level totals or weights
+- classify positions as core / satellite / hedge
+- infer strategy or intent from the holdings
+- mark positions as off-target or in-need-of-rebalancing
+- distinguish liquid from illiquid assets
+
+These are all valuation / strategy / interpretation concerns, and they are out of scope.
+
+### 29.4 InvestorSpace API additions
+
+InvestorSpace now exposes:
+
+- `add_investor_state(investor_state)` — register; rejects duplicates; emits `investor_state_added` to the ledger.
+- `get_investor_state(investor_id)` — returns `InvestorState` or `None`.
+- `list_investors()` — tuple in **insertion order**.
+- `snapshot()` — sorted by `investor_id`.
+
+Read-only kernel projections:
+
+- `get_balance_sheet_view(investor_id, *, as_of_date=None)`
+- `get_constraint_evaluations(investor_id, *, as_of_date=None)`
+- `get_visible_signals(observer_id, *, as_of_date=None)`
+
+Investor-specific ownership views:
+
+- `list_portfolio_positions(investor_id)` — broad: raw `OwnershipRecord`s held by the investor (no valuation, no asset typing). Equivalent to `kernel.ownership.get_positions(investor_id)`.
+- `list_portfolio_exposures(investor_id)` — narrow: each position joined with the latest price and registry-derived asset type. Returns `tuple[PortfolioExposure, ...]`.
+
+All accessors return safe defaults when their refs are unbound. None of them mutate any source book.
+
+### 29.5 Why missing data does not crash
+
+`list_portfolio_exposures` is intentionally tolerant of incomplete data:
+
+- A position with no `PriceBook` observation still produces a `PortfolioExposure` — quantity is preserved, `latest_price` and `market_value` are `None`, and `metadata["missing_price"] = True`.
+- A position whose `asset_id` is not in the `Registry` still produces a `PortfolioExposure` — `asset_type` is `None`, and `metadata["missing_asset_type"] = True`. Valuation still happens if a price is available.
+
+This rule mirrors `BalanceSheetProjector` (§24): the projector reports what it can compute and is honest about what it cannot. Crashing would force every caller to defensively pre-check whether all needed data exists before issuing the read. That defeats the point of having a projection layer.
+
+### 29.6 What InvestorSpace must not do
+
+v0.10 explicitly forbids the following inside `InvestorSpace`:
+
+- mutating `OwnershipBook`, `ContractBook`, `PriceBook`, `ConstraintBook`, or `SignalBook`
+- mutating `CorporateSpace`, `BankSpace`, `ExchangeSpace`, `RealEstateSpace`, or any other space's internal state
+- implementing trading decisions, order generation, or rebalancing
+- implementing allocation logic, mandate enforcement, or strategy selection
+- implementing price impact, liquidity, or market microstructure
+- implementing performance attribution, benchmark comparison, or risk budgeting
+- implementing investor-to-investor activist behavior
+- implementing scenario logic
+- producing `WorldEvent`s that carry trading-decision payloads (transport-level events for testing remain fine)
+
+The space reads positions. It surfaces them as exposures. It does not act.
+
+### 29.7 Ledger event types
+
+- `investor_state_added` — emitted by `InvestorSpace.add_investor_state` when a ledger is configured.
+
+Existing types continue to apply. `list_portfolio_exposures` is a query and produces no ledger record on its own.
+
+### 29.8 v0.10 success criteria
+
+v0.10 is complete when **all** of the following hold:
+
+1. `InvestorState` exists with all required fields and is immutable.
+2. `PortfolioExposure` exists as an immutable projection record.
+3. `InvestorSpace` holds an `investor_id -> InvestorState` mapping and exposes `add_investor_state`, `get_investor_state`, `list_investors`, and `snapshot`.
+4. `InvestorSpace` exposes the three read-only kernel-projection accessors and the two ownership-derived helpers (`list_portfolio_positions`, `list_portfolio_exposures`).
+5. `list_portfolio_exposures` joins `OwnershipBook` × `PriceBook` × `Registry` and never crashes on missing data; missing-data flags appear in `metadata`.
+6. `investor_state_added` is recorded to the ledger when configured.
+7. `InvestorSpace` does not mutate any source book or any other space.
+8. `InvestorSpace.bind` follows the four-property contract from §27.4.
+9. v0.2 scheduler integration still works: a populated `InvestorSpace` runs for one year and is invoked at its declared frequencies (DAILY × 365, MONTHLY × 12).
+10. All previous milestones (v0 through v0.9) continue to pass.

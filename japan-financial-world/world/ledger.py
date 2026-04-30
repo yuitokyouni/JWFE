@@ -35,6 +35,7 @@ class RecordType(str, Enum):
     CONSTRAINT_EVALUATED = "constraint_evaluated"
     FIRM_STATE_ADDED = "firm_state_added"
     BANK_STATE_ADDED = "bank_state_added"
+    INVESTOR_STATE_ADDED = "investor_state_added"
     STATE_SNAPSHOT_CREATED = "state_snapshot_created"
     WARNING = "warning"
     ERROR = "error"
