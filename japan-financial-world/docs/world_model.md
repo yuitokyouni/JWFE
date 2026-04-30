@@ -1852,3 +1852,116 @@ v0.8 is complete when **all** of the following hold:
 7. `CorporateSpace` does not mutate `OwnershipBook`, `ContractBook`, `PriceBook`, `ConstraintBook`, or `SignalBook`.
 8. v0.2 scheduler integration still works: an empty world with a populated `CorporateSpace` runs for one year and the scheduler still invokes the space at its declared frequencies.
 9. All previous milestones (v0 through v0.7) continue to pass.
+
+---
+
+## 28. Minimum Bank / Debt State (v0.9)
+
+The v0.9 milestone applies the `CorporateSpace` template (§27) to `BankSpace`, with one structural addition: a **lending-exposure projection** derived from `ContractBook`. v0.9 does not add credit behavior of any kind.
+
+### 28.1 Why mirror the corporate pattern
+
+`BankSpace` is the second domain space to gain native state. The shape established in §27 — *classify locally, derive everything else* — is intentionally repeated here so the pattern is verifiable on more than one example. By the time a third space adopts the same skeleton (Investor or RealEstate), the repetition will tell us whether a `DomainSpace` mixin is justified.
+
+For now, expect:
+
+- An immutable identity dataclass (`BankState`).
+- A `bind()` override that captures the kernel projections the space needs.
+- Read-only accessors that delegate to those projections.
+- Insertion-ordered `list_*` and id-sorted `snapshot()`.
+- One ledger record type per space (`bank_state_added`).
+- A new derived view class (`LendingExposure`) introduced because the bank's natural query — "what loans am I holding?" — has no equivalent in CorporateSpace.
+
+### 28.2 BankState
+
+`BankState` is an immutable record. Its fields:
+
+- `bank_id` — WorldID of the bank.
+- `bank_type` — domain-neutral string label (default `"unspecified"`). Examples: `"city_bank"`, `"regional_bank"`, `"trust_bank"`, `"shinkin"`. v0.9 enumerates none of these — types are free-form strings.
+- `tier` — domain-neutral string label (default `"unspecified"`).
+- `status` — domain-neutral string label (default `"active"`).
+- `metadata` — bag for non-standard attributes.
+
+Like `FirmState`, `BankState` deliberately omits everything balance-sheet-derivable. There is no `capital`, `deposits`, `loan_book`, `npl_ratio`, or `spread` field. Anything computable from `OwnershipBook` × `ContractBook` × `PriceBook` is computed, not stored.
+
+### 28.3 LendingExposure
+
+`LendingExposure` is the v0.9 addition. It is a *projection* derived from `ContractBook`, not a stored fact, and is rebuilt on every query.
+
+Its fields:
+
+- `contract_id` — the underlying contract's id.
+- `lender_id` — always the bank that the projection was built for.
+- `borrower_id` — taken from `metadata["borrower_id"]` on the contract; may be `None` if the contract did not declare one.
+- `principal` — face-value principal as recorded on the contract; may be `None`.
+- `contract_type` — copied from the contract verbatim.
+- `status` — copied from the contract verbatim. **v0.9 does not filter by status** — settled, defaulted, and active loans all appear.
+- `collateral_asset_ids` — copied from the contract verbatim.
+
+`LendingExposure` is intentionally narrow. It is what `BankSpace` needs to answer "list the loans where this bank is the explicit lender" without forcing every caller to grep contract metadata themselves. It is not a credit-quality classification, a risk-weighted exposure, or a capital-relief view. Those are deferred.
+
+### 28.4 BankSpace API additions
+
+BankSpace now exposes:
+
+- `add_bank_state(bank_state)` — register a bank; rejects duplicate `bank_id`; emits `bank_state_added` to the ledger.
+- `get_bank_state(bank_id)` — returns `BankState` or `None`. Does not raise for unknown banks.
+- `list_banks()` — tuple of all `BankState`s in **insertion order**.
+- `snapshot()` — JSON-friendly view sorted by `bank_id`.
+
+Read-only kernel projections:
+
+- `get_balance_sheet_view(bank_id, *, as_of_date=None)`
+- `get_constraint_evaluations(bank_id, *, as_of_date=None)`
+- `get_visible_signals(observer_id, *, as_of_date=None)`
+
+Bank-specific contract views:
+
+- `list_contracts_for_bank(bank_id)` — broad: every contract where the bank appears in `parties`. Does not filter by role. Useful for "where is this bank involved at all?".
+- `list_lending_exposures(bank_id)` — narrow: contracts where `metadata["lender_id"] == bank_id`. Returns `tuple[LendingExposure, ...]`.
+
+All accessors return safe defaults (`None` / `()`) when their underlying refs are unbound. None of them mutate any source book.
+
+### 28.5 Why metadata-only role inference
+
+`list_lending_exposures` deliberately filters on `metadata["lender_id"]` and **does not infer role from `parties` order**. A contract with `parties=("bank:x", "firm:y")` but no metadata role tags is invisible to `list_lending_exposures` even though many real-world conventions would interpret position 0 as the lender.
+
+This is the same v0.5 / v0.7 design rule, restated for the bank context: **roles are opt-in via metadata, not inferred from data shape**. Inferring would mean two sources of truth (party order and metadata) could disagree, and silent role guessing is exactly the kind of hidden coupling §14 forbids.
+
+If a contract should be a lending exposure for the bank, it must declare `metadata["lender_id"] = bank_id` (and ideally `metadata["borrower_id"]` too). `test_list_lending_exposures_does_not_infer_role_from_parties_order` enforces this.
+
+### 28.6 What BankSpace must not do
+
+v0.9 explicitly forbids the following inside `BankSpace`:
+
+- mutating `OwnershipBook`, `ContractBook`, `PriceBook`, `ConstraintBook`, or `SignalBook`
+- mutating `CorporateSpace`, `InvestorSpace`, `ExchangeSpace`, `RealEstateSpace`, or any other space's internal state
+- implementing lending decisions, credit underwriting, or origination
+- implementing credit tightening, spread updates, or rate adjustments
+- implementing default detection, non-performing classification, or covenant trips
+- implementing collateral haircut, LTV breach, or margin-call logic
+- implementing scenario logic
+- producing `WorldEvent`s that carry credit-decision payloads (transport-level events for testing remain fine)
+
+The space reads contracts. It surfaces them as lending exposures. It does not decide.
+
+### 28.7 Ledger event types
+
+- `bank_state_added` — emitted by `BankSpace.add_bank_state` when a ledger is configured.
+
+Existing types continue to apply: reading projections through the space inherits whatever logging the underlying projector or evaluator does. Notably, `list_lending_exposures` produces no ledger record on its own — it is a query, not a state change.
+
+### 28.8 v0.9 success criteria
+
+v0.9 is complete when **all** of the following hold:
+
+1. `BankState` exists with all required fields and is immutable.
+2. `LendingExposure` exists as an immutable projection record.
+3. `BankSpace` holds a `bank_id -> BankState` mapping and exposes `add_bank_state`, `get_bank_state`, `list_banks`, and `snapshot`.
+4. `BankSpace` exposes the four read-only kernel-projection accessors and the two contract-derived helpers (`list_contracts_for_bank`, `list_lending_exposures`).
+5. `list_lending_exposures` filters strictly on `metadata["lender_id"]`; it does not infer role from `parties` order.
+6. `bank_state_added` is recorded to the ledger when configured.
+7. `BankSpace` does not mutate any source book or any other space.
+8. `BankSpace.bind` follows the four-property contract from §27.4.
+9. v0.2 scheduler integration still works: a populated `BankSpace` runs for one year and is invoked at its declared frequencies (DAILY × 365, QUARTERLY × 4).
+10. All previous milestones (v0 through v0.8) continue to pass.
