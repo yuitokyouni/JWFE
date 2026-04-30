@@ -40,6 +40,8 @@ class RecordType(str, Enum):
     LISTING_ADDED = "listing_added"
     PROPERTY_MARKET_STATE_ADDED = "property_market_state_added"
     PROPERTY_ASSET_STATE_ADDED = "property_asset_state_added"
+    INFORMATION_SOURCE_STATE_ADDED = "information_source_state_added"
+    INFORMATION_CHANNEL_STATE_ADDED = "information_channel_state_added"
     STATE_SNAPSHOT_CREATED = "state_snapshot_created"
     WARNING = "warning"
     ERROR = "error"

@@ -2449,3 +2449,130 @@ v0.12 is complete when **all** of the following hold:
 11. Missing-price queries return `None` / `()` and do not crash.
 12. v0.2 scheduler integration still works: a populated `RealEstateSpace` runs for one year and is invoked at its declared frequencies (MONTHLY × 12, QUARTERLY × 4).
 13. All previous milestones (v0 through v0.11) continue to pass.
+
+---
+
+## 33. Minimum Information Space State (v0.13)
+
+The v0.13 milestone adds `InformationSpace`, the sixth concrete domain space. Where prior milestones have classified the *who* (firms / banks / investors) and the *where* (exchanges / property markets), v0.13 classifies the **how** of information flow: which sources produce signals, and through which channels they are distributed.
+
+`SignalBook` (§26) remains the canonical store of signals. InformationSpace classifies sources and channels but does not own, generate, or interpret signal content.
+
+### 33.1 Why a separate space for sources and channels
+
+Information has been a first-class concern since v0.7: `InformationSignal` records exist, are addressable, and can be referenced from `WorldEvent` payloads. But `SignalBook` is a flat store keyed by `signal_id`. It can answer "who is `source_id` pointing at?" via `list_by_source`, but it has no notion of *what kind of source* that is, or *what channels distribute its output*.
+
+A rating agency, a wire service, a regulator, a leaker, and an automated data feed all show up in `SignalBook` as `source_id` strings. They are not all the same kind of thing, and future milestones will need to reason about that difference (credibility, distribution speed, audience). The InformationSpace state layer is where those classifications live.
+
+The same logic applies to channels: a press release reaches everyone; an internal memo reaches a small allowlist; a leaked document might reach an unintended audience entirely. Channels are the medium of distribution, distinct from the source that authored the message. Both deserve identity-level records.
+
+### 33.2 InformationSourceState
+
+`InformationSourceState` is an immutable record. Its fields:
+
+- `source_id` — WorldID of the source.
+- `source_type` — domain-neutral string label (default `"unspecified"`). Examples: `"rating_agency"`, `"wire_service"`, `"analyst"`, `"regulator"`, `"internal_disclosure"`, `"automated_feed"`.
+- `tier` — domain-neutral string label (default `"unspecified"`). Examples: `"tier_1"`, `"tier_2"`.
+- `status` — domain-neutral string label (default `"active"`).
+- `metadata` — bag for non-standard attributes.
+
+There is no `credibility_score`, `accuracy_history`, `bias_estimate`, or `topical_specialty` field. These would be the foundation of credibility / narrative behavior, and v0.13 does not implement that behavior.
+
+### 33.3 InformationChannelState
+
+`InformationChannelState` is an immutable record. Its fields:
+
+- `channel_id` — WorldID of the channel.
+- `channel_type` — domain-neutral string label (default `"unspecified"`). Examples: `"wire_service"`, `"press_release"`, `"social_media"`, `"internal_memo"`, `"regulatory_filing"`.
+- `visibility` — free-form string label (default `"public"`). Captures the channel's inherent reach pattern.
+- `status` — domain-neutral string label (default `"active"`).
+- `metadata` — bag for non-standard attributes.
+
+`visibility` is intentionally **not** validated against `SignalBook`'s visibility enum. Channel reach and signal visibility are related but distinct concepts:
+
+- `SignalBook.visibility` answers "who is *allowed* to observe this signal?".
+- `InformationChannelState.visibility` answers "what kind of medium *is* this channel?".
+
+A signal might be `restricted` even if it is published on a `public` channel (e.g., a regulatory filing on EDGAR is technically public but only allowed to be acted upon by registered users). v0.13 keeps the two labels independent so callers can reason about the propagation-vs-permission distinction without having to override one with the other.
+
+There is no `audience_size`, `read_rate`, `decay`, or `noise_level` field. v0.13 does not implement narrative dynamics.
+
+### 33.4 InformationSpace API
+
+InformationSpace inherits from `DomainSpace` (§30). It needs no domain-specific kernel ref of its own — `signals` and `registry` from `DomainSpace` are sufficient. Therefore there is **no `bind()` override**. This is the second domain space (alongside CorporateSpace) that inherits `DomainSpace.bind` unchanged.
+
+**Source CRUD:**
+
+- `add_source_state(source_state)` — register; rejects duplicate `source_id`; emits `information_source_state_added` to the ledger.
+- `get_source_state(source_id)` — returns `InformationSourceState` or `None`.
+- `list_sources()` — tuple in **insertion order**.
+
+**Channel CRUD:**
+
+- `add_channel_state(channel_state)` — register; rejects duplicate `channel_id`; emits `information_channel_state_added` to the ledger.
+- `get_channel_state(channel_id)` — returns `InformationChannelState` or `None`.
+- `list_channels()` — tuple in **insertion order**.
+
+**Signal-derived views:**
+
+- `list_signals_by_source(source_id)` — wraps `SignalBook.list_by_source`. Returns `()` when unbound.
+- `list_signals_by_type(signal_type)` — wraps `SignalBook.list_by_type`. Returns `()` when unbound.
+- `list_visible_signals(observer_id, *, as_of_date=None)` — delegates to the inherited `get_visible_signals`. Both names are exposed; `list_visible_signals` is the InformationSpace-flavored name and `get_visible_signals` is the DomainSpace-pattern name. They are equivalent.
+
+**Inherited from DomainSpace:**
+
+- `get_balance_sheet_view`, `get_constraint_evaluations`, `get_visible_signals`. Information rarely needs the first two but inherits them for free.
+
+**Snapshot:**
+
+- `snapshot()` — returns `{"space_id", "source_count", "channel_count", "sources", "channels"}`. Sources sorted by `source_id`. Channels sorted by `channel_id`.
+
+### 33.5 Source / channel registration is not gating
+
+A signal in `SignalBook` may declare a `source_id` that has not been registered in `InformationSpace`. v0.13 deliberately does not require pre-registration:
+
+- `signals.add_signal(...)` succeeds regardless of whether the source has been added.
+- `info_space.list_signals_by_source("source:unregistered")` returns the matching signals and does not crash.
+- `info_space.list_sources()` returns only the sources InformationSpace has been told about, even if `SignalBook` references others.
+
+This is the same separation pattern used elsewhere: cross-references are recorded as data, not enforced as invariants. Signals are facts about what was published; source / channel registrations are classifications that the space chooses to maintain.
+
+### 33.6 What InformationSpace must not do
+
+v0.13 explicitly forbids the following inside `InformationSpace`:
+
+- generating news, signals, or content of any kind
+- writing analyst reports, summaries, or opinions
+- interpreting signals (computing sentiment, polarity, importance, novelty)
+- updating source credibility dynamically based on signal accuracy
+- propagating rumors, modeling leak diffusion, or simulating word-of-mouth
+- forming narratives or aggregating signals into themes
+- triggering investor reactions, price movement, or credit decisions
+- mutating `SignalBook`, `OwnershipBook`, `ContractBook`, `PriceBook`, `ConstraintBook`, or any other source book
+- mutating `CorporateSpace`, `BankSpace`, `InvestorSpace`, `ExchangeSpace`, `RealEstateSpace`, or any other space's internal state
+- producing `WorldEvent`s that carry interpretive payloads (transport-level events for testing remain fine)
+
+The space classifies sources and channels. It surfaces signals on request. It does not interpret, propagate, or generate.
+
+### 33.7 Ledger event types
+
+- `information_source_state_added` — emitted by `add_source_state` when a ledger is configured.
+- `information_channel_state_added` — emitted by `add_channel_state` when a ledger is configured.
+
+`list_signals_by_*` and `list_visible_signals` are queries and produce no ledger record.
+
+### 33.8 v0.13 success criteria
+
+v0.13 is complete when **all** of the following hold:
+
+1. `InformationSourceState` exists with all required fields and is immutable.
+2. `InformationChannelState` exists with all required fields and is immutable; `visibility` is a free-form string and is not validated against `SignalBook`'s visibility enum.
+3. `InformationSpace` inherits from `DomainSpace` and requires no `bind()` override.
+4. `InformationSpace` exposes the source CRUD, the channel CRUD, and three signal-derived views (`list_signals_by_source`, `list_signals_by_type`, `list_visible_signals`).
+5. Duplicate `source_id` is rejected; duplicate `channel_id` is rejected.
+6. Signals may reference unregistered sources; signal queries do not require source or channel registration.
+7. `information_source_state_added` and `information_channel_state_added` are recorded to the ledger when configured.
+8. `InformationSpace` does not mutate `SignalBook` or any other source book or any other space.
+9. Missing-data queries return `None` / `()` and do not crash.
+10. v0.2 scheduler integration still works: a populated `InformationSpace` runs for one year and is invoked at its declared frequency (DAILY × 365).
+11. All previous milestones (v0 through v0.12) continue to pass.
