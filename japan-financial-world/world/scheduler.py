@@ -16,17 +16,27 @@ class Frequency(str, Enum):
 
 class Phase(str, Enum):
     """
-    Placeholder for future intraday / intra-period phase control.
+    Intraday / intra-period phase control.
 
-    For now, MAIN is enough.
-    Later examples:
-    - PRE_MARKET
-    - MARKET
-    - POST_MARKET
-    - SETTLEMENT
+    ``MAIN`` is the v0 default — phase-agnostic tasks fire on every
+    tick when the kernel runs in v0 mode (``kernel.tick`` /
+    ``kernel.run``).
+
+    The other six values are the v1.2 default intraday sequence
+    (see :class:`world.phases.PhaseSequence`) and are dispatched by
+    ``kernel.run_day_with_phases``. Mixing MAIN and intraday phases
+    in the same kernel run is allowed but each path filters
+    independently: v0 mode ignores phase, v1.2 mode dispatches per
+    phase and treats MAIN as its own bucket.
     """
 
     MAIN = "main"
+    OVERNIGHT = "overnight"
+    PRE_OPEN = "pre_open"
+    OPENING_AUCTION = "opening_auction"
+    CONTINUOUS_SESSION = "continuous_session"
+    CLOSING_AUCTION = "closing_auction"
+    POST_CLOSE = "post_close"
 
 
 TaskCallable = Callable[..., Any]
@@ -195,8 +205,20 @@ class Scheduler:
             Frequency.YEARLY: 40,
         }
 
+        # MAIN is the v0 default phase and ranks first so v0 tests'
+        # ordering is preserved. The intraday phases (v1.2) follow in
+        # their canonical day order: overnight → pre_open →
+        # opening_auction → continuous_session → closing_auction →
+        # post_close. The numeric gaps leave room for future
+        # sub-phases without renumbering.
         phase_rank = {
-            Phase.MAIN: 100,
+            Phase.MAIN: 0,
+            Phase.OVERNIGHT: 100,
+            Phase.PRE_OPEN: 200,
+            Phase.OPENING_AUCTION: 300,
+            Phase.CONTINUOUS_SESSION: 400,
+            Phase.CLOSING_AUCTION: 500,
+            Phase.POST_CLOSE: 600,
         }
 
         return sorted(

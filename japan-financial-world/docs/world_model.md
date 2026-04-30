@@ -2947,3 +2947,92 @@ v1.1 is complete when **all** of the following hold:
 9. v1.1 mutates none of `OwnershipBook`, `ContractBook`, `PriceBook`, `ConstraintBook`, or `SignalBook`.
 10. The kernel exposes `kernel.valuations` and `kernel.valuation_comparator` with default wiring.
 11. All previous milestones (v0 through v0.16) continue to pass.
+
+---
+
+## 37. Intraday Phase Scheduler (v1.2)
+
+The v1.2 milestone gives the world a way to express *order within a day*. v0's smallest time unit was one calendar day; v1.2 splits that day into a sequence of named phases (overnight → pre_open → opening_auction → continuous_session → closing_auction → post_close). v1.2 ships **scheduling infrastructure only** — no auction matching, no order book, no halt logic, no country-specific exchange hours.
+
+For the full design rationale, examples of future use, and the carve-out from v1's behavior contract, see [`v1_intraday_phase_design.md`](v1_intraday_phase_design.md).
+
+### 37.1 Why phases exist now
+
+v0's tasks fired once per day in a deterministic but phase-blind order. That was correct for v0 because no v0 task acted, so intraday ordering was inert. v1's introduction of behavior changes that. Earnings released after the close should be visible at the next open, not at the same instant. A reference market clearing in v1.3 cannot meaningfully run at the same instant as the investor intent it consumes.
+
+v1.2 adds the slot mechanism. v1.3 will fill the slots with reference behavior; v1.2 only declares them.
+
+### 37.2 Phase definitions
+
+`world/phases.py` defines two types:
+
+- `IntradayPhaseSpec` — immutable record with `phase_id`, `order`, `label`, `metadata`. The `phase_id` is a free-form string; when the phase participates in scheduler dispatch it must match a value of the `Phase` enum.
+- `PhaseSequence` — an ordered tuple of `IntradayPhaseSpec` with helpers `default_phases`, `list_phases`, `get_phase`, `next_phase`, `is_first_phase`, `is_last_phase`, and `to_dict`.
+
+The default sequence is the six-phase day documented above. Custom sequences are allowed for tests and future jurisdiction-specific calendars; v1.2 ships only the default.
+
+### 37.3 Scheduler extension
+
+The existing `Phase` enum gains six new values (`OVERNIGHT`, `PRE_OPEN`, `OPENING_AUCTION`, `CONTINUOUS_SESSION`, `CLOSING_AUCTION`, `POST_CLOSE`) alongside the v0 `MAIN`. The `_sorted_tasks` helper updates its `phase_rank` table to rank `MAIN` first (preserving v0 ordering tests) followed by the six intraday phases in their canonical order.
+
+`Scheduler.due_tasks(clock)` continues to return all due tasks regardless of declared phase when no `phase` filter is given. With a `phase` filter it returns only tasks declared at that phase. v0 callers that pass no filter see no behavior change.
+
+### 37.4 Kernel methods
+
+Three new methods on `WorldKernel`, all optional and additive:
+
+- `iter_intraday_phases(sequence=None)` — generator yielding `(IntradayPhaseSpec, due_tasks)` pairs for the current clock date. Tasks declared with `Phase.MAIN` are intentionally excluded.
+- `run_day_with_phases(sequence=None)` — runs one calendar day phase-by-phase, executes phase-matching due tasks, emits a month-end snapshot when applicable, and advances the clock by one day. The clock and snapshot semantics mirror `tick()`.
+- `run_with_phases(days, sequence=None)` — runs `days` consecutive days through `run_day_with_phases`.
+
+The v0 `tick()` and `run()` methods are unchanged. v0 spaces — all of which use `Phase.MAIN` — continue to be invoked exactly as before.
+
+### 37.5 Ledger event types
+
+v1.2 reuses the existing `task_executed` ledger record type. When a task fires through `run_day_with_phases`, the payload gains a `phase` key recording which phase it ran in. No new record types are introduced for intraday dispatch (per the user's preference for "reuse if cleaner").
+
+### 37.6 Backward compatibility
+
+The v0 path (`tick` / `run`) is unchanged in behavior:
+
+- All due tasks fire on every tick regardless of declared phase.
+- v0 tests pass without modification (444 v0 + 34 v1.1 + 33 v1.2 = 511 / 511 passing).
+- Tasks declared with `Phase.MAIN` continue to be the default and fire under both paths (`tick` includes them; `run_day_with_phases` excludes them — see §37.7).
+
+The v1.2 path (`run_day_with_phases` / `run_with_phases`) is opt-in. Mixing the two paths on the same calendar day would advance the clock twice; the documented rule is "use one or the other per day".
+
+### 37.7 Why MAIN is excluded from phase dispatch
+
+`run_day_with_phases` does not fire `Phase.MAIN` tasks. The reasoning:
+
+1. v0 tasks were written with no phase semantics. Forcing them into one of the six intraday phases would tie v0 spaces' dispatch order to a v1 convention.
+2. Callers that want a task to fire phase-blind should keep using `Phase.MAIN` plus `tick()`. Callers that want phase-aware dispatch declare a specific intraday phase explicitly.
+
+The two buckets are kept separate by design. v1.3 will introduce phase-aware tasks in the eight v0 spaces alongside their existing `MAIN` tasks; both buckets coexist.
+
+### 37.8 What v1.2 does not do
+
+- No order matching, order books, or limit-order semantics.
+- No auction pricing or reference clearing mechanism.
+- No price impact, halts, or circuit breakers.
+- No country-specific exchange hours, session calendars, or holiday logic.
+- No phase-specific behavior in any v0 space.
+- No cross-day phases or sub-second / wall-clock-aware phases.
+- No mutation of any source-of-truth book.
+- No Japan-specific anything.
+
+### 37.9 v1.2 success criteria
+
+v1.2 is complete when **all** of the following hold:
+
+1. `IntradayPhaseSpec` and `PhaseSequence` exist as documented.
+2. The default sequence is exactly: `overnight`, `pre_open`, `opening_auction`, `continuous_session`, `closing_auction`, `post_close`.
+3. The `Phase` enum carries the six intraday values plus `MAIN`.
+4. `_sorted_tasks` ranks all phases consistently; existing v0 sorting tests pass without modification.
+5. `WorldKernel` exposes `iter_intraday_phases`, `run_day_with_phases`, and `run_with_phases`, all opt-in.
+6. `run_day_with_phases` advances the clock once per day and emits a month-end snapshot when applicable.
+7. Phase-aware daily / monthly / quarterly tasks fire the correct number of times at their declared phase.
+8. Multiple tasks at the same phase execute in the deterministic order produced by `_sorted_tasks` (phase rank → frequency → order → space → name).
+9. No source-of-truth book is mutated by the phase dispatcher.
+10. v0 `tick` / `run` behavior is unchanged; v0 tests pass without modification.
+11. All previous milestones (v0 through v1.1) continue to pass.
