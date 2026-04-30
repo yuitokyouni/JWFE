@@ -3151,3 +3151,90 @@ v1.3 is complete when **all** of the following hold:
 8. Adding an action record does not mutate any other source-of-truth book.
 9. `jurisdiction_label` accepts any free-form string without validation.
 10. All previous milestones (v0 through v1.2.1) continue to pass.
+
+---
+
+## 39. ExternalWorld Process (v1.4)
+
+The v1.4 milestone makes external factors first-class objects in the kernel: it lets the world declare *how an external factor evolves* (process), record *what was observed* (observation), and replay *a known trajectory* (scenario path) — all without causing any domestic economic behavior. v1.4 ships only two minimal generation helpers (constant + scenario-path replay); stochastic dynamics, real data loading, and domestic propagation are out of scope.
+
+For the full design rationale (process vs observation vs scenario path, why no shocks, why domestic impact is deferred, how v2/v3 calibrated data plug in), see [`v1_external_world_process_design.md`](v1_external_world_process_design.md).
+
+### 39.1 Why external factors are first-class
+
+`ExternalSpace` (v0.14, §34.3) classifies which exogenous factors the world tracks. v1.4 adds the next layer: a process that defines how a factor evolves, observations that record what value the factor took, and scenario paths that replay a deterministic trajectory. The three are stored independently in `ExternalProcessBook` and answer different questions; later milestones (or test fixtures) decide which one drives a given run.
+
+### 39.2 The four record types
+
+v1.4 ships four immutable dataclasses in `world/external_processes.py`:
+
+- **`ExternalFactorProcess`** — `process_id`, `factor_id`, `factor_type`, `process_type`, `unit`, `base_value`, `status`, `metadata`. The `process_type` is a free-form string with suggested labels (`"constant"`, `"manual"`, `"scenario_path"`, `"historical_replay"`, `"random_walk"`, `"mean_reverting"`, `"regime_switching"`); v1.4 only ships generation logic for `"constant"`.
+- **`ExternalFactorObservation"** — `observation_id`, `factor_id`, `as_of_date`, `value`, `unit`, `source_id`, optional `phase_id`, optional `process_id`, `confidence`, `related_ids`, `metadata`. An observation records what the world saw; not every observation comes from a process, so `process_id` is optional.
+- **`ExternalScenarioPoint`** — `factor_id`, `as_of_date`, `value`, `unit`, optional `phase_id`, `metadata`. A point is the building block of a scenario path.
+- **`ExternalScenarioPath`** — `path_id`, `factor_id`, `points`, `source_id`, `metadata`. The path validates on construction that all points share its `factor_id`.
+
+### 39.3 ExternalProcessBook API
+
+- Process CRUD: `add_process`, `get_process`, `list_processes_by_factor`, `list_processes_by_type`.
+- Observation CRUD: `add_observation`, `get_observation`, `list_observations_by_factor`, `latest_observation(factor_id)`.
+- Scenario-path CRUD: `add_scenario_path`, `get_scenario_path`, `get_scenario_point(path_id, as_of_date, phase_id=None)`.
+- Helpers: `create_constant_observation` (uses process `base_value`), `create_observation_from_path` (replays a scenario point).
+- `snapshot()` returns sorted, JSON-friendly views of all three buckets.
+
+`latest_observation` returns the highest-`as_of_date` observation for a factor, or `None`. `get_scenario_point` returns `None` for a missing point on an existing path and raises `UnknownScenarioPathError` for an unknown path.
+
+### 39.4 Two minimal generation helpers
+
+v1.4 ships exactly two generation helpers and explicitly nothing else:
+
+- `create_constant_observation(process_id, as_of_date, phase_id=None)` — looks up a process with `process_type="constant"`, validates `base_value is not None`, builds an observation with a deterministic id (`f"observation:{process_id}:{as_of_date}:{phase_id or 'no_phase'}"`), and stores it.
+- `create_observation_from_path(path_id, as_of_date, phase_id=None)` — looks up the matching point on a scenario path, builds an observation from it (with `metadata["source_path_id"] = path_id` for provenance), and stores it. Returns `None` for a missing point.
+
+Random walks, mean reversion, regime switching, jump diffusion, historical replay from real data files — none of these are in v1.4. Each is a calibration decision, and v1 stays jurisdiction-neutral.
+
+### 39.5 Conceptual rules
+
+- Observations record what the world *observed*, not what any domestic agent does about it.
+- `ExternalProcessBook` does **not** mutate `OwnershipBook`, `ContractBook`, `PriceBook`, `ConstraintBook`, `SignalBook`, `ValuationBook`, or `InstitutionBook`.
+- `ExternalProcessBook` does **not** update prices automatically. An observation that the USD/JPY rate moved does not propagate into `PriceBook`. Behavior that consumes observations and updates other books belongs to later milestones and must satisfy the v1 four-property action contract.
+- `ExternalProcessBook` does **not** generate signals automatically. v1.4 considered emitting `signal_added` from observations and rejected it: signal creation is an authoring decision, not a side effect of observation.
+
+### 39.6 Cross-reference rule
+
+`factor_id` on processes and observations, and `process_id` on observations, are not validated for resolution. v1.4 does not require a factor to be registered in `ExternalSpace` before a process references it; it does not require a process to exist before an observation claims it. This is the v0 / v1 cross-reference rule: cross-references are recorded as data, not enforced as invariants. v2 / v3 calibration may populate factors and processes in either order.
+
+### 39.7 Ledger event types
+
+- `external_process_added` — emitted by `add_process`.
+- `external_observation_added` — emitted by `add_observation`.
+- `external_scenario_path_added` — emitted by `add_scenario_path`.
+
+All three use `space_id="external_processes"`. Observations propagate `confidence` to the ledger record's `confidence` field.
+
+### 39.8 Kernel wiring
+
+`WorldKernel` exposes `kernel.external_processes: ExternalProcessBook`. The book's `ledger` and `clock` are propagated in `__post_init__`, alongside the existing books (`ownership`, `contracts`, `prices`, `constraints`, `signals`, `valuations`, `institutions`).
+
+### 39.9 What v1.4 does not do
+
+- No stochastic process generation (random walk, mean reversion, regime switching, etc.). Those are later milestones.
+- No historical replay from real data files. Loading public Japan data is a v2 task; loading proprietary or paid data is a v3 task.
+- No domestic propagation of observations to `PriceBook`, `SignalBook`, or any domain space.
+- No FX conversion (v1.1's `ValuationComparator` already declines to convert; v1.4 likewise does not).
+- No shock primitives ("oil shock", "war", "FX crash"); no scenario interpretation; no Japan-specific calibration.
+
+### 39.10 v1.4 success criteria
+
+v1.4 is complete when **all** of the following hold:
+
+1. The four immutable dataclasses exist with all documented fields and reject empty required fields where applicable.
+2. `ExternalProcessBook` provides the full CRUD surface plus the two helpers and `snapshot`.
+3. Duplicate ids in each bucket are rejected with their `Duplicate*Error`. Unknown lookups raise `Unknown*Error`.
+4. `latest_observation` returns the highest-`as_of_date` observation for a factor, or `None`.
+5. `get_scenario_point` returns `None` for a missing point on an existing path and raises `UnknownScenarioPathError` for an unknown path.
+6. `create_constant_observation` validates `process_type == "constant"` and `base_value is not None`, builds a deterministic `observation_id`, and rejects double-calls as duplicates.
+7. `create_observation_from_path` returns `None` for a missing point and writes nothing in that case; raises for an unknown path.
+8. The three ledger record types are emitted on the corresponding `add_*` calls when a ledger is configured.
+9. `kernel.external_processes` is exposed with default wiring.
+10. v1.4 mutates none of `OwnershipBook`, `ContractBook`, `PriceBook`, `ConstraintBook`, `SignalBook`, `ValuationBook`, or `InstitutionBook`.
+11. All previous milestones (v0 through v1.3) continue to pass.

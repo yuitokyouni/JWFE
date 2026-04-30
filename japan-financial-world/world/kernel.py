@@ -10,6 +10,7 @@ from world.clock import Clock
 from world.constraints import ConstraintBook, ConstraintEvaluator
 from world.contracts import ContractBook
 from world.event_bus import EventBus
+from world.external_processes import ExternalProcessBook
 from world.institutions import InstitutionBook
 from world.ledger import Ledger
 from world.ownership import OwnershipBook
@@ -43,6 +44,9 @@ class WorldKernel:
     valuations: ValuationBook = field(default_factory=ValuationBook)
     valuation_comparator: ValuationComparator | None = None
     institutions: InstitutionBook = field(default_factory=InstitutionBook)
+    external_processes: ExternalProcessBook = field(
+        default_factory=ExternalProcessBook
+    )
 
     def __post_init__(self) -> None:
         for book in (
@@ -53,6 +57,7 @@ class WorldKernel:
             self.signals,
             self.valuations,
             self.institutions,
+            self.external_processes,
         ):
             if book.ledger is None:
                 book.ledger = self.ledger
