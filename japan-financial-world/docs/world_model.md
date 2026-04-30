@@ -2753,3 +2753,71 @@ After v0.14, all eight spaces enumerated in §2 (Corporate, Investors, Banking, 
 - a documented contract in `world_model.md`
 
 The world kernel as a constitutional structure is now complete. Subsequent milestones (v1 and beyond) will add domain behavior — Japanese-jurisdiction calibration, central bank reaction functions, investor strategy, market clearing, scenarios — on top of this kernel rather than expanding it.
+
+---
+
+## 35. Cross-Space Integration Verification (v0.15)
+
+The v0.15 milestone is a single integration test file — `tests/test_world_kernel_full_structure.py` — that exercises the entire eight-space world together. It writes no new production code; everything it verifies has already been implemented across §22–§34. The point of v0.15 is to confirm that those layers compose into one coherent system without behavior, scenarios, or domain logic, and to draw a line under v0 with a passing reference test.
+
+### 35.1 What the integration test covers
+
+The file builds one populated `WorldKernel` via a `_build_full_world()` helper, and asserts the following properties as separate test functions:
+
+1. **Coexistence.** All eight spaces register with the same kernel and run for one calendar year (365 ticks) without raising. The clock advances to `2027-01-01`.
+2. **Frequency correctness.** Each space's scheduled tasks fire the expected number of times across 365 days. For example, `banking_daily` fires 365 times, `corporate_quarterly` fires 4 times, `corporate_yearly` fires 1 time. This catches any regression in how `DomainSpace` interacts with `Scheduler`.
+3. **Snapshot creation.** The kernel emits 12 `state_snapshot_created` records over the year, one per month-end.
+4. **Per-space read access.** Each space can query its relevant projections through the inherited or domain-specific accessors:
+   - CorporateSpace reads balance sheet, constraint evaluations, and visible signals.
+   - BankSpace reads contracts, lending exposures, balance sheet, constraints, signals.
+   - InvestorSpace reads portfolio positions, exposures, balance sheet, constraints, signals.
+   - ExchangeSpace reads listings, latest price, price history, signals.
+   - RealEstateSpace reads property assets, prices, signals.
+   - InformationSpace reads signals by source / type / visibility.
+   - PolicySpace and ExternalSpace each read visible signals.
+5. **EventBus delivery semantics (§22 / §26).** A `WorldEvent` referencing a `signal_id` and addressed to two daily-firing target spaces is delivered exactly once to each target, on day 2 (the v0.3 next-tick rule). The test runs day 1 first, asserts zero deliveries, then runs day 2 and asserts two `event_delivered` ledger records.
+6. **Transport / visibility independence (§26.5).** A WorldEvent referencing a `restricted` signal is delivered through the bus regardless of the signal's visibility. The visibility filter applies only when the receiver queries `SignalBook.list_visible_to` directly.
+7. **No cross-space mutation.** The test takes a snapshot of every kernel-level book (ownership, contracts, prices, constraints, signals), exercises every read accessor across every space, and confirms that all five book snapshots are byte-identical to the pre-read state. The ledger accumulates entries (notably `constraint_evaluated` records produced by the evaluator), but no source-of-truth book is mutated by reading.
+8. **Complete ledger audit trail.** After setup and a one-year run, the ledger contains every expected event type: `object_registered`, `task_scheduled`, the 12 state-addition record types (`firm_state_added`, `bank_state_added`, etc.), the network-book mutation types (`ownership_position_added`, `contract_created`, `price_updated`, `constraint_added`, `signal_added`), the runtime types (`task_executed`, `state_snapshot_created`).
+
+### 35.2 What the integration test deliberately does not check
+
+v0.15 does not exercise behavior that v0 does not implement. The test does not assert anything about:
+
+- price formation or model marks
+- order flow or trade execution
+- credit decisions, default outcomes, covenant trips
+- investor allocation or rebalancing
+- policy rate changes or reaction-function output
+- external shock generation or factor value updates
+- narrative / rumor / credibility dynamics
+- cap rate or rent updates
+
+If any of those become non-zero in a future milestone's run, that milestone's own tests will assert them. v0.15 stays inside the empty-but-structured world.
+
+### 35.3 v0.15 success criteria
+
+v0.15 is complete when **all** of the following hold:
+
+1. The new test file exists at `tests/test_world_kernel_full_structure.py` and passes under `pytest -q`.
+2. All eight spaces are instantiated and registered against one `WorldKernel`.
+3. Minimal coherent state is populated in every space and across every kernel-level book.
+4. A 365-day run completes without exceptions, and per-frequency task counts match the declared frequencies of each space.
+5. Every space's read-only accessors return the expected shapes and values for the populated data.
+6. EventBus integration is verified end-to-end: next-tick delivery, two-target delivery, and transport independence from signal visibility.
+7. No source-of-truth book is mutated by read operations.
+8. The ledger carries every expected event type after setup and run.
+9. All previous milestones (v0 through v0.14) continue to pass.
+
+### 35.4 v0 closure
+
+v0.15 is the final milestone in the v0 line. After it passes, the project's invariants are:
+
+- the world kernel is a jurisdiction-neutral constitutional structure
+- all eight spaces classify but do not act
+- all reads are non-mutating; all writes are explicit and ledger-recorded
+- inter-space communication is mediated by EventBus, with same-tick delivery forbidden
+- signal content lives in `SignalBook`; classifications live in their respective spaces
+- no decision, valuation, scenario, or stochastic process is implemented anywhere
+
+v1 (and any later versions) will build on this foundation. They are expected to add behavior, calibration to specific Japanese institutions, and scenario logic — but not to weaken any of the v0 invariants above without an explicit, documented decision.
