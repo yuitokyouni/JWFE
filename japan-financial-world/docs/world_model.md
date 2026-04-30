@@ -3238,3 +3238,118 @@ v1.4 is complete when **all** of the following hold:
 9. `kernel.external_processes` is exposed with default wiring.
 10. v1.4 mutates none of `OwnershipBook`, `ContractBook`, `PriceBook`, `ConstraintBook`, `SignalBook`, `ValuationBook`, or `InstitutionBook`.
 11. All previous milestones (v0 through v1.3) continue to pass.
+
+---
+
+## 40. Relationship Capital Layer (v1.5)
+
+The v1.5 milestone adds **non-contractual relationships** between world objects as first-class records. Relationship capital captures soft links — trust, reputation, information access, historical support, advisory ties, main-bank-like ties — that contracts (`ContractBook`, v0.4) and ownership (`OwnershipBook`, v0.4) cannot express. v1.5 stores the records and supports controlled strength updates; it does **not** apply decay, decide lending, drive investor behavior, propagate reputation effects, or calibrate to any specific jurisdiction.
+
+For the full design rationale (why contracts are not enough, the four-layer separation between contract / ownership / signal / relationship, evidence-refs and causal traceability, why decay is stored but not applied, why Japan main-bank calibration is v2/v3), see [`v1_relationship_capital_design.md`](v1_relationship_capital_design.md).
+
+### 40.1 RelationshipRecord
+
+`RelationshipRecord` is an immutable dataclass with twelve fields:
+
+- `relationship_id` — unique identifier.
+- `source_id`, `target_id` — free-form WorldIDs (not validated for resolution).
+- `relationship_type` — free-form string (e.g., `"main_bank"`, `"advisory"`, `"trust"`, `"interlocking_directorate"`).
+- `strength` — domain-specific numeric score; v1.5 does not normalize.
+- `as_of_date` — ISO date of the recorded state.
+- `direction` — free-form string. Suggested labels: `"directed"` (asymmetric source→target), `"undirected"` (symmetric), `"reciprocal"` (mutual, possibly different strengths each way).
+- `visibility` — free-form string (`"public"`, `"private"`, `"restricted"`, `"inferred"`, `"rumored"`). Stored but not enforced at read time; consumers decide visibility filtering.
+- `decay_rate` — stored verbatim; v1.5 does **not** apply it on read.
+- `confidence` — bounded to [0, 1].
+- `evidence_refs` — tuple of WorldIDs / record IDs justifying the relationship (signals, contracts, action records, valuations, observations, ledger record IDs).
+- `metadata` — bag for non-standard attributes.
+
+### 40.2 RelationshipView
+
+`RelationshipView` is an immutable derived record returned by `build_relationship_view`. Its fields:
+
+- `subject_id`, `counterparty_id` — the two ids the view aggregates between.
+- `relationship_types` — tuple of types found.
+- `total_strength` — simple sum of strengths over included records.
+- `visible_relationship_ids` — tuple of relationship_ids included.
+- `as_of_date` — kernel clock's current date when available.
+- `metadata` — empty by default.
+
+The view is built on demand and never stored; reads are pure.
+
+### 40.3 RelationshipCapitalBook API
+
+- `add_relationship(record)` — append; rejects duplicate id; emits `relationship_added` to the ledger.
+- `get_relationship(relationship_id)` — raises `UnknownRelationshipError` for unknown ids.
+- `list_by_source` / `list_by_target` / `list_by_type` — indexed reads.
+- `list_between(source_id, target_id)` — returns records with the exact (source, target) pair. Directional: callers wanting both directions call twice.
+- `update_strength(relationship_id, new_strength, as_of_date=None, reason=None)` — replaces the record under the id with a copy carrying the new strength. Records `relationship_strength_updated` to the ledger with the previous strength and the supplied reason. Other fields (type, direction, visibility, decay_rate, confidence, evidence_refs, metadata) are preserved.
+- `build_relationship_view(subject_id, counterparty_id)` — aggregation view (see §40.4).
+- `snapshot()` — sorted, JSON-friendly view of all relationships.
+
+### 40.4 build_relationship_view direction handling
+
+`build_relationship_view(A, B)` returns a `RelationshipView` from A's perspective:
+
+- All `(source=A, target=B)` records are included regardless of `direction`.
+- `(source=B, target=A)` records are included **only** when their `direction` is `"undirected"` or `"reciprocal"`. `"directed"` records in the reverse direction describe B's view of A and belong to `build_relationship_view(B, A)`.
+
+`total_strength` is the simple sum over the included records. v1.5 does not apply decay, normalize across types, weight by confidence, deduplicate, or filter by visibility — those are interpretation concerns. The view sums what is there.
+
+### 40.5 Why decay is stored but not applied
+
+`decay_rate` is recorded as a parameter slot and v1.5 explicitly does not compute `strength * exp(-decay * elapsed)` on read. The reasons:
+
+- Decay parameters are jurisdiction-specific empirical findings (calibration, not architecture). v1 stays jurisdiction-neutral.
+- Multiple decay models (continuous exponential, step on covenant breach, ratchet on success) are plausible. v1.5 should not commit to one.
+- If decay were auto-applied, two reads of the same relationship at different dates would return different strengths, making the read path stateful in a way the rest of the kernel avoids. v1.5's reads are deterministic.
+
+A future module that wants decayed strength computes it from the stored fields, or calls `update_strength` to persist a decayed value as a new fact. Either path keeps the audit trail clear. Test [`test_decay_rate_stored_but_not_applied`](../tests/test_relationships.py) enforces this rule.
+
+### 40.6 Evidence refs
+
+`evidence_refs` carries the ids of records that justify why a relationship exists. The field accepts any kind of WorldID / record id without validation: contracts, signals, action records, valuations, observations, ledger record ids. The point is *causal traceability* — a future replay engine can walk from a relationship to its evidence and reconstruct the chain that produced the record.
+
+This is the relationship-layer counterpart to v1.3's `InstitutionalActionRecord.parent_record_ids`. Both fields turn the ledger from a flat log into a causal graph.
+
+### 40.7 Cross-reference rule
+
+`source_id`, `target_id`, and `evidence_refs` are recorded as data and not validated for resolution. v1.5 follows the v0 / v1 rule: cross-references are data, not enforced invariants.
+
+### 40.8 Ledger event types
+
+- `relationship_added` — emitted by `add_relationship`. Carries the relationship's `visibility` and `confidence` to the ledger record's corresponding fields.
+- `relationship_strength_updated` — emitted by `update_strength`. Records `previous_strength`, `new_strength`, `as_of_date` (post-update), and the supplied `reason`.
+
+Both use `space_id="relationships"`.
+
+### 40.9 Kernel wiring
+
+`WorldKernel` exposes `kernel.relationships: RelationshipCapitalBook`. The book's `ledger` and `clock` are propagated in `__post_init__`, alongside the existing books (`ownership`, `contracts`, `prices`, `constraints`, `signals`, `valuations`, `institutions`, `external_processes`).
+
+### 40.10 What v1.5 does not do
+
+- No lending decisions, investor behavior, or automatic rescue / support. All belong to later milestones that consume relationships and satisfy the v1 four-property action contract.
+- No decay application. `decay_rate` is stored verbatim.
+- No reputation contagion across third parties (A's trust in B influencing C's trust in B). v1.5 stores pairwise relationships only.
+- No information-asymmetry modeling. v1.5 records the tie; it does not model the asymmetry.
+- No visibility filtering at read time. The label is stored but not enforced.
+- No network analytics (centrality, communities, clustering). Those are derivable from `snapshot()` if needed.
+- No Japan main-bank calibration. v1.5 supports `relationship_type="main_bank"` as a string label and stores any caller-assigned strength; jurisdiction-specific main-bank semantics belong to v2 (public calibration) or v3 (proprietary).
+- No price impact, credit decisions, trading, or scenarios.
+
+### 40.11 v1.5 success criteria
+
+v1.5 is complete when **all** of the following hold:
+
+1. `RelationshipRecord` exists with all twelve documented fields and is immutable. Required fields are validated; `confidence` is bounded to [0, 1].
+2. `RelationshipView` exists as an immutable derived record.
+3. `RelationshipCapitalBook` provides `add_relationship`, `get_relationship`, `list_by_source`, `list_by_target`, `list_by_type`, `list_between`, `update_strength`, `build_relationship_view`, and `snapshot`.
+4. Duplicate ids are rejected with `DuplicateRelationshipError`. Unknown lookups raise `UnknownRelationshipError`.
+5. `update_strength` replaces the record in place, preserves all other fields, and records a ledger event with the previous strength and supplied reason.
+6. `evidence_refs` is preserved through add and get unchanged.
+7. `decay_rate` is stored verbatim and **not** automatically applied on read.
+8. `build_relationship_view` aggregates forward records plus undirected / reciprocal reverse records, sums strengths without applying decay, and triggers no behavior in any other book.
+9. The two ledger record types are emitted on the corresponding `add_*` / update calls when a ledger is configured.
+10. `kernel.relationships` is exposed with default wiring.
+11. v1.5 mutates none of `OwnershipBook`, `ContractBook`, `PriceBook`, `ConstraintBook`, `SignalBook`, `ValuationBook`, `InstitutionBook`, or `ExternalProcessBook`.
+12. All previous milestones (v0 through v1.4) continue to pass.

@@ -17,6 +17,7 @@ from world.ownership import OwnershipBook
 from world.phases import IntradayPhaseSpec, PhaseSequence
 from world.prices import PriceBook
 from world.registry import RegisteredObject, Registry
+from world.relationships import RelationshipCapitalBook
 from world.scheduler import Phase, Scheduler, ScheduledTask, TaskSpec
 from world.signals import SignalBook
 from world.state import State
@@ -47,6 +48,9 @@ class WorldKernel:
     external_processes: ExternalProcessBook = field(
         default_factory=ExternalProcessBook
     )
+    relationships: RelationshipCapitalBook = field(
+        default_factory=RelationshipCapitalBook
+    )
 
     def __post_init__(self) -> None:
         for book in (
@@ -58,6 +62,7 @@ class WorldKernel:
             self.valuations,
             self.institutions,
             self.external_processes,
+            self.relationships,
         ):
             if book.ledger is None:
                 book.ledger = self.ledger
