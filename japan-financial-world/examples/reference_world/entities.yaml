@@ -1,0 +1,140 @@
+# FWE Reference Demo — Entity Catalog
+#
+# This file is a synthetic, jurisdiction-neutral entity catalog for
+# the FWE Reference Demo (see docs/fwe_reference_demo_design.md). All
+# identifiers use the *_reference_* naming convention; no real bank,
+# firm, fund, market, regulator, or country name appears here.
+#
+# All numeric values are illustrative round numbers chosen for
+# traceability — not calibrated to any real economy.
+
+firms:
+  - id: "firm:reference_manufacturer_a"
+    sector: "manufacturing"
+    tier: "large"
+    metadata:
+      role: "valuation_subject"   # used in step 3 of the reference loop
+  - id: "firm:reference_manufacturer_b"
+    sector: "manufacturing"
+    tier: "mid"
+  - id: "firm:reference_retailer_a"
+    sector: "retail"
+    tier: "mid"
+  - id: "firm:reference_property_a"
+    sector: "real_estate_holding"
+    tier: "mid"
+  - id: "firm:reference_utility_a"
+    sector: "utilities"
+    tier: "large"
+
+banks:
+  - id: "bank:reference_bank_a"
+    bank_type: "reference_large_bank"
+    tier: "large"
+  - id: "bank:reference_bank_b"
+    bank_type: "reference_regional_bank"
+    tier: "regional"
+
+investors:
+  - id: "investor:reference_pension_a"
+    investor_type: "long_only_pension"
+    tier: "large"
+  - id: "investor:reference_passive_a"
+    investor_type: "passive_index"
+    tier: "mid"
+  - id: "investor:reference_macro_a"
+    investor_type: "active_macro"
+    tier: "mid"
+
+exchanges:
+  - id: "market:reference_equity_market"
+    market_type: "equity"
+    tier: "primary"
+
+real_estate_markets:
+  - id: "market:reference_real_estate_central"
+    region: "reference_central"
+    property_type: "office"
+    tier: "prime"
+
+information_sources:
+  - id: "source:reference_news_outlet"
+    source_type: "news_aggregator"
+    tier: "general"
+
+policy_authorities:
+  - id: "authority:reference_central_bank"
+    authority_type: "central_bank"
+    tier: "primary"
+
+institutions:
+  # The institution profile that records the institutional action in
+  # step 5 of the reference loop. Distinct from PolicyAuthorityState
+  # above (v0 identity-level state) — this is the v1.3 institution
+  # profile used by InstitutionBook.
+  - id: "institution:reference_central_bank"
+    institution_type: "reference_central_bank"
+    jurisdiction_label: "neutral_jurisdiction"
+    mandate_summary: "reference monetary stability mandate (synthetic)"
+
+external_factors:
+  - id: "factor:reference_macro_index"
+    process_id: "process:reference_macro_index"
+    factor_type: "macro_indicator"
+    process_type: "constant"
+    unit: "index_points"
+    base_value: 100.0
+  - id: "factor:reference_fx_pair"
+    process_id: "process:reference_fx_pair"
+    factor_type: "fx_rate"
+    process_type: "constant"
+    unit: "rate"
+    base_value: 1.0
+
+# Seed price book entry — the comparator in step 4 needs a latest
+# price for the valuation subject. The valued firm's price is set to
+# 95 so that the step-3 valuation of 110 produces a positive gap of
+# +15 (~15.8%).
+seed_prices:
+  - asset_id: "firm:reference_manufacturer_a"
+    price: 95.0
+    as_of_date: "2026-01-01"
+    source: "exchange"
+
+# Static portfolio holdings (illustrative; no trading happens). Used
+# to demonstrate that the demo world has multi-space populations,
+# not to drive any decision.
+seed_ownership:
+  - owner_id: "investor:reference_pension_a"
+    asset_id: "firm:reference_manufacturer_a"
+    quantity: 1000
+  - owner_id: "investor:reference_passive_a"
+    asset_id: "firm:reference_manufacturer_a"
+    quantity: 250
+  - owner_id: "investor:reference_passive_a"
+    asset_id: "firm:reference_manufacturer_b"
+    quantity: 100
+
+# Reference-loop parameters used by run_reference_loop.py. These are
+# script inputs, not record fields; they keep the run deterministic.
+loop:
+  as_of_date: "2026-01-01"
+  observation_phase_id: "overnight"
+  action_phase_id: "post_close"
+  observed_factor: "factor:reference_macro_index"
+  signal_id_observation: "signal:reference_macro_observed_001"
+  valuation_id: "valuation:reference_demo_001"
+  valuation_subject_id: "firm:reference_manufacturer_a"
+  valuer_id: "valuer:reference_research_desk"
+  valuation_method: "dcf"
+  valuation_estimated_value: 110.0
+  valuation_currency: "reference_unit"
+  action_id: "action:reference_announcement_001"
+  action_institution_id: "institution:reference_central_bank"
+  action_type: "reference_macro_statement"
+  signal_id_followup: "signal:reference_followup_001"
+  event_id: "event:reference_announcement_001"
+  event_source_space: "information"
+  event_target_spaces:
+    - "banking"
+    - "investors"
