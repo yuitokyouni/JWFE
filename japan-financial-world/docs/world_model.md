@@ -3943,3 +3943,130 @@ The engine writes only to `RoutineBook` and only via `add_run_record`. Cross-ref
 | v1.8.7 Corporate Reporting Routine | First concrete routine using `corporate_quarterly_reporting` on the diagonal `Corporate → Corporate` channel. | Next |
 | v1.8.8 Investor + Bank Attention Demo | Two more concrete routines using heterogeneous attention. | After v1.8.7 |
 | v1.9 Living Reference World Demo | Year-long run with no external observation; non-empty ledger on every reporting / review cycle. | After v1.8.8 |
+
+## 49. v1.8.7 Corporate Quarterly Reporting Routine
+
+§49 (v1.8.7) ships **the first concrete endogenous routine** on top of the v1.8.3 / v1.8.4 / v1.8.5 / v1.8.6 substrate. The routine is intentionally narrow: a Corporate → Corporate self-loop that produces one synthetic quarterly reporting `InformationSignal` per call, through the existing `RoutineEngine` and `SignalBook` plumbing. No economic computation, no investor reaction, no price formation, no scheduler integration.
+
+§49 is the first place in the project where an actor "does something" on its own schedule cycle without being shocked into action. It validates that the §43 (v1.8.1) endogenous-dynamics direction can produce a real ledger trace using only the existing primitives — no special new API needed for one routine to exist.
+
+### 49.1 What lands in v1.8.7
+
+- `world/reference_routines.py` (new module):
+  - Three module constants establishing the v1.8.7 controlled vocabulary:
+    - `CORPORATE_REPORTING_INTERACTION_ID = "interaction:corporate.reporting_preparation"` — the shared self-loop channel id.
+    - `CORPORATE_QUARTERLY_REPORTING_ROUTINE_TYPE = "corporate_quarterly_reporting"` — the routine_type string.
+    - `CORPORATE_REPORTING_SIGNAL_TYPE = "corporate_quarterly_report"` — the produced signal's `signal_type`. Distinct from the v1.8.2 design's `"earnings_disclosure"` watched-type because v1.8.7 does **not** compute earnings — it publishes a synthetic report.
+    - `CORPORATE_REPORTING_SOURCE_ID = "source:corporate_self_reporting"` — synthetic source id; not a real news outlet or filing system.
+  - `register_corporate_reporting_interaction(kernel) -> InteractionSpec` — idempotent registration of the self-loop channel. `routine_types_that_may_use_this_channel` is locked to `("corporate_quarterly_reporting",)`.
+  - `register_corporate_quarterly_reporting_routine(kernel, *, firm_id, routine_id=None) -> RoutineSpec` — idempotent per-firm registration. `frequency="QUARTERLY"`, `phase_id="post_close"`, `missing_input_policy="degraded"`, `allowed_interaction_ids` contains the corporate-reporting channel.
+  - `run_corporate_quarterly_reporting(kernel, *, firm_id, ...) -> CorporateReportingResult` — the routine itself.
+  - `CorporateReportingResult` immutable dataclass carrying the engine result + the produced signal, with `run_id` / `signal_id` / `routine_id` / `as_of_date` / `status` properties for caller convenience.
+- `tests/test_corporate_reporting_routine.py`: 26 tests covering the three helpers + the end-to-end flow + boundaries (see §49.4 for the test inventory).
+
+The v1.8.7 module is **additive only**. No `world/` infrastructure module, no `spaces/` file, and no existing test is changed. The kernel's `__post_init__` is not modified — registration is caller-driven, mirroring how v1.8.6 made execution caller-driven.
+
+### 49.2 Execution flow
+
+The helper composes the existing primitives in a single call:
+
+```
+run_corporate_quarterly_reporting(kernel, firm_id="firm:reference_manufacturer_a")
+
+  1. Resolve as_of_date (argument > kernel.clock).
+  2. Build RoutineExecutionRequest:
+       - routine_id   = "routine:corporate_quarterly_reporting:<firm_id>"
+       - request_id   = "req:routine:corporate_quarterly_reporting:<firm_id>:<date>"
+       - interaction_ids = (CORPORATE_REPORTING_INTERACTION_ID,)
+       - explicit_input_refs = (firm_id,)        # default; pass () for degraded
+       - output_refs        = (signal_id,)
+  3. kernel.routine_engine.execute_request(request)
+       -> writes one RoutineRunRecord
+       -> emits one routine_run_recorded ledger entry
+  4. Build InformationSignal:
+       - signal_id    = "signal:corporate_quarterly_report:<firm_id>:<date>"
+       - signal_type  = "corporate_quarterly_report"
+       - subject_id   = firm_id
+       - source_id    = "source:corporate_self_reporting"
+       - related_ids  = (run_id,)                # back-link to the run
+       - metadata     = {"routine_run_id": run_id, "routine_type": ..., "interaction_id": ...}
+       - payload      = synthetic toy fields (see §49.3)
+  5. kernel.signals.add_signal(signal)
+       -> writes the signal to SignalBook
+       -> emits one signal_added ledger entry
+```
+
+Two ledger entries land per call, in this order: `routine_run_recorded`, then `signal_added`. The pairing is reconstructable from the ledger alone via the `related_ids` back-link on the signal and the `output_refs` forward-link on the run record.
+
+### 49.3 Synthetic signal payload
+
+The signal's `payload` carries a small set of toy fields:
+
+```
+firm_id            : str    — the subject
+reporting_period   : str    — ISO YYYY-MM-DD (= as_of_date)
+revenue_index      : float  — toy, default 100.0
+margin_index       : float  — toy, default 0.10
+leverage_hint      : float  — toy, default 1.0
+liquidity_hint     : float  — toy, default 1.0
+confidence         : float  — toy, default 1.0
+statement          : str    — "synthetic quarterly reporting signal"
+```
+
+These values are illustrative round numbers chosen for traceability. **They are not computed from any balance sheet, price book, valuation book, external observation, or other source-of-truth book.** v1.8.7 explicitly does not implement economic computation. Callers may override the defaults to publish different toy values; future v2 calibration will populate the same fields from public Japan data without altering the routine's structural shape.
+
+### 49.4 Test coverage
+
+`tests/test_corporate_reporting_routine.py` (26 tests):
+
+- Registration helpers: idempotent re-registration of both interaction and routine; correct self-loop / channel-type / `routine_types_that_may_use_this_channel` shape; per-firm routine metadata; `firm_id` rejection on empty.
+- Run helper happy path: exactly one `RoutineRunRecord` created per call; exactly one `InformationSignal` published; signal back-references the run via `related_ids` and `metadata["routine_run_id"]`; run record forward-references the signal via `output_refs`; the run uses the corporate self-loop interaction (`source_space_id == target_space_id == "corporate"`).
+- Synthetic payload fields preserved verbatim; default `status="completed"` when inputs present; `status="degraded"` when `explicit_input_refs=()` (v1.8.1 anti-scenario discipline).
+- Date semantics: defaults to clock; explicit override honored.
+- Compatibility failures: missing interaction → `RoutineExecutionIncompatibleInteractionError`; missing routine spec → engine raises `RoutineExecutionValidationError`; both surfaced loudly.
+- Ledger ordering: exactly two new ledger entries land per call, in the order `routine_run_recorded` then `signal_added`, with matching `object_id`s.
+- No-mutation guarantee against `OwnershipBook` / `ContractBook` / `PriceBook` / `ConstraintBook` / `ValuationBook` / `InstitutionBook` / `ExternalProcessBook` / `RelationshipCapitalBook`.
+- Auto-execution prohibition: `kernel.tick()` and `kernel.run(days=N)` produce zero new run records and zero new signals — the routine is caller-initiated only.
+- Synthetic-only identifiers: the signal's `signal_id` / `source_id` / `payload` / `metadata` and every module constant are walked for the v1.7-public-rc1 forbidden-token list and asserted clean.
+- Multi-firm and multi-period scaling: distinct firms get distinct routines and signals; the same firm across two quarters produces two distinct run records under one routine spec.
+
+### 49.5 Boundaries
+
+§49 is the *first* concrete routine. It is also the *narrowest* possible one. v1.8.7 explicitly does **not**:
+
+- Trigger investor reactions, bank reviews, valuation refreshes, or any other downstream routine. The signal sits in `SignalBook`; nothing reads it.
+- Update prices, ownership, contracts, balance sheets, valuations, constraints, relationships, institutions, or external processes.
+- Compute revenue, margin, leverage, liquidity, or any other economic metric. The payload's "indices" and "hints" are toy values.
+- Hook into the scheduler. Caller invokes the routine; nothing fires it automatically.
+- Implement or imply Japan calibration. All identifiers and source labels are synthetic; the synthetic-only identifier test enforces this at runtime.
+- Call user-defined callbacks, attention selection logic, or automatic menu construction. The v1.8.5 attention layer is not wired into v1.8.7 — the routine simply passes its own `firm_id` as an explicit input ref.
+
+The sole writes per call are: one `RoutineRunRecord` (via `RoutineBook.add_run_record`) and one `InformationSignal` (via `SignalBook.add_signal`). Reviewers should reject any v1.8.x PR that adds writes outside this set under the v1.8.7 helper.
+
+### 49.6 v1.8.7 success criteria
+
+§49 is complete when **all** hold:
+
+1. `world/reference_routines.py` exists and behaves per §49.1 / §49.2.
+2. `tests/test_corporate_reporting_routine.py` passes (26 tests).
+3. The full test suite passes (1025 tests = 999 prior + 26 corporate-reporting).
+4. `compileall world spaces tests examples` is clean and `ruff check .` from the repo root is clean.
+5. No existing test was modified; no existing record shape, book API, scheduler extension, or ledger record type was altered.
+6. The two new ledger entries (`routine_run_recorded` then `signal_added`) appear in that order per call, and the signal's `related_ids` contain the run's `run_id` — verified by an explicit ordering test.
+7. `kernel.tick()` and `kernel.run(days=N)` do not auto-execute the routine — verified by tests that exercise both paths against a populated kernel and assert zero run records and zero signals appear.
+
+### 49.7 Position in the v1.8.x sequence
+
+v1.8.7 is the v1.8.x line's **first economically-suggestive output** — but it is suggestive only. The signal exists; nothing reads it. The next two milestones make it useful:
+
+| Milestone | Scope | Status |
+| --- | --- | --- |
+| v1.8.1 Endogenous Reference Dynamics | Design (§43). | Shipped |
+| v1.8.2 Interaction Topology + Attention | Design (§44). | Shipped |
+| v1.8.3 InteractionBook + Tensor View | Code (§45). | Shipped |
+| v1.8.4 RoutineBook + RoutineRunRecord | Code (§46). | Shipped |
+| v1.8.5 AttentionProfile + ObservationMenu + SelectedObservationSet | Code (§47). | Shipped |
+| v1.8.6 Routine Engine plumbing | Code (§48). | Shipped |
+| **v1.8.7 Corporate Quarterly Reporting Routine** | Code (§49). First concrete routine; Corporate → Corporate self-loop. | **Shipped** |
+| v1.8.8 Investor + Bank Attention Demo | Two more concrete routines. The investor and bank routines may *read* the v1.8.7 signal through `AttentionProfile` filters — that is the first heterogeneous-attention test. | Next |
+| v1.9 Living Reference World Demo | Year-long run on the routine + topology + attention stack with no external observation; non-empty ledger on every reporting / review cycle. | After v1.8.8 |

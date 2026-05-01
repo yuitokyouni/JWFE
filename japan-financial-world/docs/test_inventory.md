@@ -1,11 +1,11 @@
 # Test Inventory
 
-Snapshot of the test suite at **v1.8.6** (`Routine Engine
-plumbing`): `999 / 999 passing` (444 v0 + 188 v1.0-v1.7 frozen
-reference + 367 post-v1.7 additions covering reference demo,
+Snapshot of the test suite at **v1.8.7** (`Corporate Quarterly
+Reporting Routine`): `1025 / 1025 passing` (444 v0 + 188 v1.0-v1.7
+frozen reference + 393 post-v1.7 additions covering reference demo,
 replay, manifest, catalog-shape, experiment harness, renamed
-WorldID tests, interactions, routines, attention, and routine
-engine).
+WorldID tests, interactions, routines, attention, routine engine,
+and the first concrete routine).
 
 This inventory is grouped by what each component verifies. The numbers in
 parentheses are test counts per file. Run the full suite with:
@@ -273,6 +273,36 @@ no-mutation guarantee.
   `RecordType.INTERACTION_ADDED`; kernel wiring; no-mutation
   guarantee against every other v0 / v1 source-of-truth book.
 
+## Corporate quarterly reporting routine (v1.8.7)
+
+- `test_corporate_reporting_routine.py` (26) — registration
+  helpers (`register_corporate_reporting_interaction` /
+  `register_corporate_quarterly_reporting_routine`) are
+  idempotent and produce a Corporate → Corporate self-loop
+  channel locked to the `corporate_quarterly_reporting`
+  routine type, plus per-firm `RoutineSpec`s with the right
+  `frequency` / `phase_id` / `missing_input_policy` /
+  `allowed_interaction_ids`. The
+  `run_corporate_quarterly_reporting` helper produces exactly
+  one `RoutineRunRecord` and exactly one
+  `corporate_quarterly_report` `InformationSignal` per call,
+  linked by id (`signal.related_ids` and
+  `signal.metadata["routine_run_id"]` back-reference the run;
+  `record.output_refs` forward-references the signal). Default
+  `status="completed"` when inputs are present; `status="degraded"`
+  when `explicit_input_refs=()` (v1.8.1 anti-scenario discipline);
+  date defaults to clock and explicit override honored;
+  missing interaction or missing routine spec raise the
+  v1.8.6 controlled errors; ledger ordering pinned to
+  `routine_run_recorded` then `signal_added`; no-mutation
+  guarantee against every other v0/v1 source-of-truth book;
+  `kernel.tick()` and `kernel.run(days=N)` do NOT auto-run;
+  signal payload + module constants are scanned for the
+  forbidden Japan-name token list and asserted clean;
+  multiple firms each get their own routine; the same firm
+  across two quarters produces two distinct run records and
+  signals.
+
 ## Routine engine (v1.8.6)
 
 - `test_routine_engine.py` (50) — `RoutineExecutionRequest` field
@@ -402,7 +432,7 @@ no-mutation guarantee.
 | Reference loop (v1.6)            | 1     | 5     |
 | **v1 subtotal**                  | **7** | **188** |
 
-### v1.7-public-rc1+ / v1.8 / v1.8.3 / v1.8.4 / v1.8.5 / v1.8.6 additions
+### v1.7-public-rc1+ / v1.8 / v1.8.3 / v1.8.4 / v1.8.5 / v1.8.6 / v1.8.7 additions
 
 | Component                               | Files | Tests |
 | --------------------------------------- | ----- | ----- |
@@ -416,7 +446,8 @@ no-mutation guarantee.
 | Routines (v1.8.4)                       | 1     | 72    |
 | Attention (v1.8.5)                      | 1     | 102   |
 | Routine engine (v1.8.6)                 | 1     | 50    |
-| **post-v1.7 subtotal**                  | **10**| **367** |
+| Corporate quarterly reporting (v1.8.7)  | 1     | 26    |
+| **post-v1.7 subtotal**                  | **11**| **393** |
 
 ### v0 + v1 + post-v1.7 totals
 
@@ -424,8 +455,8 @@ no-mutation guarantee.
 | -------------------------------- | ----- | ----- |
 | v0                               | 35    | 444   |
 | v1.0–v1.7 frozen reference       | 7     | 188   |
-| post-v1.7 (v1.7-public-rc1+ / v1.8 / v1.8.3 / v1.8.4 / v1.8.5 / v1.8.6) | 10 | 367 |
-| **Total**                        | **52**| **999** |
+| post-v1.7 (v1.7-public-rc1+ / v1.8 / v1.8.3 / v1.8.4 / v1.8.5 / v1.8.6 / v1.8.7) | 11 | 393 |
+| **Total**                        | **53**| **1025** |
 
 ## How to interpret a failing test
 

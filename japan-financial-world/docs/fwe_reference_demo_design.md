@@ -369,6 +369,19 @@ a v1+ behavioral milestone, not an extension of this demo.
   (required fields, hash format, deterministic write,
   git-unavailable handling, no ledger mutation).
 
+> **v1.8.7 update — first endogenous routine available.** As of
+> v1.8.7, the project ships its first concrete routine:
+> `world.reference_routines.run_corporate_quarterly_reporting(...)`.
+> The routine runs Corporate → Corporate as a self-loop, persists
+> one `RoutineRunRecord` through `RoutineEngine`, and publishes one
+> synthetic `corporate_quarterly_report` `InformationSignal`. The
+> v1.7-era reference demo described in this document is unchanged;
+> the v1.8.7 routine is a separate helper that callers may invoke
+> for endogenous traces (no external observation required). The
+> v1.9 Living Reference World Demo will compose multiple routines
+> across firms / banks / investors into a single year-long trace
+> that the v1.7-era one-shot demo here cannot produce on its own.
+
 No file under `world/`, `spaces/`, or any existing test file is
 modified. The 632 / 632 v0 + v1 test count grows by the number of
 new demo tests; no existing test is changed.
