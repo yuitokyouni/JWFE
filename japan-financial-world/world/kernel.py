@@ -13,6 +13,7 @@ from world.contracts import ContractBook
 from world.event_bus import EventBus
 from world.exposures import ExposureBook
 from world.external_processes import ExternalProcessBook
+from world.observation_menu_builder import ObservationMenuBuilder
 from world.institutions import InstitutionBook
 from world.interactions import InteractionBook
 from world.ledger import Ledger
@@ -63,6 +64,7 @@ class WorldKernel:
     variables: WorldVariableBook = field(default_factory=WorldVariableBook)
     exposures: ExposureBook = field(default_factory=ExposureBook)
     routine_engine: RoutineEngine | None = None
+    observation_menu_builder: ObservationMenuBuilder | None = None
 
     def __post_init__(self) -> None:
         for book in (
@@ -124,6 +126,22 @@ class WorldKernel:
                 routines=self.routines,
                 interactions=self.interactions,
                 attention=self.attention,
+                clock=self.clock,
+            )
+
+        # v1.8.11 observation-menu builder — read-only join service
+        # that builds per-actor ObservationMenu records from
+        # visible signals, visible variable observations, and
+        # active exposures, and writes them through
+        # AttentionBook.add_menu's existing ledger emission path.
+        # Does NOT hook into tick() / run().
+        if self.observation_menu_builder is None:
+            self.observation_menu_builder = ObservationMenuBuilder(
+                attention=self.attention,
+                signals=self.signals,
+                variables=self.variables,
+                exposures=self.exposures,
+                interactions=self.interactions,
                 clock=self.clock,
             )
 

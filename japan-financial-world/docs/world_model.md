@@ -4281,10 +4281,10 @@ The book writes only to itself + the ledger (via the existing `Ledger.append` pa
 | v1.8.7 Corporate Quarterly Reporting Routine | First concrete routine. | Shipped |
 | v1.8.8 Reference Variable Layer — Design | Design (§50). | Shipped |
 | v1.8.8 hardening — anchor variables to spaces / channels / exposures | Design (§50.1). | Shipped |
-| **v1.8.9 WorldVariableBook** | Code (§51). Storage + lookup only. | **Shipped** |
-| v1.8.10 Exposure / Dependency Layer | Code. | Next |
-| v1.8.11 `ObservationMenu` builder | Code. | After v1.8.10 |
-| v1.8.12 Investor + Bank Attention Demo | Code. | After v1.8.11 |
+| v1.8.9 WorldVariableBook | Code (§51). Storage + lookup only. | Shipped |
+| v1.8.10 Exposure / Dependency Layer | Code (§52). | Shipped |
+| **v1.8.11 `ObservationMenu` builder** | Code (§53). Read-only join. | **Shipped** |
+| v1.8.12 Investor + Bank Attention Demo | Code. | Next |
 | v1.9 Living Reference World Demo | Code + tests. | After v1.8.12 |
 
 ## 52. v1.8.10 Exposure / Dependency Layer
@@ -4378,6 +4378,76 @@ Each step is opt-in. v1.8.10 does **not** implement the join; it only persists t
 | v1.8.8 Reference Variable Layer — Design (+ hardening) | Design (§50, §50.1). | Shipped |
 | v1.8.9 WorldVariableBook | Code (§51). | Shipped |
 | **v1.8.10 Exposure / Dependency Layer** | Code (§52). Storage + lookup only. | **Shipped** |
-| v1.8.11 `ObservationMenu` builder | Code. | Next |
-| v1.8.12 Investor + Bank Attention Demo | Code. | After v1.8.11 |
+| **v1.8.11 `ObservationMenu` builder** | Code (§53). Read-only join. | **Shipped** |
+| v1.8.12 Investor + Bank Attention Demo | Code. | Next |
+| v1.9 Living Reference World Demo | Code + tests. | After v1.8.12 |
+
+## 53. v1.8.11 ObservationMenu Builder
+
+§53 (v1.8.11) implements the v1.8.8 hardening's **gate 1 (visibility) + gate 2 (availability)** of the four-gate rule as a kernel-level join service. `ObservationMenuBuilder` reads `AttentionBook`, `SignalBook`, `WorldVariableBook`, and `ExposureBook` and writes one `ObservationMenu` per build call (via the existing `OBSERVATION_MENU_CREATED` ledger path on `AttentionBook.add_menu`). It does **not** perform attention selection (gate 3 — `SelectedObservationSet`), does **not** consume observations or fire routines (gate 4 — `RoutineEngine`), and does **not** auto-fire from `tick()` / `run()`.
+
+§53 is the first piece of code that operationalizes the source / scope / exposure hook chain that §50.1 named and §52 made data-complete. v1.8.11 surfaces the chain as data — *which signals are visible, which variable observations are visible, which exposures are active* — without inventing the relationship at runtime.
+
+### 53.1 What lands in v1.8.11
+
+- `world/attention.py` — `ObservationMenu` extended additively with `available_variable_observation_ids: tuple[str, ...]` and `available_exposure_ids: tuple[str, ...]`. Both default empty for backwards compatibility, both flow through the existing `AVAILABLE_FIELDS` machinery (so `total_available_count()` and `__post_init__` normalization automatically cover them), both round-trip through `to_dict()`, and both carry counts in the existing `OBSERVATION_MENU_CREATED` ledger payload (`available_variable_observation_count`, `available_exposure_count`).
+- `world/observation_menu_builder.py` — new module:
+  - `ObservationMenuBuildRequest` immutable dataclass: `request_id`, `actor_id`, `as_of_date?`, `phase_id?`, `include_signals=True`, `include_variables=True`, `include_exposures=True`, `metadata`.
+  - `ObservationMenuBuildResult` immutable dataclass mirroring the persisted menu plus the originating `request_id` and a derived `status` label.
+  - `ObservationMenuBuilder` dataclass wired to `AttentionBook`, `SignalBook`, `WorldVariableBook`, `ExposureBook`, `InteractionBook?`, `Clock?`. Public API: `build_menu(req) -> Result`, `preview_menu(req) -> Result` (no write), and the read-only collectors `collect_visible_signals`, `collect_active_exposures`, `collect_visible_variable_observations`.
+  - `ObservationMenuBuilderError` / `ObservationMenuBuildMissingDateError` for controlled failure paths.
+- `world/kernel.py` — new optional field `observation_menu_builder: ObservationMenuBuilder | None`, constructed in `__post_init__` mirroring the v1.8.6 `routine_engine` pattern. NOT fired by `tick()` / `run()`.
+- `tests/test_observation_menu_builder.py` — 50 tests covering the menu extension, request validation, end-to-end build, date semantics, exposure→variable join, no-exposure→empty default, visibility filtering, inactive-exposure exclusion, signal collection through `list_visible_to`, interaction-id collection (carried + signal-metadata), include flags, status semantics, single ledger emission, preview-does-not-write, kernel wiring, no-mutation guarantee.
+
+### 53.2 Exposure / variable join semantics
+
+The join is the v1.8.8 hardening's **exposure hook** in code:
+
+1. The actor's exposures define which variables matter to them (`ExposureBook.list_by_subject(actor_id)` filtered by `is_active_as_of(as_of_date)`).
+2. For each relevant variable, only observations with `visibility_date <= as_of_date` are surfaced (where `visibility_date = visible_from_date if present else as_of_date`).
+3. **If the actor has zero active exposures, the menu's `available_variable_observation_ids` is empty by default** — the builder does *not* dump every world variable on every actor.
+
+`available_interaction_ids` is the deduplicated union of `carried_by_interaction_id` values across the surfaced variable observations and the `interaction_id` key (when present) in the surfaced signals' metadata. This gives downstream consumers a way to navigate from a menu back to the channels that carried its content, without the builder having to validate that each interaction id resolves in `InteractionBook` (per the v0 / v1 cross-reference rule).
+
+### 53.3 Status vocabulary
+
+`ObservationMenuBuildResult.status` is a descriptive label, not an economic claim:
+
+- `"completed"` — at least one available ref exists across the menu (auto-derived).
+- `"empty"` — zero candidates across all sources (auto-derived).
+- `"partial"` / `"degraded"` — caller-supplied via `request.metadata["status"]`. v1.8.11 reserves the labels but does not auto-derive them.
+
+### 53.4 Anti-scope (what v1.8.11 deliberately does not do)
+
+§53 is a read-only join milestone. v1.8.11 does **not** add:
+
+- Attention selection. Gate 3 (`SelectedObservationSet`) remains caller-driven.
+- Routine execution. Gate 4 (`RoutineEngine`) is unchanged.
+- Auto-firing from `tick()` / `run()`. The builder is exposed as `kernel.observation_menu_builder` and fires only when a caller invokes `build_menu` / `preview_menu`.
+- Sensitivity calibration. Exposures are still synthetic strengths from §52.
+- Cross-reference validation. `actor_id` / `variable_id` / `interaction_id` are recorded as data, per the v0/v1 rule.
+- Economic behavior. No price formation, no impact computation, no routine triggering.
+
+### 53.5 v1.8.11 success criteria
+
+§53 is complete when **all** hold:
+
+1. `world/observation_menu_builder.py`, the two new `ObservationMenu` fields, the two new `OBSERVATION_MENU_CREATED` payload counts, and the `observation_menu_builder` kernel field exist and behave per §53.1.
+2. `tests/test_observation_menu_builder.py` passes (50 tests).
+3. The full test suite passes (1225 tests = 1175 prior + 50 builder).
+4. `compileall world spaces tests examples` is clean and `ruff check .` from the repo root is clean.
+5. No existing test was modified; no existing record shape was altered destructively (the `ObservationMenu` extension is additive; defaults preserve prior behavior).
+6. The builder does not mutate `SignalBook`, `WorldVariableBook`, or `ExposureBook` — verified by the explicit no-mutation test.
+7. `tick()` / `run()` does not auto-build menus — verified by the kernel non-firing test.
+8. `build_menu` writes exactly one menu per call through `AttentionBook.add_menu`; `preview_menu` writes nothing.
+
+### 53.6 Position in the v1.8.x sequence
+
+| Milestone | Scope | Status |
+| --- | --- | --- |
+| v1.8.8 Reference Variable Layer — Design (+ hardening) | Design (§50, §50.1). | Shipped |
+| v1.8.9 WorldVariableBook | Code (§51). | Shipped |
+| v1.8.10 Exposure / Dependency Layer | Code (§52). | Shipped |
+| **v1.8.11 `ObservationMenu` builder** | Code (§53). Read-only join. | **Shipped** |
+| v1.8.12 Investor + Bank Attention Demo | Code. | Next |
 | v1.9 Living Reference World Demo | Code + tests. | After v1.8.12 |

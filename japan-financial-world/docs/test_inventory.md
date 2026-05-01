@@ -1,12 +1,13 @@
 # Test Inventory
 
-Snapshot of the test suite at **v1.8.10** (`Exposure / Dependency
-Layer`): `1175 / 1175 passing` (444 v0 + 188 v1.0-v1.7 frozen
-reference + 543 post-v1.7 additions covering reference demo,
+Snapshot of the test suite at **v1.8.11** (`ObservationMenu
+Builder`): `1225 / 1225 passing` (444 v0 + 188 v1.0-v1.7 frozen
+reference + 593 post-v1.7 additions covering reference demo,
 replay, manifest, catalog-shape, experiment harness, renamed
 WorldID tests, interactions, routines, attention, routine engine,
-the first concrete routine, the world-variable storage layer, and
-the exposure / dependency storage layer).
+the first concrete routine, the world-variable storage layer, the
+exposure / dependency storage layer, and the observation-menu
+builder join service).
 
 This inventory is grouped by what each component verifies. The numbers in
 parentheses are test counts per file. Run the full suite with:
@@ -274,6 +275,52 @@ no-mutation guarantee.
   `RecordType.INTERACTION_ADDED`; kernel wiring; no-mutation
   guarantee against every other v0 / v1 source-of-truth book.
 
+## Observation menu builder (v1.8.11)
+
+- `test_observation_menu_builder.py` (50) — `ObservationMenu`
+  extension acceptance for the two new fields
+  (`available_variable_observation_ids` and
+  `available_exposure_ids`), their participation in
+  `total_available_count()` and `to_dict()`, rejection of empty
+  strings inside the new tuples, and the two new counts
+  (`available_variable_observation_count`,
+  `available_exposure_count`) in the existing
+  `OBSERVATION_MENU_CREATED` ledger payload;
+  `ObservationMenuBuildRequest` field validation (parametrized
+  rejection of empty required strings, non-bool include flags),
+  frozen dataclass, `to_dict` round-trip; `build_menu` end-to-end
+  flow writing exactly one `ObservationMenu` through
+  `AttentionBook.add_menu` (and exactly one ledger record),
+  result-mirrors-stored-menu, default `menu_id` formula
+  (`menu:` + `request_id`), `metadata["menu_id"]` override,
+  `metadata["status"]` override; date semantics
+  (`request.as_of_date` overrides clock; clock default; missing
+  date raises `ObservationMenuBuildMissingDateError`);
+  exposure→variable join semantics (only variables the actor is
+  exposed to surface; no-exposure ⇒ empty
+  `available_variable_observation_ids` by default; visibility
+  filter (`visible_from_date <= as_of_date`) admits and rejects
+  correctly); inactive exposures (effective_to in past) excluded
+  from both `available_exposure_ids` and the variable join;
+  exposure scoping by `subject_id`; signal collection through
+  `SignalBook.list_visible_to` (private signals excluded);
+  `available_interaction_ids` union from
+  `carried_by_interaction_id` + signal `metadata["interaction_id"]`,
+  with deduplication; status auto-derivation
+  (`completed` / `empty`) and caller override; include flags
+  (`include_signals` / `include_variables` / `include_exposures`)
+  skip the corresponding collector; preview path produces no
+  persisted menu and no ledger record, returns same content as
+  build, prefixes id with `menu:preview:`; read-only collectors
+  (`collect_visible_signals`, `collect_active_exposures`,
+  `collect_visible_variable_observations`); kernel wiring
+  (`kernel.observation_menu_builder` exposed, books and clock
+  shared); `kernel.tick()` and `kernel.run(days=N)` do NOT
+  auto-build menus; no-mutation guarantee against `SignalBook`,
+  `WorldVariableBook`, and `ExposureBook`;
+  `DuplicateObservationMenuError` raised when the same
+  `menu_id` is built twice.
+
 ## Exposure / dependency layer (v1.8.10)
 
 - `test_exposures.py` (59) — `ExposureRecord` field validation
@@ -494,7 +541,7 @@ no-mutation guarantee.
 | Reference loop (v1.6)            | 1     | 5     |
 | **v1 subtotal**                  | **7** | **188** |
 
-### v1.7-public-rc1+ / v1.8 / v1.8.3 / v1.8.4 / v1.8.5 / v1.8.6 / v1.8.7 / v1.8.9 / v1.8.10 additions
+### v1.7-public-rc1+ / v1.8 / v1.8.3 / v1.8.4 / v1.8.5 / v1.8.6 / v1.8.7 / v1.8.9 / v1.8.10 / v1.8.11 additions
 
 | Component                               | Files | Tests |
 | --------------------------------------- | ----- | ----- |
@@ -511,7 +558,8 @@ no-mutation guarantee.
 | Corporate quarterly reporting (v1.8.7)  | 1     | 26    |
 | World variable book (v1.8.9)            | 1     | 91    |
 | Exposure / dependency layer (v1.8.10)   | 1     | 59    |
-| **post-v1.7 subtotal**                  | **13**| **543** |
+| Observation menu builder (v1.8.11)      | 1     | 50    |
+| **post-v1.7 subtotal**                  | **14**| **593** |
 
 ### v0 + v1 + post-v1.7 totals
 
@@ -519,8 +567,8 @@ no-mutation guarantee.
 | -------------------------------- | ----- | ----- |
 | v0                               | 35    | 444   |
 | v1.0–v1.7 frozen reference       | 7     | 188   |
-| post-v1.7 (v1.7-public-rc1+ / v1.8 / v1.8.3 / v1.8.4 / v1.8.5 / v1.8.6 / v1.8.7 / v1.8.9 / v1.8.10) | 13 | 543 |
-| **Total**                        | **55**| **1175** |
+| post-v1.7 (v1.7-public-rc1+ / v1.8 / v1.8.3 / v1.8.4 / v1.8.5 / v1.8.6 / v1.8.7 / v1.8.9 / v1.8.10 / v1.8.11) | 14 | 593 |
+| **Total**                        | **56**| **1225** |
 
 ## How to interpret a failing test
 

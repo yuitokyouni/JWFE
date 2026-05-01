@@ -304,6 +304,10 @@ class ObservationMenu:
         default_factory=tuple
     )
     available_interaction_ids: tuple[str, ...] = field(default_factory=tuple)
+    available_variable_observation_ids: tuple[str, ...] = field(
+        default_factory=tuple
+    )
+    available_exposure_ids: tuple[str, ...] = field(default_factory=tuple)
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
     AVAILABLE_FIELDS: ClassVar[tuple[str, ...]] = (
@@ -314,6 +318,8 @@ class ObservationMenu:
         "available_price_ids",
         "available_external_observation_ids",
         "available_interaction_ids",
+        "available_variable_observation_ids",
+        "available_exposure_ids",
     )
 
     def __post_init__(self) -> None:
@@ -363,6 +369,10 @@ class ObservationMenu:
                 self.available_external_observation_ids
             ),
             "available_interaction_ids": list(self.available_interaction_ids),
+            "available_variable_observation_ids": list(
+                self.available_variable_observation_ids
+            ),
+            "available_exposure_ids": list(self.available_exposure_ids),
             "metadata": dict(self.metadata),
         }
 
@@ -694,6 +704,12 @@ class AttentionBook:
                     ),
                     "available_interaction_count": len(
                         menu.available_interaction_ids
+                    ),
+                    "available_variable_observation_count": len(
+                        menu.available_variable_observation_ids
+                    ),
+                    "available_exposure_count": len(
+                        menu.available_exposure_ids
                     ),
                     "total_available_count": menu.total_available_count(),
                 },
