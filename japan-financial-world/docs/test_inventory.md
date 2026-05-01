@@ -1,10 +1,11 @@
 # Test Inventory
 
-Snapshot of the test suite at **v1.8.4** (`RoutineBook + RoutineRunRecord`):
-`847 / 847 passing` (444 v0 + 188 v1.0-v1.7 frozen reference + 215
-post-v1.7 additions covering reference demo, replay, manifest,
-catalog-shape, experiment harness, renamed WorldID tests,
-interactions, and routines).
+Snapshot of the test suite at **v1.8.5** (`AttentionProfile +
+ObservationMenu + SelectedObservationSet`): `949 / 949 passing` (444
+v0 + 188 v1.0-v1.7 frozen reference + 317 post-v1.7 additions
+covering reference demo, replay, manifest, catalog-shape,
+experiment harness, renamed WorldID tests, interactions, routines,
+and attention).
 
 This inventory is grouped by what each component verifies. The numbers in
 parentheses are test counts per file. Run the full suite with:
@@ -272,6 +273,41 @@ no-mutation guarantee.
   `RecordType.INTERACTION_ADDED`; kernel wiring; no-mutation
   guarantee against every other v0 / v1 source-of-truth book.
 
+## Attention (v1.8.5)
+
+- `test_attention.py` (102) — `AttentionProfile`,
+  `ObservationMenu`, and `SelectedObservationSet` field validation
+  (parametrized rejection of empty required strings, non-bool
+  `enabled`, empty entries in tuple fields, non-numeric and
+  bool-typed `priority_weights`, date coercion on `as_of_date`);
+  tuple normalization; frozen dataclasses; `AttentionBook` CRUD +
+  duplicate rejection (`DuplicateAttentionProfileError` /
+  `DuplicateObservationMenuError` /
+  `DuplicateSelectedObservationSetError`) for all three record
+  types; every filter listing (`list_profiles_by_actor` /
+  `list_profiles_by_actor_type` /
+  `list_profiles_by_watched_space` / `list_profiles_by_channel`;
+  `list_menus_by_actor` / `list_menus_by_date`;
+  `list_selections_by_actor` / `list_selections_by_profile` /
+  `list_selections_by_menu` / `list_selections_by_status`);
+  multiple profiles per actor allowed; disabled-by-default with
+  `include_disabled=True` opt-in; `priority_weights` preserved as
+  numeric `dict[str, float]`; `missing_input_policy` defaults to
+  `"degraded"`; empty / partial menus accepted; recommended
+  selection status vocabulary (`"completed"` / `"partial"` /
+  `"degraded"` / `"empty"`) round-trips cleanly;
+  `selected_refs` not enforced as subset of menu (documented
+  v1.8.5 behavior); `profile_matches_menu` shape, overlap-found,
+  no-overlap, omits-unwatched-dimensions, unknown-profile raises,
+  unknown-menu raises, no-mutation cases; snapshot determinism
+  with separate enabled / disabled counts; ledger emission of
+  all three new `RecordType` members (`attention_profile_added`,
+  `observation_menu_created` with `simulation_date=as_of_date`,
+  `observation_set_selected` with `correlation_id=routine_run_id`);
+  kernel wiring; no-mutation guarantee against every other v0 /
+  v1 source-of-truth book including `InteractionBook` and
+  `RoutineBook`.
+
 ## Routines (v1.8.4)
 
 - `test_routines.py` (72) — `RoutineSpec` and
@@ -331,7 +367,7 @@ no-mutation guarantee.
 | Reference loop (v1.6)            | 1     | 5     |
 | **v1 subtotal**                  | **7** | **188** |
 
-### v1.7-public-rc1+ / v1.8 / v1.8.3 / v1.8.4 additions
+### v1.7-public-rc1+ / v1.8 / v1.8.3 / v1.8.4 / v1.8.5 additions
 
 | Component                               | Files | Tests |
 | --------------------------------------- | ----- | ----- |
@@ -343,7 +379,8 @@ no-mutation guarantee.
 | WorldID tests (renamed from tests.py)   | 1     | 12    |
 | Interaction topology (v1.8.3)           | 1     | 50    |
 | Routines (v1.8.4)                       | 1     | 72    |
-| **post-v1.7 subtotal**                  | **8** | **215** |
+| Attention (v1.8.5)                      | 1     | 102   |
+| **post-v1.7 subtotal**                  | **9** | **317** |
 
 ### v0 + v1 + post-v1.7 totals
 
@@ -351,8 +388,8 @@ no-mutation guarantee.
 | -------------------------------- | ----- | ----- |
 | v0                               | 35    | 444   |
 | v1.0–v1.7 frozen reference       | 7     | 188   |
-| post-v1.7 (v1.7-public-rc1+ / v1.8 / v1.8.3 / v1.8.4) | 8 | 215  |
-| **Total**                        | **50**| **847** |
+| post-v1.7 (v1.7-public-rc1+ / v1.8 / v1.8.3 / v1.8.4 / v1.8.5) | 9 | 317 |
+| **Total**                        | **51**| **949** |
 
 ## How to interpret a failing test
 

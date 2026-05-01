@@ -3806,3 +3806,75 @@ The v1.8.2 design's milestone table named v1.8.4 as "AttentionProfile + Observat
 | v1.9 Living Reference World Demo | Year-long run with no external observation; non-empty ledger on every reporting / review cycle. | After v1.8.8 |
 
 The split keeps each milestone reviewable; previously v1.8.4 carried four record types, four ledger event types, and a view builder, which is too much to land in one PR.
+
+## 47. v1.8.5 AttentionProfile + ObservationMenu + SelectedObservationSet
+
+§47 (v1.8.5) implements the attention layer that the v1.8.2 design (§44) named: a kernel-level `AttentionBook` that stores **what each actor tends to watch** (`AttentionProfile`), **what is available at a date / phase** (`ObservationMenu`), and **what was actually selected** (`SelectedObservationSet`).
+
+§47 ships **storage and lookup only**. The book stores the records and offers filter / lookup APIs plus a single read-only structural-overlap predicate. It does not build menus from other books, decide what to select, execute routines, or take any economic action. The Routine engine that consumes `SelectedObservationSet` to drive `RoutineRunRecord` entries is the v1.8.6 milestone.
+
+### 47.1 What lands in v1.8.5
+
+- `world/attention.py`:
+  - `AttentionProfile` immutable dataclass with the §44.4 field set: `profile_id`, `actor_id`, `actor_type`, `update_frequency`, `phase_id?`, the eight `watched_*` tuple-of-string fields (`watched_space_ids`, `watched_subject_ids`, `watched_signal_types`, `watched_channels`, `watched_metrics`, `watched_valuation_types`, `watched_constraint_types`, `watched_relationship_types`), `priority_weights` (mapping `str → float`), `missing_input_policy` (default `"degraded"` — the v1.8.1 anti-scenario default), `enabled`, `metadata`.
+  - `ObservationMenu` immutable dataclass with the §44.5 field set: `menu_id`, `actor_id`, `as_of_date`, `phase_id?`, the seven `available_*_ids` tuple-of-string fields (signals / valuations / constraints / relationships / prices / external observations / interactions), `metadata`. Empty and partial menus are valid.
+  - `SelectedObservationSet` immutable dataclass with the §44.5 field set: `selection_id`, `actor_id`, `attention_profile_id`, `menu_id`, `routine_run_id?`, `selected_refs`, `skipped_refs`, `selection_reason`, `as_of_date`, `phase_id?`, `status`, `metadata`. v1.8.5 does **not** enforce that `selected_refs` is a subset of the menu's `available_*_ids` — the predicate is too speculative for a storage milestone, and the engine layer that consumes the selection can enforce it if it wishes. Callers that want `parent_record_ids` causal links put them under `metadata["parent_record_ids"]`; v1.8.5 does not invent a dedicated field.
+  - `AttentionBook` append-only store with the v1.8.2 API: `add_profile`, `get_profile`, `list_profiles`, `list_profiles_by_actor`, `list_profiles_by_actor_type`, `list_profiles_by_watched_space`, `list_profiles_by_channel`, `add_menu`, `get_menu`, `list_menus_by_actor`, `list_menus_by_date`, `add_selection`, `get_selection`, `list_selections_by_actor`, `list_selections_by_profile`, `list_selections_by_menu`, `list_selections_by_status`, `snapshot`, plus the `profile_matches_menu(profile_id, menu_id) -> dict` structural-overlap helper.
+  - `AttentionError`, `DuplicateAttentionProfileError`, `DuplicateObservationMenuError`, `DuplicateSelectedObservationSetError`, `UnknownAttentionProfileError`, `UnknownObservationMenuError`, `UnknownSelectedObservationSetError`.
+- `world/ledger.py`: three new `RecordType` members:
+  - `ATTENTION_PROFILE_ADDED = "attention_profile_added"`
+  - `OBSERVATION_MENU_CREATED = "observation_menu_created"`
+  - `OBSERVATION_SET_SELECTED = "observation_set_selected"`
+  `add_profile` / `add_menu` / `add_selection` write the corresponding entry when a ledger is wired. The selection ledger entry carries `routine_run_id` as the `correlation_id` so a future routine engine can join attention writes to its `RoutineRunRecord` lineage.
+- `world/kernel.py`: new `attention: AttentionBook` field; the standard `__post_init__` wiring shares the kernel's ledger and clock with the book.
+- `tests/test_attention.py`: 102 tests covering field validation for all three record types, CRUD + duplicate rejection for each, every filter listing, the disabled-by-default rule for profiles, the "multiple profiles per actor" rule from §44.4, the recommended status vocabulary (`"completed"` / `"partial"` / `"degraded"` / `"empty"`), the `priority_weights` numeric-only rule (rejects `bool`, accepts `int` / `float`), the `profile_matches_menu` shape and behavior on overlap / no overlap / unknown profile / unknown menu, snapshot determinism with separate enabled / disabled counts, ledger emission of all three new `RecordType` members (with `correlation_id` carrying `routine_run_id` on selections), kernel wiring, and a no-mutation guarantee against every other v0/v1 source-of-truth book including `InteractionBook` and `RoutineBook`.
+
+### 47.2 The `profile_matches_menu` predicate
+
+`AttentionBook.profile_matches_menu(profile_id, menu_id) -> dict` returns a **structural overlap summary** between an `AttentionProfile` and an `ObservationMenu` without inferring economic meaning. The dict has:
+
+- `profile_id`, `menu_id` — echoed back for the caller.
+- `has_any_overlap` (`bool`) — `True` if any of the dimensions below is non-empty *and* the menu carries at least one available item in that dimension.
+- `per_dimension` (`dict[str, dict]`) — for each (watched-dimension, menu-field) pair where the profile's watched filter is non-empty, a sub-dict with `watched_count` and `menu_available_count`.
+
+The predicate intentionally does **not** check whether each available id has a *type* matching the profile's filter — that requires reading the underlying record books and is deferred to the v1.8.6 engine layer. The summary is conservative: it tells the caller "is there structural potential for overlap?" not "are these specific records relevant?"
+
+`UnknownAttentionProfileError` / `UnknownObservationMenuError` are raised on missing ids; the predicate reads both books and mutates neither.
+
+### 47.3 Boundaries
+
+§47 is a storage + lookup milestone. v1.8.5 does **not** add:
+
+- Routine execution. The Routine engine that consumes selections to produce `RoutineRunRecord` entries lands at v1.8.6.
+- Automatic menu construction. Callers build `ObservationMenu` instances by hand (or via future v1.8.6+ helpers); v1.8.5 stores what is given.
+- Selection logic. Callers build `SelectedObservationSet` instances by hand; v1.8.5 stores what is given. Selection rules — recency, priority-top-K, profile-driven match — are v1.8.6+ engine concerns.
+- Concrete routines. Corporate quarterly reporting / valuation refresh / bank review / investor review / etc. are v1.8.7+.
+- Subset enforcement. `SelectedObservationSet.selected_refs` is **not** required to be a subset of the menu's `available_*_ids`. v1.8.5 documents this and persists what the caller gives. Engine layers may enforce it.
+- Price formation, trading, lending decisions, corporate actions, policy reaction functions, Japan calibration, real data, or any external-shock scenario engine. All v1.7 / v1.8.1 / v1.8.2 / v1.8.3 / v1.8.4 prohibitions are inherited.
+
+Cross-references (`actor_id`, `attention_profile_id`, `menu_id`, `routine_run_id`, `selected_refs`, `skipped_refs`, `available_*_ids`) are recorded as data and **not** validated for resolution against any other book, per the v0 / v1 cross-reference rule.
+
+### 47.4 v1.8.5 success criteria
+
+§47 is complete when **all** hold:
+
+1. `world/attention.py`, the three new ledger types, and the `attention` kernel field exist and behave per §47.1.
+2. `tests/test_attention.py` passes (102 tests).
+3. The full test suite passes (949 tests = 847 prior + 102 attention).
+4. `compileall world spaces tests examples` is clean and `ruff check .` from the repo root is clean.
+5. No existing test was modified; no existing record shape, book API, scheduler extension, or ledger record type was altered.
+6. `AttentionBook` does not mutate any other v0 / v1 source-of-truth book — verified by an explicit no-mutation test that exercises every read + write API and asserts every other book's snapshot is byte-identical before and after.
+
+### 47.5 Revised v1.8.x sequence
+
+| Milestone | Scope | Status |
+| --- | --- | --- |
+| v1.8.1 Endogenous Reference Dynamics | Design (§43). | Shipped |
+| v1.8.2 Interaction Topology + Attention | Design (§44). | Shipped |
+| v1.8.3 InteractionBook + Tensor View | Code (§45). | Shipped |
+| v1.8.4 RoutineBook + RoutineRunRecord | Code (§46). | Shipped |
+| **v1.8.5 AttentionProfile + ObservationMenu + SelectedObservationSet** | Code (§47). Storage + lookup only. | **Shipped** |
+| v1.8.6 Routine engine (execution) | Code. Schedule-and-fire wiring that consumes routines + attention to produce `RoutineRunRecord` entries automatically. | Next |
+| v1.8.7 Corporate Reporting Routine | First concrete routine using `corporate_quarterly_reporting` on the diagonal `Corporate → Corporate` channel. | After v1.8.6 |
+| v1.8.8 Investor + Bank Attention Demo | Two more concrete routines using heterogeneous attention. | After v1.8.7 |
+| v1.9 Living Reference World Demo | Year-long run with no external observation; non-empty ledger on every reporting / review cycle. | After v1.8.8 |

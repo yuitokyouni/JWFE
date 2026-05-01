@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 from typing import Iterator
 
+from world.attention import AttentionBook
 from world.balance_sheet import BalanceSheetProjector
 from world.clock import Clock
 from world.constraints import ConstraintBook, ConstraintEvaluator
@@ -55,6 +56,7 @@ class WorldKernel:
     )
     interactions: InteractionBook = field(default_factory=InteractionBook)
     routines: RoutineBook = field(default_factory=RoutineBook)
+    attention: AttentionBook = field(default_factory=AttentionBook)
 
     def __post_init__(self) -> None:
         for book in (
@@ -69,6 +71,7 @@ class WorldKernel:
             self.relationships,
             self.interactions,
             self.routines,
+            self.attention,
         ):
             if book.ledger is None:
                 book.ledger = self.ledger
