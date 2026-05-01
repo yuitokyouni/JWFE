@@ -4287,7 +4287,8 @@ The book writes only to itself + the ledger (via the existing `Ledger.append` pa
 | v1.8.12 Attention Variable Hooks + Investor / Bank Attention Demo | Code (§54). Heterogeneous attention. | Shipped |
 | v1.8.13 Investor / Bank Review Routines | Code (§55). Routines consume attention. | Shipped |
 | v1.8.14 Endogenous Chain Harness | Code (§56). Single helper orchestrates the full chain. | Shipped |
-| **v1.8.15 Ledger Trace Report** | Code (§57). Read-only explainability over the chain. | **Shipped** |
+| v1.8.15 Ledger Trace Report | Code (§57). Read-only explainability over the chain. | Shipped |
+| **v1.8.16 Freeze / Readiness** | Docs only (§58). Consolidates v1.8 + plans v1.9. | **Shipped** |
 | v1.9 Living Reference World Demo | Code + tests. | Next |
 
 ## 52. v1.8.10 Exposure / Dependency Layer
@@ -4385,7 +4386,8 @@ Each step is opt-in. v1.8.10 does **not** implement the join; it only persists t
 | v1.8.12 Attention Variable Hooks + Investor / Bank Attention Demo | Code (§54). Heterogeneous attention. | Shipped |
 | v1.8.13 Investor / Bank Review Routines | Code (§55). Routines consume attention. | Shipped |
 | v1.8.14 Endogenous Chain Harness | Code (§56). Single helper orchestrates the full chain. | Shipped |
-| **v1.8.15 Ledger Trace Report** | Code (§57). Read-only explainability over the chain. | **Shipped** |
+| v1.8.15 Ledger Trace Report | Code (§57). Read-only explainability over the chain. | Shipped |
+| **v1.8.16 Freeze / Readiness** | Docs only (§58). Consolidates v1.8 + plans v1.9. | **Shipped** |
 | v1.9 Living Reference World Demo | Code + tests. | Next |
 
 ## 53. v1.8.11 ObservationMenu Builder
@@ -4458,7 +4460,8 @@ The join is the v1.8.8 hardening's **exposure hook** in code:
 | v1.8.12 Attention Variable Hooks + Investor / Bank Attention Demo | Code (§54). Heterogeneous attention. | Shipped |
 | v1.8.13 Investor / Bank Review Routines | Code (§55). Routines consume attention. | Shipped |
 | v1.8.14 Endogenous Chain Harness | Code (§56). Single helper orchestrates the full chain. | Shipped |
-| **v1.8.15 Ledger Trace Report** | Code (§57). Read-only explainability over the chain. | **Shipped** |
+| v1.8.15 Ledger Trace Report | Code (§57). Read-only explainability over the chain. | Shipped |
+| **v1.8.16 Freeze / Readiness** | Docs only (§58). Consolidates v1.8 + plans v1.9. | **Shipped** |
 | v1.9 Living Reference World Demo | Code + tests. | Next |
 
 ## 54. v1.8.12 Attention Variable Hooks + Investor / Bank Attention Demo
@@ -4751,8 +4754,60 @@ This is what makes v1.8.15 viable for the v1.9 Living Reference World Demo: a ye
 | v1.8.12 Attention Variable Hooks + Investor / Bank Attention Demo | Code (§54). | Shipped |
 | v1.8.13 Investor / Bank Review Routines | Code (§55). | Shipped |
 | v1.8.14 Endogenous Chain Harness | Code (§56). | Shipped |
-| **v1.8.15 Ledger Trace Report** | Code (§57). Explainability over the chain. | **Shipped** |
+| v1.8.15 Ledger Trace Report | Code (§57). | Shipped |
+| **v1.8.16 Freeze / Readiness** | Docs only (§58). | **Shipped** |
 | v1.9 Living Reference World Demo | Year-long run sweeping the chain + report. | Next |
+
+## 58. v1.8.16 Freeze / Readiness
+
+§58 (v1.8.16) is **docs and release-readiness only**. No new code, no new tests, no new ledger record types, no new model behavior. v1.8.16 consolidates the v1.8 line as a coherent endogenous-activity milestone and prepares the project for v1.9 Living Reference World and eventual v1.9.last public prototype.
+
+### 58.1 What ships in v1.8.16
+
+- **`README.md`** (repo root) — opening repositioned to emphasize the jurisdiction-neutral / research-software / synthetic-only framing. New sections: "Current capability" (names the v1.8 stack components), "What the reference demo can do now" (the *corporate reporting → menus → heterogeneous selections → reviews → trace report* chain), "What it still does not do" (the v1.8 hard rails restated for first-time readers), "Quickstart" (the two demo invocations including `--markdown`), and "Roadmap" (v1.8.0 – v1.8.16 shipped, v1.9.0 next, v1.9.last first public prototype, v2.0 Japan public-data design gate, v3.0 proprietary).
+- **`docs/v1_8_release_summary.md`** — new doc cataloging every v1.8 sub-release (v1.8.0 → v1.8.16), the v1.8 conceptual result ("external shocks are not the engine of the world"), the v1.8 technical result (a deterministic endogenous chain renderable as a Markdown report), the test surface at v1.8 freeze (1341 passed), and the hard boundaries v1.8 keeps.
+- **`docs/v1_9_living_reference_world_plan.md`** — new doc defining v1.9's goal (multi-period synthetic living world without external shocks), scope (3–5 firms / 2 investors / 2 banks / 5–8 variables / 10–20 exposures / 4 quarterly periods), per-period flow (each period walks the v1.8.14 chain), complexity discipline (sparse edge-list traversal, no Cartesian-product loops, expected `O(periods × actors × relevant_refs)`), and the v1.9.last acceptance criteria.
+- **`docs/public_prototype_plan.md`** — new doc defining what "public prototype" means for this project (GitHub-first / CLI-first / synthetic-only / explainability-first / no-Japan-claims), the public surfaces v1.9.last may target (repo + CLI + static Markdown reports + precomputed demo output + optional UI later), the surfaces v1.9.last must not target (proprietary calibration, expert notes, paid data, named-institution stress, client reports, private templates, investment advice), and the eleven acceptance gates.
+- **`RELEASE_CHECKLIST.md`** — new "Public prototype gate (v1.9.last)" section covering the prototype-specific items on top of the existing public-release gate (one-command demo, README scope read, public/private boundary agreement, forbidden-token scan with word boundaries, no proprietary content, no investment-advice framings, CI green).
+- **`examples/reference_world/README.md`** — extended to introduce both demos (the v1.6 reference loop and the v1.8.14 endogenous chain), add the `--markdown` invocation, and explain that the endogenous chain requires no external shock.
+- **`docs/world_model.md`** §58 — this section.
+- **`docs/fwe_reference_demo_design.md`** — appended a v1.8.16 freeze note.
+- **`docs/test_inventory.md`** — headline updated to v1.8.16 (test count unchanged at 1341).
+
+### 58.2 What v1.8.16 deliberately does NOT do
+
+§58 is documentation only. v1.8.16 does **not**:
+
+- Add new routines, books, or kernel fields.
+- Introduce new economic behavior (no price formation, trading, lending decisions, valuation refresh, impact estimation, sensitivity calculation, DSCR / LTV updates, covenant enforcement, corporate actions, policy reactions).
+- Add scheduler auto-firing.
+- Sweep the v1.8.14 chain over multiple periods. That is v1.9.0.
+- Add Japan calibration or real data ingestion.
+- Modify any v1.0 – v1.8.15 record shape, helper, or test destructively.
+- Introduce a scenario engine.
+
+### 58.3 v1.8.16 success criteria
+
+§58 is complete when **all** hold:
+
+1. `README.md` accurately describes the v1.8 stack, the endogenous chain, and the explicit non-capabilities; the disclaimer remains intact and the version table reflects v1.8.16 / v1.9.0 / v1.9.last / v2 / v3.
+2. `docs/v1_8_release_summary.md`, `docs/v1_9_living_reference_world_plan.md`, and `docs/public_prototype_plan.md` exist and cross-reference each other coherently.
+3. `examples/reference_world/README.md` introduces both demos and the `--markdown` flag.
+4. `RELEASE_CHECKLIST.md` carries the v1.9.last public-prototype gate alongside the existing public-release gate.
+5. `docs/world_model.md` §58 (this section) summarises v1.8 and points at v1.9.
+6. The full test suite still passes (1341 tests = no change from v1.8.15).
+7. `compileall world spaces tests examples` is clean and `ruff check .` from the repo root is clean.
+
+### 58.4 Position in the v1.8.x sequence
+
+| Milestone | Scope | Status |
+| --- | --- | --- |
+| v1.8.13 Investor / Bank Review Routines | Code (§55). | Shipped |
+| v1.8.14 Endogenous Chain Harness | Code (§56). | Shipped |
+| v1.8.15 Ledger Trace Report | Code (§57). | Shipped |
+| **v1.8.16 Freeze / Readiness** | Docs (§58). | **Shipped** |
+| v1.9 Living Reference World Demo | Multi-period sweep over the chain. | Next |
+| v1.9.last | First lightweight public prototype. | Planned |
 
 
 

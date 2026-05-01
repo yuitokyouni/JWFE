@@ -429,6 +429,20 @@ a v1+ behavioral milestone, not an extension of this demo.
 > include the v1.8.15 Markdown, which is presentation rather than a
 > reproducibility artifact.
 
+### Update — v1.8.16 freeze / readiness
+
+> v1.8.16 is documentation only — no new code, no test surface
+> change. It consolidates v1.8 (v1.8.0 – v1.8.15) into a coherent
+> milestone: see [`v1_8_release_summary.md`](v1_8_release_summary.md).
+> It also names the v1.9 successor and the v1.9.last public-prototype
+> target: [`v1_9_living_reference_world_plan.md`](v1_9_living_reference_world_plan.md)
+> and [`public_prototype_plan.md`](public_prototype_plan.md).
+> The v1.7-era reference demo described in this document is again
+> unaffected; v1.8.16 only adds cross-references and reaffirms the
+> separation of "demo as reproducibility artifact" (this document)
+> from "demo as explainability artifact" (the v1.8.14 / v1.8.15
+> chain + report).
+
 No file under `world/`, `spaces/`, or any existing test file is
 modified. The 632 / 632 v0 + v1 test count grows by the number of
 new demo tests; no existing test is changed.

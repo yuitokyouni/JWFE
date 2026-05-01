@@ -1,22 +1,156 @@
-# Japan Financial World Engine (JFWE)
+# Japan Financial World Engine (JFWE) / Financial World Engine (FWE)
 
-A simulation engine that represents a financial economy through layered
-"spaces" (Corporate, Banking, Investors, Exchange, Real Estate, Information,
-Policy, External) coordinated by a world kernel. Identity, time, ownership,
-contracts, prices, signals, constraints, and inter-space communication all live
-in explicit kernel-level structures so that future behavior can be added on top
-without hidden cross-space writes.
+**FWE / JFWE is a jurisdiction-neutral financial-world simulation
+substrate.** It models a financial economy through layered "spaces"
+(Corporate, Banking, Investors, Exchange, Real Estate, Information,
+Policy, External) coordinated by a world kernel, and now ships an
+**endogenous routine + heterogeneous attention chain** that produces
+auditable ledger traces from internal cycles — corporate reporting,
+attention building, and review — without external shocks.
 
-The current code is at the **v1.8** milestone, tagged **`v1.8-public-release`**:
-a jurisdiction-neutral reference financial system (v1.7 freeze) layered on top
-of the v0 world kernel, plus a config-driven experiment harness (v1.8) that
-turns the bundled FWE Reference Demo into a reproducible, manifest-emitting
-run. v1 adds reference record types, books, and an end-to-end orchestrator
-that links every record type into a single causal ledger trace. v1.8 wraps
-that demo behind a small YAML config schema, a SHA-256 ledger-digest replay
-gate, and a JSON manifest. **No autonomous economic behavior is added in
-v1 / v1.8** — no price formation, no trading, no credit decisions, no Japan
-calibration.
+This is **research software**. It demonstrates *how* a financial world
+can be modeled with explicit identity, time, ownership, contracts,
+prices, signals, constraints, variables, exposures, attention, and
+routines. It does **not** predict markets and is **not** investment
+advice. It is **not** Japan-calibrated. The reference data is fully
+synthetic.
+
+The current code is at the **v1.8** milestone (latest sub-release
+**v1.8.16 freeze / readiness**, tagged **`v1.8-public-release`** at
+v1.8.0). v1.8.x layered an endogenous activity stack on top of the
+v1.7 reference financial system: interaction topology, attention,
+routines, world variables, exposures, an investor / bank attention
+demo, two review routines, an orchestration harness, and a
+human-readable ledger-trace report. **No autonomous economic
+behavior is added in v1 / v1.8** — no price formation, no trading,
+no credit decisions, no Japan calibration.
+
+## Current capability
+
+What the v1.8 stack ships:
+
+- **World kernel** (v0) — `WorldKernel` orchestrating identity, time,
+  registry, scheduler, ledger, state, and event bus.
+- **Eight domain spaces** (v0) — Corporate, Banking, Investors,
+  Exchange, Real Estate, Information, Policy, External; wired through
+  a shared `DomainSpace` contract.
+- **Ledger / registry / event bus** — append-only causal trace, stable
+  WorldIDs, and `bind()`-mediated cross-space transport.
+- **Valuation / institution / relationship layers** (v1.1, v1.3, v1.5)
+  — `ValuationBook`, `InstitutionBook`, `RelationshipCapitalBook`, plus
+  the four-property action contract.
+- **Reference variable + exposure layers** (v1.8.9, v1.8.10) —
+  `WorldVariableBook` (kernel-level reference variables and observations
+  with vintage / look-ahead-safe filtering) and `ExposureBook` (per-actor
+  variable dependencies as data, not as calculation).
+- **Interaction topology** (v1.8.3) — `InteractionBook` + sparse
+  tensor / matrix views over the inter-space channel graph.
+- **Routine infrastructure** (v1.8.4 / v1.8.6 / v1.8.7) —
+  `RoutineBook` + `RoutineEngine` + the first concrete routine
+  (`corporate_quarterly_reporting`).
+- **Attention infrastructure** (v1.8.5 / v1.8.11 / v1.8.12) —
+  `AttentionBook` (profiles / menus / selections), the
+  `ObservationMenuBuilder` join service, and the heterogeneous
+  investor / bank attention demo.
+- **Review routines** (v1.8.13) — `investor_review` and `bank_review`
+  on Investors → Investors and Banking → Banking self-loops; consume
+  selected observations and emit synthetic review notes.
+- **Endogenous chain harness** (v1.8.14) —
+  `world/reference_chain.py::run_reference_endogenous_chain`
+  orchestrates the full chain in one helper call.
+- **Ledger trace report** (v1.8.15) — `world/ledger_trace_report.py`
+  turns the chain's ledger slice into a deterministic
+  `LedgerTraceReport` plus a compact Markdown rendering.
+
+## What the reference demo can do now
+
+With v1.8.14 + v1.8.15, a single helper produces this auditable
+non-shock chain:
+
+```
+corporate quarterly reporting
+  -> RoutineRunRecord + corporate-report InformationSignal
+heterogeneous investor / bank attention
+  -> 2 ObservationMenu records
+  -> 2 SelectedObservationSet records (investor and bank diverge)
+investor / bank review routines
+  -> 2 RoutineRunRecords
+  -> 2 review-note InformationSignals
+human-readable ledger trace report
+  -> deterministic Markdown summary of every record the chain wrote
+```
+
+Every step is caller-initiated. Every record is reconstructable from
+the kernel's ledger alone. Two fresh kernels seeded identically
+produce byte-identical chains and byte-identical reports. Selection
+between actors is heterogeneous *as data*, not as decision: the
+investor and the bank, looking at the same world, record different
+selected refs because their `AttentionProfile` watch fields differ.
+
+## What it still does not do
+
+The v1.8 stack is **infrastructure for endogenous activity**, not
+behavior. It deliberately does not implement:
+
+- price formation, order matching, or any market microstructure
+- trading, portfolio rebalancing, or allocation decisions
+- bank credit / lending decisions, default detection, covenant trips
+- valuation refresh (the comparator stays read-only; no impact
+  estimation, sensitivity, DSCR, LTV, or covenant stress)
+- corporate actions, earnings dynamics, or cash-flow projection
+- policy reaction functions, rate-setting rules, or scenario engines
+- any Japan-specific calibration (BOJ, MUFG, GPIF, JGB / USDJPY
+  series, TSE listings — all v2 / v3 territory)
+- real data ingestion (no public-data licenses are wired)
+- investment advice of any form
+
+If your use case requires any of the above, this repository is the
+**substrate** below them, not the implementation of them.
+
+## Quickstart
+
+From the repo root, install the project plus dev dependencies:
+
+```bash
+pip install -e ".[dev]"
+```
+
+Then, from `japan-financial-world/`:
+
+```bash
+# Tests
+python -m pytest -q
+
+# v1.7-era reference demo (single-day causal trace)
+python -m examples.reference_world.run_reference_loop
+
+# v1.8.14 endogenous chain demo (compact operational trace)
+python -m examples.reference_world.run_endogenous_chain
+
+# v1.8.15 ledger trace report appended to the operational trace
+python -m examples.reference_world.run_endogenous_chain --markdown
+```
+
+Both demos use only synthetic, jurisdiction-neutral identifiers, run
+in well under a second, and are deterministic across invocations.
+
+## Roadmap
+
+| Version       | Goal                                                      | Status                       |
+| ------------- | --------------------------------------------------------- | ---------------------------- |
+| v1.8.0–v1.8.15 | Endogenous activity infrastructure (built milestone-by-milestone) | Shipped |
+| **v1.8.16**   | Freeze / readiness / docs (this milestone)                | **In progress**              |
+| v1.9.0        | Living Reference World Demo (multi-period sweep over the v1.8.14 harness) | Next |
+| v1.9.x        | Report polishing, sparse / performance boundary, public-prototype readiness | Planned |
+| v1.9.last     | First lightweight public prototype (synthetic-only, CLI-first, deterministic, explainability-first) | Planned |
+| v2.0          | Japan public-data calibration design gate                 | Not started                  |
+| v3.0          | Proprietary Japan calibration / expert-data layer         | Private                      |
+
+For the v1.8.16 freeze surface and the v1.9 plan see:
+
+- [`docs/v1_8_release_summary.md`](japan-financial-world/docs/v1_8_release_summary.md)
+- [`docs/v1_9_living_reference_world_plan.md`](japan-financial-world/docs/v1_9_living_reference_world_plan.md)
+- [`docs/public_prototype_plan.md`](japan-financial-world/docs/public_prototype_plan.md)
 
 ## Project layers
 
@@ -83,7 +217,11 @@ real-world claim.
 | ------- | -------------------------------------------------------------------------------- | ---------------------------- |
 | v0.xx   | Jurisdiction-neutral world kernel                                                | **Frozen at v0.16**          |
 | v1.0–v1.7 | Jurisdiction-neutral reference financial system                                | **Frozen at v1.7**           |
-| v1.8    | Experiment harness (config-driven driver + manifest + replay gate, no new behavior) | **Tagged `v1.8-public-release`** |
+| v1.8.0  | Experiment harness (config-driven driver + manifest + replay gate, no new behavior) | **Tagged `v1.8-public-release`** |
+| v1.8.x  | Endogenous activity infrastructure (interactions / routines / attention / variables / exposures / chain harness / trace report) | Shipped (1341 tests) |
+| v1.8.16 | Freeze / readiness / docs                                                        | **In progress**              |
+| v1.9.0  | Living Reference World Demo (multi-period sweep)                                 | Next                         |
+| v1.9.last | First lightweight public prototype                                             | Planned                      |
 | v2.xx   | Japan public calibration                                                         | Not started                  |
 | v3.xx   | Japan proprietary / commercial calibration                                       | Not started                  |
 
@@ -138,6 +276,28 @@ no-cross-mutation rule. v1 layers reference content on that contract:
   for future v1.8.x milestones but raise `NotImplementedError` at
   runtime in v1.8 itself. See
   [`docs/v1_experiment_harness_design.md`](japan-financial-world/docs/v1_experiment_harness_design.md).
+- **v1.8.1 → v1.8.15 Endogenous activity stack** — interaction
+  topology (`InteractionBook`, sparse tensor / matrix views), routine
+  infrastructure (`RoutineBook`, `RoutineEngine`, the corporate
+  quarterly reporting routine), attention infrastructure
+  (`AttentionBook`, the `ObservationMenuBuilder` join service, the
+  investor / bank attention demo with explicit variable / exposure
+  hooks), reference variables (`WorldVariableBook`), exposures
+  (`ExposureBook`), the two review routines (`investor_review`,
+  `bank_review`), the orchestration harness
+  (`run_reference_endogenous_chain`), and the read-only ledger trace
+  report (`world/ledger_trace_report.py`). Each milestone landed
+  additively; together they let a caller produce a deterministic,
+  fully ledger-reconstructable non-shock chain. See `docs/world_model.md`
+  §43 – §57 and
+  [`docs/v1_8_release_summary.md`](japan-financial-world/docs/v1_8_release_summary.md).
+- **v1.8.16 Freeze / readiness** — docs and release-readiness only.
+  No new code behavior; consolidates v1.8 as a coherent milestone and
+  prepares v1.9. See
+  [`docs/v1_8_release_summary.md`](japan-financial-world/docs/v1_8_release_summary.md),
+  [`docs/v1_9_living_reference_world_plan.md`](japan-financial-world/docs/v1_9_living_reference_world_plan.md),
+  and
+  [`docs/public_prototype_plan.md`](japan-financial-world/docs/public_prototype_plan.md).
 
 ## What v0 vs v1 own
 
@@ -201,11 +361,25 @@ Start here:
   — forward-looking note on data sources, entity mapping, license
   review, and v2 vs v3 boundary
 
-**v1.8 (tagged `v1.8-public-release`):**
+**v1.8 (tagged `v1.8-public-release` at v1.8.0; v1.8.16 freeze):**
+- [docs/v1_8_release_summary.md](japan-financial-world/docs/v1_8_release_summary.md)
+  — v1.8 milestone-by-milestone summary
+- [docs/v1_9_living_reference_world_plan.md](japan-financial-world/docs/v1_9_living_reference_world_plan.md)
+  — next milestone (Living Reference World Demo)
+- [docs/public_prototype_plan.md](japan-financial-world/docs/public_prototype_plan.md)
+  — v1.9.last public-prototype target
 - [docs/fwe_reference_demo_design.md](japan-financial-world/docs/fwe_reference_demo_design.md)
   — reference demo, replay-determinism gate, manifest design
 - [docs/v1_experiment_harness_design.md](japan-financial-world/docs/v1_experiment_harness_design.md)
   — config-driven harness for the demo
+- [docs/v1_endogenous_reference_dynamics_design.md](japan-financial-world/docs/v1_endogenous_reference_dynamics_design.md)
+  — anti-scenario routine vocabulary (v1.8.1)
+- [docs/v1_interaction_topology_design.md](japan-financial-world/docs/v1_interaction_topology_design.md)
+  — interaction topology + heterogeneous attention design (v1.8.2)
+- [docs/v1_reference_variable_layer_design.md](japan-financial-world/docs/v1_reference_variable_layer_design.md)
+  — reference variable + exposure design (v1.8.8 + hardening)
+- [examples/reference_world/README.md](japan-financial-world/examples/reference_world/README.md)
+  — runnable demos (reference loop + endogenous chain)
 
 **v1 sub-milestone designs:**
 - [docs/v1_reference_system_design.md](japan-financial-world/docs/v1_reference_system_design.md)
@@ -233,7 +407,7 @@ Start here:
 
 **Tests:**
 - [docs/test_inventory.md](japan-financial-world/docs/test_inventory.md)
-  — 632 tests grouped by component (444 v0 + 188 v1)
+  — 1341 tests grouped by component (444 v0 + 188 v1.0–v1.7 + 709 post-v1.7)
 
 **Long-form / original ambition (kept for reference):**
 - [docs/architecture.md](japan-financial-world/docs/architecture.md) —
@@ -271,9 +445,13 @@ From the `japan-financial-world` directory:
 python -m pytest -q
 ```
 
-Expected: `725 passed` at the latest commit (444 v0 + 188 v1 + the
-reference-demo, replay, manifest, experiment-harness, and catalog-
-shape test additions).
+Expected: `1341 passed` at the latest commit (444 v0 + 188 v1
+frozen reference + 709 post-v1.7 additions covering the reference
+demo, replay, manifest, catalog-shape, experiment harness, and the
+v1.8.x endogenous-activity stack — interactions, routines,
+attention, variable / exposure layers, the menu builder, the
+investor / bank attention demo, the two review routines, the chain
+harness, and the ledger trace report).
 
 To run only v0 tests, exclude the v1 test files; to run only v1 tests:
 

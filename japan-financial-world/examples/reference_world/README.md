@@ -1,14 +1,23 @@
-# FWE Reference Demo
+# FWE Reference Demos
 
-A single, synthetic, jurisdiction-neutral demo world that walks the
-v1.6 reference loop end-to-end and produces a complete causal ledger
-trace.
+Two synthetic, jurisdiction-neutral demos sit in this directory:
 
-The demo's role is structural: it shows what FWE simulates and why
-the ledger matters. **It is not a market predictor, not investment
-advice, and not a calibrated Japan model.** Every entity name uses
-the `*_reference_*` synthetic naming convention. Every numeric value
-is an illustrative round number, not a measurement.
+1. **v1.6 reference loop** (`run_reference_loop.py`) — the original
+   one-shot causal trace: external observation → signal →
+   valuation → comparator → institutional action → follow-up
+   signal → event → next-tick delivery.
+2. **v1.8.14 endogenous chain** (`run_endogenous_chain.py`) — the
+   non-shock chain shipped by the v1.8 stack: corporate quarterly
+   reporting → heterogeneous investor / bank attention → investor /
+   bank review → ledger trace report. **No external observation is
+   required, and no shock is applied.** With `--markdown` the v1.8.15
+   reporter renders a deterministic Markdown summary of every
+   record the chain wrote.
+
+Both demos are research artifacts. **Neither is a market predictor,
+investment advice, or a calibrated Japan model.** Every entity name
+uses the `*_reference_*` synthetic naming convention. Every numeric
+value is an illustrative round number, not a measurement.
 
 ## What is in this directory
 
@@ -18,6 +27,7 @@ is an illustrative round number, not a measurement.
 | `entities.yaml`         | Synthetic entity catalog: 5 firms, 2 banks, 3 investor types, 1 exchange, 1 real-estate market, 1 information source, 1 policy authority, 2 external factors, plus seed prices, seed ownership, and the loop parameters. |
 | `expected_story.md`     | Per-step narrative of the ledger trace the script produces. |
 | `run_reference_loop.py` | Runnable script that builds the demo kernel, walks the seven loop steps, advances two ticks, and prints a summary. |
+| `run_endogenous_chain.py` | v1.8.14 endogenous chain demo. Builds a small synthetic seed kernel, runs `run_reference_endogenous_chain`, and prints a compact operational trace. With `--markdown` it appends the v1.8.15 deterministic ledger trace report. |
 | `replay_utils.py`       | `canonicalize_ledger(kernel)` and `ledger_digest(kernel)` helpers used by the v1 replay-determinism gate. |
 | `manifest.py`           | `build_reference_demo_manifest(kernel, summary)` and `write_manifest(manifest, path)` helpers for the reproducibility manifest (git_sha, python_version, platform, input file hashes, ledger digest, summary). |
 | `configs/`              | YAML configs for the v1.8 experiment harness. `configs/base.yaml` mirrors the bundled demo and produces the same SHA-256 ledger digest. |
@@ -32,7 +42,14 @@ and (for the v1.8 harness)
 From the `japan-financial-world/` directory:
 
 ```bash
+# v1.6 one-shot causal trace
 python examples/reference_world/run_reference_loop.py
+
+# v1.8.14 endogenous chain (operational trace only)
+python -m examples.reference_world.run_endogenous_chain
+
+# v1.8.14 chain + v1.8.15 deterministic Markdown ledger trace report
+python -m examples.reference_world.run_endogenous_chain --markdown
 ```
 
 Expected output (abbreviated):
@@ -72,7 +89,7 @@ kernel, summary = demo.run()
 # kernel.ledger.records — full causal trace
 ```
 
-## What this demo represents
+## What `run_reference_loop.py` represents
 
 - An external macro factor is observed.
 - A signal is emitted referencing the observation.
@@ -84,7 +101,35 @@ kernel, summary = demo.run()
 - A `WorldEvent` is published; on the next tick it is delivered to
   banking + investors.
 
-## What this demo does NOT represent
+## What `run_endogenous_chain.py` represents
+
+- A firm publishes a synthetic quarterly-report `InformationSignal`
+  through the v1.8.7 corporate reporting routine.
+- The v1.8.11 `ObservationMenuBuilder` builds one `ObservationMenu`
+  per actor, surfacing the corporate signal plus visible variable
+  observations gated by each actor's exposures.
+- The v1.8.12 attention demo writes one
+  `SelectedObservationSet` per actor, applying a structural
+  selection rule against each `AttentionProfile`'s watch fields. The
+  investor and the bank, looking at the same world, select
+  different refs.
+- The v1.8.13 review routines (`investor_review`, `bank_review`)
+  consume those selections through `RoutineEngine`, persist one
+  `RoutineRunRecord` each, and emit one synthetic review-note
+  `InformationSignal` each.
+- The v1.8.14 harness (`run_reference_endogenous_chain`) sequences
+  the above and returns a deterministic `EndogenousChainResult`
+  naming every record id the chain wrote.
+- The v1.8.15 ledger trace report
+  (`build_endogenous_chain_report` +
+  `render_endogenous_chain_markdown`) projects the slice of the
+  ledger the chain produced into a deterministic Markdown summary.
+
+The chain is **fully endogenous** — no external observation,
+shock, or scenario branch is required to make any of these records
+appear.
+
+## What these demos do NOT represent
 
 - No price formation. Prices do not move.
 - No trading. Investor portfolios are static.
@@ -96,9 +141,13 @@ kernel, summary = demo.run()
 - No scenarios, scenario branching, or stress logic.
 - No Japan-specific calibration of any kind.
 
-The demo's job is to make the v1 record-shape and audit-trail
+The demos' job is to make the v1 record-shape and audit-trail
 contract concrete and runnable. Anything beyond that is v1+
 behavioral, v2 (Japan public), or v3 (Japan proprietary) territory.
+
+The endogenous chain in particular is **infrastructure**, not
+behavior — it shows that the v1.8 stack composes correctly, not
+that any specific output should be acted upon.
 
 ## Read in this order
 

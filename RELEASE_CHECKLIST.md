@@ -194,6 +194,47 @@ new review is performed.
 - [ ] If the answer to any of the above is "no," fix before
   releasing.
 
+## Public prototype gate (v1.9.last)
+
+The **v1.9.last public prototype** is allowed to ship when the
+public-release gate above is fully green *and* the prototype-
+specific items below are all true. v1.9.last is a public *prototype*
+(synthetic-only, CLI-first, explainability-first), not a fresh
+public release of unrelated material — see
+[`japan-financial-world/docs/public_prototype_plan.md`](japan-financial-world/docs/public_prototype_plan.md).
+
+- [ ] **One-command demo.** From a clean clone, after
+  `pip install -e ".[dev]"` and `cd japan-financial-world`,
+  `python -m examples.reference_world.run_endogenous_chain --markdown`
+  produces a complete operational trace plus a deterministic
+  Markdown ledger trace report. The two outputs are byte-identical
+  across consecutive invocations.
+- [ ] **README scope read.** The first ~60 seconds of `README.md`
+  state, accurately and without marketing language, that the
+  project is research software, not a market predictor or
+  investment advisor; that all data is synthetic; that Japan
+  calibration is v2 / v3 territory.
+- [ ] **Public / private boundary agreement.** `README.md`,
+  `SECURITY.md`,
+  [`docs/public_private_boundary.md`](japan-financial-world/docs/public_private_boundary.md),
+  [`docs/v1_8_release_summary.md`](japan-financial-world/docs/v1_8_release_summary.md),
+  and
+  [`docs/public_prototype_plan.md`](japan-financial-world/docs/public_prototype_plan.md)
+  agree on what is public, what is private, and where the seam is.
+- [ ] **Forbidden-token scan clean.** A word-boundary scan for the
+  canonical token list at `world/experiment.py::_FORBIDDEN_TOKENS`
+  finds no hits in any object id, signal id, or example output.
+  Use `\b` boundaries — naive substring greps mis-flag `tse` ⊂
+  `itself`.
+- [ ] **No proprietary content.** No expert-interview notes, no
+  named-institution stress results, no paid-data references, no
+  client-report templates, no NDA-restricted material.
+- [ ] **No investment-advice framings.** Neither direct ("buy
+  X") nor indirect ("a portfolio with exposure E would
+  experience O") forms appear in code, docs, or demo output.
+- [ ] **CI green on the tag commit.** `Tests + lint + demo`
+  and `Secret scan (gitleaks)` jobs both green.
+
 ## Tagging
 
 A release candidate (RC) may be tagged with the public-release

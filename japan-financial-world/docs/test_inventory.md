@@ -1,13 +1,13 @@
 # Test Inventory
 
-Snapshot of the test suite at **v1.8.15** (`Ledger Trace Report`):
-`1341 / 1341 passing` (444 v0 + 188 v1.0-v1.7 frozen reference +
-709 post-v1.7 additions covering reference demo, replay,
-manifest, catalog-shape, experiment harness, renamed WorldID
-tests, interactions, routines, attention, routine engine, the
-corporate quarterly reporting routine, the world-variable
-storage layer, the exposure / dependency storage layer, the
-observation-menu builder join service, the
+Snapshot of the test suite at **v1.8.16** (`Freeze / Readiness` —
+docs only, no test count change): `1341 / 1341 passing` (444 v0 +
+188 v1.0-v1.7 frozen reference + 709 post-v1.7 additions covering
+reference demo, replay, manifest, catalog-shape, experiment
+harness, renamed WorldID tests, interactions, routines, attention,
+routine engine, the corporate quarterly reporting routine, the
+world-variable storage layer, the exposure / dependency storage
+layer, the observation-menu builder join service, the
 heterogeneous-attention investor / bank demo, the investor /
 bank review routines, the endogenous chain harness, and the
 ledger trace report).
