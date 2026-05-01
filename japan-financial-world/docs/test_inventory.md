@@ -1,15 +1,16 @@
 # Test Inventory
 
-Snapshot of the test suite at **v1.8.14** (`Endogenous Chain
-Harness`): `1318 / 1318 passing` (444 v0 + 188 v1.0-v1.7 frozen
-reference + 686 post-v1.7 additions covering reference demo,
-replay, manifest, catalog-shape, experiment harness, renamed
-WorldID tests, interactions, routines, attention, routine engine,
-the corporate quarterly reporting routine, the world-variable
+Snapshot of the test suite at **v1.8.15** (`Ledger Trace Report`):
+`1341 / 1341 passing` (444 v0 + 188 v1.0-v1.7 frozen reference +
+709 post-v1.7 additions covering reference demo, replay,
+manifest, catalog-shape, experiment harness, renamed WorldID
+tests, interactions, routines, attention, routine engine, the
+corporate quarterly reporting routine, the world-variable
 storage layer, the exposure / dependency storage layer, the
 observation-menu builder join service, the
 heterogeneous-attention investor / bank demo, the investor /
-bank review routines, and the endogenous chain harness).
+bank review routines, the endogenous chain harness, and the
+ledger trace report).
 
 This inventory is grouped by what each component verifies. The numbers in
 parentheses are test counts per file. Run the full suite with:
@@ -276,6 +277,37 @@ no-mutation guarantee.
   determinism; snapshot determinism; ledger emission of
   `RecordType.INTERACTION_ADDED`; kernel wiring; no-mutation
   guarantee against every other v0 / v1 source-of-truth book.
+
+## Ledger trace report (v1.8.15)
+
+- `test_ledger_trace_report.py` (23) — `LedgerTraceReport`
+  immutable shape and schema-level `__post_init__` validation
+  (rejecting inconsistent indices, count mismatches);
+  `build_endogenous_chain_report` produces a report whose
+  `record_count`, `start_record_index`, and `end_record_index`
+  match the kernel ledger slice from the chain result;
+  `ordered_record_ids` matches `chain_result.created_record_ids`
+  byte-identically on the canonical chain;
+  `record_type_counts` sums to `record_count` and is sorted for
+  determinism; role-bucketed ids
+  (`routine_run_ids` / `signal_ids` / `menu_ids` /
+  `selection_ids`) match the chain's primary ids; selection
+  refs (`investor_selected_refs`, `bank_selected_refs`,
+  `shared_selected_refs`, `investor_only_refs`, `bank_only_refs`)
+  are carried through verbatim; default `report_id` formula and
+  explicit override; audit metadata
+  (`renderer == "v1.8.15"`, `chain_*_status` fields,
+  `chain_as_of_date`, etc.); determinism — `to_dict` and
+  `render_endogenous_chain_markdown` are byte-identical across
+  two fresh kernels seeded identically; Markdown contains the
+  expected section headings and event-type counts;
+  validation warnings (ledger truncated after chain returned,
+  count mismatch on a tampered chain result) without crashing;
+  defensive errors on `kernel=None` or non-`EndogenousChainResult`
+  inputs; full read-only guarantee against every kernel book and
+  the ledger; CLI smoke tests confirming `--markdown` produces
+  both the operational trace and the report and that the default
+  mode produces only the trace.
 
 ## Endogenous chain harness (v1.8.14)
 
@@ -653,7 +685,7 @@ no-mutation guarantee.
 | Reference loop (v1.6)            | 1     | 5     |
 | **v1 subtotal**                  | **7** | **188** |
 
-### v1.7-public-rc1+ / v1.8 / v1.8.3 / v1.8.4 / v1.8.5 / v1.8.6 / v1.8.7 / v1.8.9 / v1.8.10 / v1.8.11 / v1.8.12 / v1.8.13 / v1.8.14 additions
+### v1.7-public-rc1+ / v1.8 / v1.8.3 / v1.8.4 / v1.8.5 / v1.8.6 / v1.8.7 / v1.8.9 / v1.8.10 / v1.8.11 / v1.8.12 / v1.8.13 / v1.8.14 / v1.8.15 additions
 
 | Component                               | Files | Tests |
 | --------------------------------------- | ----- | ----- |
@@ -674,7 +706,8 @@ no-mutation guarantee.
 | Reference attention demo (v1.8.12)      | 1     | 23    |
 | Reference review routines (v1.8.13)     | 1     | 32    |
 | Endogenous chain harness (v1.8.14)      | 1     | 29    |
-| **post-v1.7 subtotal**                  | **17**| **686** |
+| Ledger trace report (v1.8.15)           | 1     | 23    |
+| **post-v1.7 subtotal**                  | **18**| **709** |
 
 ### v0 + v1 + post-v1.7 totals
 
@@ -682,8 +715,8 @@ no-mutation guarantee.
 | -------------------------------- | ----- | ----- |
 | v0                               | 35    | 444   |
 | v1.0–v1.7 frozen reference       | 7     | 188   |
-| post-v1.7 (v1.7-public-rc1+ / v1.8 / v1.8.3 / v1.8.4 / v1.8.5 / v1.8.6 / v1.8.7 / v1.8.9 / v1.8.10 / v1.8.11 / v1.8.12 / v1.8.13 / v1.8.14) | 17 | 686 |
-| **Total**                        | **59**| **1318** |
+| post-v1.7 (v1.7-public-rc1+ / v1.8 / v1.8.3 / v1.8.4 / v1.8.5 / v1.8.6 / v1.8.7 / v1.8.9 / v1.8.10 / v1.8.11 / v1.8.12 / v1.8.13 / v1.8.14 / v1.8.15) | 18 | 709 |
+| **Total**                        | **60**| **1341** |
 
 ## Auditing for jurisdiction-neutral identifiers
 

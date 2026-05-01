@@ -4286,7 +4286,8 @@ The book writes only to itself + the ledger (via the existing `Ledger.append` pa
 | v1.8.11 `ObservationMenu` builder | Code (§53). Read-only join. | Shipped |
 | v1.8.12 Attention Variable Hooks + Investor / Bank Attention Demo | Code (§54). Heterogeneous attention. | Shipped |
 | v1.8.13 Investor / Bank Review Routines | Code (§55). Routines consume attention. | Shipped |
-| **v1.8.14 Endogenous Chain Harness** | Code (§56). Single helper orchestrates the full chain. | **Shipped** |
+| v1.8.14 Endogenous Chain Harness | Code (§56). Single helper orchestrates the full chain. | Shipped |
+| **v1.8.15 Ledger Trace Report** | Code (§57). Read-only explainability over the chain. | **Shipped** |
 | v1.9 Living Reference World Demo | Code + tests. | Next |
 
 ## 52. v1.8.10 Exposure / Dependency Layer
@@ -4383,7 +4384,8 @@ Each step is opt-in. v1.8.10 does **not** implement the join; it only persists t
 | v1.8.11 `ObservationMenu` builder | Code (§53). Read-only join. | Shipped |
 | v1.8.12 Attention Variable Hooks + Investor / Bank Attention Demo | Code (§54). Heterogeneous attention. | Shipped |
 | v1.8.13 Investor / Bank Review Routines | Code (§55). Routines consume attention. | Shipped |
-| **v1.8.14 Endogenous Chain Harness** | Code (§56). Single helper orchestrates the full chain. | **Shipped** |
+| v1.8.14 Endogenous Chain Harness | Code (§56). Single helper orchestrates the full chain. | Shipped |
+| **v1.8.15 Ledger Trace Report** | Code (§57). Read-only explainability over the chain. | **Shipped** |
 | v1.9 Living Reference World Demo | Code + tests. | Next |
 
 ## 53. v1.8.11 ObservationMenu Builder
@@ -4455,7 +4457,8 @@ The join is the v1.8.8 hardening's **exposure hook** in code:
 | v1.8.11 `ObservationMenu` builder | Code (§53). Read-only join. | Shipped |
 | v1.8.12 Attention Variable Hooks + Investor / Bank Attention Demo | Code (§54). Heterogeneous attention. | Shipped |
 | v1.8.13 Investor / Bank Review Routines | Code (§55). Routines consume attention. | Shipped |
-| **v1.8.14 Endogenous Chain Harness** | Code (§56). Single helper orchestrates the full chain. | **Shipped** |
+| v1.8.14 Endogenous Chain Harness | Code (§56). Single helper orchestrates the full chain. | Shipped |
+| **v1.8.15 Ledger Trace Report** | Code (§57). Read-only explainability over the chain. | **Shipped** |
 | v1.9 Living Reference World Demo | Code + tests. | Next |
 
 ## 54. v1.8.12 Attention Variable Hooks + Investor / Bank Attention Demo
@@ -4685,7 +4688,71 @@ This is what makes v1.8.14 a viable foundation for v1.9: a year-long sweep can r
 | v1.8.11 `ObservationMenu` builder | Code (§53). | Shipped |
 | v1.8.12 Attention Variable Hooks + Investor / Bank Attention Demo | Code (§54). | Shipped |
 | v1.8.13 Investor / Bank Review Routines | Code (§55). | Shipped |
-| **v1.8.14 Endogenous Chain Harness** | Code (§56). | **Shipped** |
+| v1.8.14 Endogenous Chain Harness | Code (§56). | Shipped |
+| **v1.8.15 Ledger Trace Report** | Code (§57). Read-only explainability layer. | **Shipped** |
 | v1.9 Living Reference World Demo | Year-long run sweeping the chain. | Next |
+
+## 57. v1.8.15 Ledger Trace Report
+
+§57 (v1.8.15) is **explainability**, not modeling. It ships a small read-only reporter that turns the ledger slice produced by `run_reference_endogenous_chain` (the v1.8.14 harness) into a deterministic immutable summary, plus deterministic dict and Markdown projections. v1.8.15 introduces no new ledger record type, no new economic behavior, no scheduler change, no real data ingestion — it is pure presentation over the records the v1.8.x stack already emits.
+
+The reporter is the last piece of v1.8.x before v1.9: with it, anyone running the endogenous chain can immediately see *what happened* in a form suitable for code review, demo decks, public-facing notebooks, or post-hoc audit.
+
+### 57.1 What lands in v1.8.15
+
+- `world/ledger_trace_report.py` — new module with:
+  - `LedgerTraceReport` — immutable dataclass naming the chain's ledger slice (`start_record_index`, `end_record_index`, `record_count`), the per-event-type counts (`record_type_counts`, sorted for determinism), the ordered ids and event types (`ordered_record_ids`, `ordered_record_types`), the role-bucketed ids (`routine_run_ids`, `signal_ids`, `menu_ids`, `selection_ids`), the v1.8.12 set differences (`investor_only_refs`, `bank_only_refs`, `shared_selected_refs`, plus `investor_selected_refs` / `bank_selected_refs`), a `warnings` tuple, and an audit-friendly `metadata` mapping.
+  - `build_endogenous_chain_report(kernel, chain_result, *, chain_name=..., report_id=..., metadata=...)` — re-walks `kernel.ledger.records[before:after]`, populates the report, and emits informative warning strings (slice / chain mismatch, ledger truncated, missing expected event type) without crashing.
+  - `LedgerTraceReport.to_dict()` — deterministic dict / list projection suitable for JSON.
+  - `render_endogenous_chain_markdown(report)` — deterministic compact Markdown rendering with fixed section headings.
+- `examples/reference_world/run_endogenous_chain.py` — extended with a `--markdown` flag that prints the rendered report after the operational trace. The previous compact trace (`[corporate]` / `[attention]` / `[selection]` / `[review]` / `[ledger]`) still prints by default.
+- `tests/test_ledger_trace_report.py` — 23 tests pinning report shape, ledger-slice arithmetic (`record_count == end - start == len(ordered_record_ids)`), `record_type_counts` sums to `record_count` and is sorted, `ordered_record_ids` matches `chain_result.created_record_ids` byte-identically on the canonical chain, role bucketing, ref carry-through, default and explicit `report_id` / `chain_name`, audit metadata, determinism of `to_dict` and Markdown across two fresh kernels seeded identically, Markdown contains the expected section headings and event-type counts, validation warnings (slice grown after chain returned, count mismatch on a tampered chain result) without crashing, defensive errors (None kernel, wrong-type chain result), schema-level validation in `__post_init__`, full no-mutation guarantee against every kernel book and the ledger itself, and CLI smoke tests that confirm `--markdown` produces both the operational trace and the report and that the default mode does not.
+
+### 57.2 The summary is convenience; the ledger is truth
+
+The same record-by-record ground truth lives at `kernel.ledger.records[report.start_record_index:report.end_record_index]`. `LedgerTraceReport` re-projects that slice into a shape humans and downstream consumers can read at a glance — it does **not** replace the ledger. If the report and the ledger ever disagree, **trust the ledger**; v1.8.15's validation warnings exist to flag exactly this kind of drift.
+
+### 57.3 Determinism
+
+For a given kernel + chain_result pair, the report (and its `to_dict` / Markdown projections) is byte-identical across fresh process invocations. v1.8.15 does not consult the wall clock, does not mint random ids, and sorts every collection that does not have a natural ledger order.
+
+This is what makes v1.8.15 viable for the v1.9 Living Reference World Demo: a year-long sweep can render one report per chain invocation and concatenate the Markdown with no manifest drift.
+
+### 57.4 Anti-scope (what v1.8.15 deliberately does not do)
+
+§57 is a reporting milestone. v1.8.15 does **not** add:
+
+- New economic behavior, new routines, new ledger record types, new scheduler hooks.
+- New books or kernel fields.
+- Hashing / replay-determinism manifests beyond what v1.7 already ships. The Markdown is a *report*, not a manifest; it is not part of the v1.7 catalog-shape regression.
+- Wall-clock dependencies, randomness, or floating-point accumulation that could drift across runs.
+- Any read of records *outside* the chain's ledger slice. Records that exist before `start_record_index` or after `end_record_index` are not inspected.
+- Real Japan calibration; no real data ingestion.
+
+### 57.5 v1.8.15 success criteria
+
+§57 is complete when **all** hold:
+
+1. `world/ledger_trace_report.py` exports `LedgerTraceReport`, `build_endogenous_chain_report`, and `render_endogenous_chain_markdown` with the v1.8.15 contract.
+2. `record_count`, `ordered_record_ids`, and the role-bucketed id tuples match the kernel ledger slice on the canonical chain.
+3. `record_type_counts` sums to `record_count` and is sorted.
+4. `ordered_record_ids == chain_result.created_record_ids` when the ledger is untouched after the chain.
+5. `to_dict` and `render_endogenous_chain_markdown` are deterministic across two fresh kernels seeded identically.
+6. The reporter does not mutate `valuations`, `prices`, `ownership`, `contracts`, `constraints`, `exposures`, `variables`, `attention`, `routines`, `interactions`, `signals`, `institutions`, `external_processes`, `relationships`, or the ledger.
+7. Validation issues (slice / chain mismatch, count mismatch, missing expected event type) emit `warnings` strings without crashing.
+8. The CLI prints both the operational trace and the Markdown report when `--markdown` is supplied; the default mode prints only the trace.
+9. The full test suite passes (1341 tests = 1318 prior + 23 reporter).
+10. `compileall world spaces tests examples` is clean and `ruff check .` from the repo root is clean.
+
+### 57.6 Position in the v1.8.x sequence
+
+| Milestone | Scope | Status |
+| --- | --- | --- |
+| v1.8.12 Attention Variable Hooks + Investor / Bank Attention Demo | Code (§54). | Shipped |
+| v1.8.13 Investor / Bank Review Routines | Code (§55). | Shipped |
+| v1.8.14 Endogenous Chain Harness | Code (§56). | Shipped |
+| **v1.8.15 Ledger Trace Report** | Code (§57). Explainability over the chain. | **Shipped** |
+| v1.9 Living Reference World Demo | Year-long run sweeping the chain + report. | Next |
+
 
 

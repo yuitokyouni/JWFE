@@ -412,6 +412,23 @@ a v1+ behavioral milestone, not an extension of this demo.
 > compact endogenous companion; v1.9 will sweep this harness over a
 > full calendar year.
 
+### Update — v1.8.15 ledger trace report
+
+> v1.8.15 ships `world/ledger_trace_report.py` — a read-only reporter
+> that turns the v1.8.14 chain's ledger slice into a deterministic
+> `LedgerTraceReport` plus `to_dict` / Markdown projections. It adds
+> no new ledger record types, no new economic behavior, and no new
+> kernel state; the same record-by-record truth still lives at
+> `kernel.ledger.records[start:end]` and the report is reconstructable
+> from that slice plus the chain result.
+>
+> The CLI now accepts `--markdown` to render the report after the
+> operational trace. Both modes are byte-identical across runs. The
+> v1.7-era reference demo described in this document is unaffected;
+> the v1.7 manifest catalog and replay-determinism gates do not
+> include the v1.8.15 Markdown, which is presentation rather than a
+> reproducibility artifact.
+
 No file under `world/`, `spaces/`, or any existing test file is
 modified. The 632 / 632 v0 + v1 test count grows by the number of
 new demo tests; no existing test is changed.

@@ -1,29 +1,37 @@
 """
-v1.8.14 reference CLI — runs the endogenous chain on a synthetic
-seed kernel and prints a compact trace.
+v1.8.14 + v1.8.15 reference CLI — runs the endogenous chain on a
+synthetic seed kernel, prints a compact operational trace, and
+optionally renders a Markdown ledger-trace report.
 
 Usage:
 
     cd japan-financial-world
     python -m examples.reference_world.run_endogenous_chain
+    python -m examples.reference_world.run_endogenous_chain --markdown
 
 The seed values are deterministic and synthetic (no Japan
 calibration, no real data). Re-running the script produces the
-same trace.
+same trace and the same Markdown report — byte-identically.
 
 This is a thin orchestration wrapper around
-``world.reference_chain.run_reference_endogenous_chain``. Tests
-exercise the harness directly; the CLI is for human eyeballs.
+``world.reference_chain.run_reference_endogenous_chain`` (the v1.8.14
+chain) and ``world.ledger_trace_report`` (the v1.8.15 reporter).
+Tests exercise both directly; the CLI is for human eyeballs.
 """
 
 from __future__ import annotations
 
+import argparse
 from datetime import date
 
 from world.clock import Clock
 from world.exposures import ExposureRecord
 from world.kernel import WorldKernel
 from world.ledger import Ledger
+from world.ledger_trace_report import (
+    build_endogenous_chain_report,
+    render_endogenous_chain_markdown,
+)
 from world.reference_chain import (
     EndogenousChainResult,
     run_reference_endogenous_chain,
@@ -161,7 +169,27 @@ def _print_trace(result: EndogenousChainResult) -> None:
     )
 
 
-def main() -> None:
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="run_endogenous_chain",
+        description=(
+            "Run the v1.8.14 endogenous reference chain on a synthetic "
+            "seed kernel and optionally render the v1.8.15 Markdown report."
+        ),
+    )
+    parser.add_argument(
+        "--markdown",
+        action="store_true",
+        help=(
+            "After the operational trace, render the v1.8.15 ledger trace "
+            "report as deterministic Markdown."
+        ),
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = _parse_args(argv)
     kernel = _build_seed_kernel()
     result = run_reference_endogenous_chain(
         kernel,
@@ -171,6 +199,11 @@ def main() -> None:
         as_of_date=_AS_OF,
     )
     _print_trace(result)
+
+    if args.markdown:
+        report = build_endogenous_chain_report(kernel, result)
+        print()
+        print(render_endogenous_chain_markdown(report), end="")
 
 
 if __name__ == "__main__":
