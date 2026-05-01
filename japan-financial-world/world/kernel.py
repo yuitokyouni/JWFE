@@ -26,6 +26,7 @@ from world.scheduler import Phase, Scheduler, ScheduledTask, TaskSpec
 from world.signals import SignalBook
 from world.state import State
 from world.valuations import ValuationBook, ValuationComparator
+from world.variables import WorldVariableBook
 
 if TYPE_CHECKING:
     from spaces.base import BaseSpace
@@ -58,6 +59,7 @@ class WorldKernel:
     interactions: InteractionBook = field(default_factory=InteractionBook)
     routines: RoutineBook = field(default_factory=RoutineBook)
     attention: AttentionBook = field(default_factory=AttentionBook)
+    variables: WorldVariableBook = field(default_factory=WorldVariableBook)
     routine_engine: RoutineEngine | None = None
 
     def __post_init__(self) -> None:
@@ -74,6 +76,7 @@ class WorldKernel:
             self.interactions,
             self.routines,
             self.attention,
+            self.variables,
         ):
             if book.ledger is None:
                 book.ledger = self.ledger

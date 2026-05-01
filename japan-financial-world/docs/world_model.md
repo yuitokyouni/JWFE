@@ -4213,3 +4213,76 @@ A variable observation only matters when **all four** gates are satisfied: visib
 2. This section (§50.1) records the hardening in the constitutional log.
 3. No `world/`, `spaces/`, `examples/`, or `tests/` file is modified. The 1025-test baseline is unchanged.
 4. v1.8.9 reviewers reading the hardened design can answer "where does this variable hook into spaces, channels, and exposures?" before they touch any code.
+
+## 51. v1.8.9 WorldVariableBook
+
+§51 (v1.8.9) implements the v1.8.8 design + hardening as a kernel-level book. `WorldVariableBook` stores `ReferenceVariableSpec` records (what variables exist, with explicit source / scope / channel hooks) and `VariableObservation` records (what value was observed and when, with explicit visibility / vintage / revision metadata). It does **not** calculate macro variables, simulate commodity / power / technology dynamics, trigger routines, or perform Japan calibration. Cross-references are stored as data; the v0/v1 cross-reference rule holds.
+
+§51 is the storage milestone for the §50 / §50.1 design. The v1.8.10 Exposure / Dependency Layer, the v1.8.11 ObservationMenu builder, and the v1.8.12 Investor + Bank Attention Demo will read this book; v1.8.9 only stores.
+
+### 51.1 What lands in v1.8.9
+
+- `world/variables.py`:
+  - `ReferenceVariableSpec` immutable dataclass with the 18 fields in §50.1.3 (the original §50.3 set + the hardening additions). Required: `variable_id`, `variable_name`, `variable_group`, `variable_type`, `source_space_id`, `canonical_unit`, `frequency`, `observation_kind`, `default_visibility`, `observability_scope`. Optional / tuple / metadata fields per §50.1.3.
+  - `VariableObservation` immutable dataclass with the 16 fields in §50.1.3. Required: `observation_id`, `variable_id`, `as_of_date`, `value`, `unit`. Optional period / release / visibility / vintage / revision / anchoring / metadata fields. `value` accepts `int | float | str | None` (qualitative and quantitative). `confidence` validated in `[0.0, 1.0]`.
+  - `VariableObservation.visibility_date` — derived property returning `visible_from_date if present else as_of_date`. The v1.8.8 hardening's gate-1 visibility filter uses this property.
+  - `WorldVariableBook` append-only store: `add_variable`, `get_variable`, `list_variables`, `list_variables_by_group`, `list_variables_by_source_space`, `list_variables_by_related_space`, `list_variables_by_consumer_space`, `add_observation`, `get_observation`, `list_observations` (with optional `variable_id` arg), `list_observations_by_variable`, `list_observations_by_as_of_date`, `list_observations_visible_as_of`, `list_observations_carried_by_interaction`, `latest_observation` (with optional `as_of_date` for look-ahead-bias-free lookup), `snapshot`.
+  - Errors: `VariableError` (base), `DuplicateVariableError`, `DuplicateVariableObservationError`, `UnknownVariableError`, `UnknownVariableObservationError`.
+- `world/ledger.py`: two new `RecordType` members:
+  - `VARIABLE_ADDED = "variable_added"`
+  - `VARIABLE_OBSERVATION_ADDED = "variable_observation_added"`
+  `add_variable` / `add_observation` write the corresponding entry when a ledger is wired. The observation ledger entry uses `simulation_date = observation.as_of_date` and carries `correlation_id = carried_by_interaction_id` so a future routine engine can join variable observations to interaction-channel lineage.
+- `world/kernel.py`: new `variables: WorldVariableBook` field; the standard `__post_init__` wiring shares the kernel's ledger and clock with the book.
+- `tests/test_variables.py`: 91 tests covering field validation for both record types (parametrized rejection of empty required strings, empty entries in tuple fields, non-numeric / out-of-bounds / bool-typed `confidence`), date coercion on every date field, frozen dataclass immutability, `to_dict` round-trip; CRUD with duplicate rejection for both records; every filter listing for variables (by group / source space / related space / consumer space) and observations (by variable / as_of_date / visibility / channel); the visibility-filter rule (`visible_from_date` overrides `as_of_date` when present, in either direction — earlier or later); `latest_observation` deterministic tiebreaker (visibility_date desc → as_of_date desc → observation_id desc); `latest_observation` returns `None` when nothing is visible; vintage / revision storage; cross-reference rule (`variable_id` on observation NOT validated against the variables store); snapshot determinism with separate counts; ledger emission of both new record types (with `simulation_date` from the observation and `correlation_id` from the channel); kernel wiring; no-mutation guarantee against every other v0/v1 source-of-truth book; and the auto-execution prohibition (`tick()` / `run()` produce zero new variable / observation records).
+
+### 51.2 Visibility semantics — the v1.8.8 hardening's gate-1
+
+`list_observations_visible_as_of(as_of_date)` returns observations whose `visibility_date <= as_of_date`, where `visibility_date` is `visible_from_date if visible_from_date is not None else as_of_date`. ISO `YYYY-MM-DD` strings sort lexicographically the same as chronologically, so direct string comparison is correct.
+
+`latest_observation(variable_id, as_of_date=None)` filters to a specific variable, then (when `as_of_date` is provided) applies the same visibility filter, then returns the single record with the highest `(visibility_date, as_of_date, observation_id)` tuple under reverse sort. The tiebreaker is fully deterministic — two repeated calls against the same book state always return the same record.
+
+The book does **not** implement revision resolution beyond storing `vintage_id` and `revision_of`; "give me the latest non-superseded vintage of variable X for period Y" is a v1.8.10+ concern that may build on top of this book.
+
+### 51.3 Naming choice
+
+The class is `WorldVariableBook`, not `IndicatorBook`. "World variable" matches the §50.1.1 conceptual classification — a reference variable is a *world-context / field / substrate variable*, not specifically a macro indicator. Energy variables, technology indices, and qualitative narratives are first-class members of the layer; "indicator" would narrow to macroeconomic context only and obscure the AI / electricity / labor groups. The module name is `world/variables.py`.
+
+### 51.4 Boundaries
+
+§51 is a storage + lookup milestone. v1.8.9 does **not** add:
+
+- A GDP / CPI / rate calculator. The book stores released figures; nothing computes them.
+- A forecaster. No routine produces a forward point estimate for any variable.
+- A rate-setting engine. Even with `variable:policy_rate` registered, no v1.8.x routine sets it.
+- Commodity / power / technology-diffusion simulation. Variables are *values*, not markets / grids / models.
+- Policy reaction logic.
+- Price formation, trading, lending decisions, corporate actions.
+- Japan calibration or any real-data ingestion.
+- Auto-firing on `tick()` / `run()`. The book is read / written only by direct caller invocations — verified by the auto-execution-prohibition test.
+
+The book writes only to itself + the ledger (via the existing `Ledger.append` path). Tests assert no mutation of `OwnershipBook`, `ContractBook`, `PriceBook`, `ConstraintBook`, `SignalBook`, `ValuationBook`, `InstitutionBook`, `ExternalProcessBook`, `RelationshipCapitalBook`, `InteractionBook`, `RoutineBook`, or `AttentionBook`.
+
+### 51.5 v1.8.9 success criteria
+
+§51 is complete when **all** hold:
+
+1. `world/variables.py`, the two new ledger types, and the `variables` kernel field exist and behave per §51.1.
+2. `tests/test_variables.py` passes (91 tests).
+3. The full test suite passes (1116 tests = 1025 prior + 91 variables).
+4. `compileall world spaces tests examples` is clean and `ruff check .` from the repo root is clean.
+5. No existing test was modified; no existing record shape, book API, scheduler extension, or ledger record type was altered.
+6. `WorldVariableBook` does not mutate any other v0 / v1 source-of-truth book — verified by the explicit no-mutation test.
+7. `visible_from_date` overrides `as_of_date` for visibility filtering in both directions (earlier and later), per the v1.8.8 hardening's gate-1.
+
+### 51.6 Position in the v1.8.x sequence
+
+| Milestone | Scope | Status |
+| --- | --- | --- |
+| v1.8.7 Corporate Quarterly Reporting Routine | First concrete routine. | Shipped |
+| v1.8.8 Reference Variable Layer — Design | Design (§50). | Shipped |
+| v1.8.8 hardening — anchor variables to spaces / channels / exposures | Design (§50.1). | Shipped |
+| **v1.8.9 WorldVariableBook** | Code (§51). Storage + lookup only. | **Shipped** |
+| v1.8.10 Exposure / Dependency Layer | Code. | Next |
+| v1.8.11 `ObservationMenu` builder | Code. | After v1.8.10 |
+| v1.8.12 Investor + Bank Attention Demo | Code. | After v1.8.11 |
+| v1.9 Living Reference World Demo | Code + tests. | After v1.8.12 |

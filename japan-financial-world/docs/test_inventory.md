@@ -1,11 +1,11 @@
 # Test Inventory
 
-Snapshot of the test suite at **v1.8.7** (`Corporate Quarterly
-Reporting Routine`): `1025 / 1025 passing` (444 v0 + 188 v1.0-v1.7
-frozen reference + 393 post-v1.7 additions covering reference demo,
-replay, manifest, catalog-shape, experiment harness, renamed
-WorldID tests, interactions, routines, attention, routine engine,
-and the first concrete routine).
+Snapshot of the test suite at **v1.8.9** (`WorldVariableBook`):
+`1116 / 1116 passing` (444 v0 + 188 v1.0-v1.7 frozen reference +
+484 post-v1.7 additions covering reference demo, replay, manifest,
+catalog-shape, experiment harness, renamed WorldID tests,
+interactions, routines, attention, routine engine, the first
+concrete routine, and the world-variable storage layer).
 
 This inventory is grouped by what each component verifies. The numbers in
 parentheses are test counts per file. Run the full suite with:
@@ -273,6 +273,38 @@ no-mutation guarantee.
   `RecordType.INTERACTION_ADDED`; kernel wiring; no-mutation
   guarantee against every other v0 / v1 source-of-truth book.
 
+## World variable book (v1.8.9)
+
+- `test_variables.py` (91) — `ReferenceVariableSpec` and
+  `VariableObservation` field validation (parametrized rejection
+  of empty required strings, empty entries in tuple fields,
+  non-numeric / out-of-bounds / bool-typed `confidence`, non-int
+  `expected_release_lag_days`); date coercion on every date
+  field; numeric (int / float) and string and `None` `value`
+  acceptance; frozen dataclasses; `to_dict` round-trip;
+  `WorldVariableBook` CRUD with duplicate rejection
+  (`DuplicateVariableError` /
+  `DuplicateVariableObservationError`) for both records; every
+  filter listing for variables (by group / source space /
+  related space / consumer space) and observations (by variable
+  / `as_of_date` / channel); the visibility-filter rule —
+  `visible_from_date` overrides `as_of_date` when present, in
+  *both* directions (earlier and later); `latest_observation`
+  deterministic tiebreaker (`visibility_date` desc →
+  `as_of_date` desc → `observation_id` desc); `latest_observation`
+  returns `None` when nothing visible or variable unknown;
+  vintage / revision storage and retrieval; cross-reference rule
+  (`variable_id` on observation NOT validated against the
+  variables store); snapshot determinism with separate counts;
+  ledger emission of `VARIABLE_ADDED` and
+  `VARIABLE_OBSERVATION_ADDED` (with `simulation_date` from the
+  observation's `as_of_date` and `correlation_id` from
+  `carried_by_interaction_id`); kernel wiring; no-mutation
+  guarantee against every other v0 / v1 source-of-truth book
+  including `InteractionBook`, `RoutineBook`, and
+  `AttentionBook`; `kernel.tick()` and `kernel.run(days=N)` do
+  NOT auto-mutate variables or observations.
+
 ## Corporate quarterly reporting routine (v1.8.7)
 
 - `test_corporate_reporting_routine.py` (26) — registration
@@ -432,7 +464,7 @@ no-mutation guarantee.
 | Reference loop (v1.6)            | 1     | 5     |
 | **v1 subtotal**                  | **7** | **188** |
 
-### v1.7-public-rc1+ / v1.8 / v1.8.3 / v1.8.4 / v1.8.5 / v1.8.6 / v1.8.7 additions
+### v1.7-public-rc1+ / v1.8 / v1.8.3 / v1.8.4 / v1.8.5 / v1.8.6 / v1.8.7 / v1.8.9 additions
 
 | Component                               | Files | Tests |
 | --------------------------------------- | ----- | ----- |
@@ -447,7 +479,8 @@ no-mutation guarantee.
 | Attention (v1.8.5)                      | 1     | 102   |
 | Routine engine (v1.8.6)                 | 1     | 50    |
 | Corporate quarterly reporting (v1.8.7)  | 1     | 26    |
-| **post-v1.7 subtotal**                  | **11**| **393** |
+| World variable book (v1.8.9)            | 1     | 91    |
+| **post-v1.7 subtotal**                  | **12**| **484** |
 
 ### v0 + v1 + post-v1.7 totals
 
@@ -455,8 +488,8 @@ no-mutation guarantee.
 | -------------------------------- | ----- | ----- |
 | v0                               | 35    | 444   |
 | v1.0–v1.7 frozen reference       | 7     | 188   |
-| post-v1.7 (v1.7-public-rc1+ / v1.8 / v1.8.3 / v1.8.4 / v1.8.5 / v1.8.6 / v1.8.7) | 11 | 393 |
-| **Total**                        | **53**| **1025** |
+| post-v1.7 (v1.7-public-rc1+ / v1.8 / v1.8.3 / v1.8.4 / v1.8.5 / v1.8.6 / v1.8.7 / v1.8.9) | 12 | 484 |
+| **Total**                        | **54**| **1116** |
 
 ## How to interpret a failing test
 

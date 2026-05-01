@@ -63,6 +63,8 @@ class RecordType(str, Enum):
     ATTENTION_PROFILE_ADDED = "attention_profile_added"
     OBSERVATION_MENU_CREATED = "observation_menu_created"
     OBSERVATION_SET_SELECTED = "observation_set_selected"
+    VARIABLE_ADDED = "variable_added"
+    VARIABLE_OBSERVATION_ADDED = "variable_observation_added"
     STATE_SNAPSHOT_CREATED = "state_snapshot_created"
     WARNING = "warning"
     ERROR = "error"
