@@ -148,7 +148,7 @@ def _build_full_world() -> tuple[
     )
     spaces["policy"].add_instrument_state(  # type: ignore[attr-defined]
         PolicyInstrumentState(
-            instrument_id="instrument:boj_policy_rate",
+            instrument_id="instrument:reference_central_bank_policy_rate",
             authority_id="authority:reference_central_bank",
             instrument_type="policy_rate",
         )
@@ -251,7 +251,7 @@ def _build_full_world() -> tuple[
             source_id="authority:reference_central_bank",
             published_date="2026-01-01",
             visibility="restricted",
-            metadata={"allowed_viewers": ("agent:boj_committee",)},
+            metadata={"allowed_viewers": ("agent:reference_central_bank_committee",)},
         )
     )
 
@@ -453,7 +453,7 @@ def test_information_space_reads_signals_by_source_type_visibility():
     assert {s.signal_id for s in visible} == {"signal:reference_rating_agency_a_rating"}
 
     # The restricted signal is visible to its allowed viewer.
-    visible_committee = info.list_visible_signals("agent:boj_committee")
+    visible_committee = info.list_visible_signals("agent:reference_central_bank_committee")
     assert {s.signal_id for s in visible_committee} == {
         "signal:reference_rating_agency_a_rating",
         "signal:internal_minutes",
@@ -467,7 +467,7 @@ def test_policy_space_reads_visible_signals():
     visible = policy.get_visible_signals("authority:reference_central_bank")
     # Policy authority sees the public rating action; the restricted
     # internal memo is invisible because authority:reference_central_bank is not in the
-    # allowed_viewers list (which contains agent:boj_committee only).
+    # allowed_viewers list (which contains agent:reference_central_bank_committee only).
     assert {s.signal_id for s in visible} == {"signal:reference_rating_agency_a_rating"}
 
 

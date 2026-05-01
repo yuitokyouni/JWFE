@@ -16,6 +16,46 @@ to be green on the commit being tagged. CI runs the items below
 automatically; this section is the manual mirror so you can
 reproduce locally before pushing.
 
+### Latest readiness-review snapshot
+
+Each readiness review records its result here so the next reviewer
+can pick up where the last one stopped. Replace the snapshot when a
+new review is performed.
+
+- **Date:** 2026-05-01
+- **Commit:** post-`v1.7-public-rc1`, after the manifest milestone
+  (`c347c5d`) and one synthetic-ID cleanup pass.
+- **Status:** all release-gate checks below pass locally. CI status
+  must still be confirmed on the commit being tagged.
+- **Local results:**
+  - `pytest -q` → 674 passed
+  - `compileall world spaces tests examples` → clean
+  - `ruff check .` (repo root) → clean
+  - `examples/reference_world/run_reference_loop.py` → produces
+    seven loop record types + day-2 delivery to
+    `(banking, investors)`
+  - Replay-determinism gate (`tests/test_reference_demo_replay.py`)
+    → 6 / 6 passed
+  - Manifest gate (`tests/test_reference_demo_manifest.py`) →
+    14 / 14 passed
+  - Manifest sample build → ledger digest matches the digest the
+    replay test asserts
+  - Public-wording audit → zero hits in the "needs softening"
+    category; every match is a bounded NEGATIVE / prohibited-list /
+    future-scope use
+  - Synthetic-ID audit → zero remaining real-name fixtures in
+    `tests/` or `examples/`. The only file that contains the
+    forbidden tokens (`toyota`, `mufg`, `boj`, etc.) is
+    `tests/test_reference_demo.py`, which uses them as the
+    forbidden-list the demo-hygiene test asserts must not appear in
+    object_ids.
+- **Notes for the next reviewer:**
+  - Local `gitleaks` was not available during this review; rely on
+    the CI `secret-scan` job (`continue-on-error: true` until a
+    license token is wired) plus a manual pre-tag run before
+    cutting `v1.7-public-release`.
+  - No remaining release-blockers identified.
+
 ### CI
 
 - [ ] `.github/workflows/ci.yml` ran on the commit being tagged and

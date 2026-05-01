@@ -183,37 +183,37 @@ def test_duplicate_listing_rejected():
 def test_same_asset_can_be_listed_on_multiple_markets():
     space = ExchangeSpace()
     space.add_listing(_listing(market_id="market:reference_equity_market", asset_id="asset:reference_manufacturer_equity"))
-    space.add_listing(_listing(market_id="market:nyse", asset_id="asset:reference_manufacturer_equity"))
+    space.add_listing(_listing(market_id="market:reference_secondary_equity_market", asset_id="asset:reference_manufacturer_equity"))
     assert space.get_listing("market:reference_equity_market", "asset:reference_manufacturer_equity") is not None
-    assert space.get_listing("market:nyse", "asset:reference_manufacturer_equity") is not None
+    assert space.get_listing("market:reference_secondary_equity_market", "asset:reference_manufacturer_equity") is not None
 
 
 def test_list_listings_returns_all_in_insertion_order():
     space = ExchangeSpace()
     space.add_listing(_listing(market_id="market:reference_equity_market", asset_id="asset:a"))
     space.add_listing(_listing(market_id="market:reference_equity_market", asset_id="asset:b"))
-    space.add_listing(_listing(market_id="market:nyse", asset_id="asset:c"))
+    space.add_listing(_listing(market_id="market:reference_secondary_equity_market", asset_id="asset:c"))
 
     listings = space.list_listings()
     assert [(item.market_id, item.asset_id) for item in listings] == [
         ("market:reference_equity_market", "asset:a"),
         ("market:reference_equity_market", "asset:b"),
-        ("market:nyse", "asset:c"),
+        ("market:reference_secondary_equity_market", "asset:c"),
     ]
 
 
 def test_list_assets_on_market_filters_by_market():
     space = ExchangeSpace()
     space.add_listing(_listing(market_id="market:reference_equity_market", asset_id="asset:reference_manufacturer_equity"))
-    space.add_listing(_listing(market_id="market:reference_equity_market", asset_id="asset:sony_eq"))
-    space.add_listing(_listing(market_id="market:jgb", asset_id="asset:jgb_10y"))
+    space.add_listing(_listing(market_id="market:reference_equity_market", asset_id="asset:reference_manufacturer_b_equity"))
+    space.add_listing(_listing(market_id="market:reference_govt_bond_market", asset_id="asset:reference_govt_bond_10y"))
 
-    on_tse = space.list_assets_on_market("market:reference_equity_market")
-    on_jgb = space.list_assets_on_market("market:jgb")
-    on_unknown = space.list_assets_on_market("market:nyse")
+    on_primary_market = space.list_assets_on_market("market:reference_equity_market")
+    on_govt_bond_market = space.list_assets_on_market("market:reference_govt_bond_market")
+    on_unknown = space.list_assets_on_market("market:reference_secondary_equity_market")
 
-    assert {item.asset_id for item in on_tse} == {"asset:reference_manufacturer_equity", "asset:sony_eq"}
-    assert {item.asset_id for item in on_jgb} == {"asset:jgb_10y"}
+    assert {item.asset_id for item in on_primary_market} == {"asset:reference_manufacturer_equity", "asset:reference_manufacturer_b_equity"}
+    assert {item.asset_id for item in on_govt_bond_market} == {"asset:reference_govt_bond_10y"}
     assert on_unknown == ()
 
 

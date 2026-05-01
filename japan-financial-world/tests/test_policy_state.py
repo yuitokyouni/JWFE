@@ -31,7 +31,7 @@ def _authority(
 
 
 def _instrument(
-    instrument_id: str = "instrument:boj_policy_rate",
+    instrument_id: str = "instrument:reference_central_bank_policy_rate",
     *,
     authority_id: str = "authority:reference_central_bank",
     instrument_type: str = "policy_rate",
@@ -90,7 +90,7 @@ def test_authority_state_is_immutable():
 
 def test_instrument_state_carries_required_fields():
     inst = _instrument()
-    assert inst.instrument_id == "instrument:boj_policy_rate"
+    assert inst.instrument_id == "instrument:reference_central_bank_policy_rate"
     assert inst.authority_id == "authority:reference_central_bank"
     assert inst.instrument_type == "policy_rate"
     assert inst.status == "active"
@@ -156,7 +156,7 @@ def test_add_and_get_instrument_state():
     space = PolicySpace()
     inst = _instrument()
     space.add_instrument_state(inst)
-    assert space.get_instrument_state("instrument:boj_policy_rate") is inst
+    assert space.get_instrument_state("instrument:reference_central_bank_policy_rate") is inst
 
 
 def test_duplicate_instrument_rejected():
@@ -171,7 +171,7 @@ def test_instrument_can_reference_unregistered_authority():
     space = PolicySpace()
     inst = _instrument(authority_id="authority:not_yet_registered")
     space.add_instrument_state(inst)
-    assert space.get_instrument_state("instrument:boj_policy_rate") is inst
+    assert space.get_instrument_state("instrument:reference_central_bank_policy_rate") is inst
 
 
 def test_list_instruments_by_authority_filters_correctly():
@@ -185,19 +185,19 @@ def test_list_instruments_by_authority_filters_correctly():
     space.add_instrument_state(
         _instrument(
             instrument_id="instrument:capital_ratio",
-            authority_id="authority:fsa",
+            authority_id="authority:reference_regulator_a",
         )
     )
 
-    boj_instruments = space.list_instruments_by_authority("authority:reference_central_bank")
-    fsa_instruments = space.list_instruments_by_authority("authority:fsa")
+    central_bank_instruments = space.list_instruments_by_authority("authority:reference_central_bank")
+    regulator_a_instruments = space.list_instruments_by_authority("authority:reference_regulator_a")
     unknown = space.list_instruments_by_authority("authority:none")
 
-    assert {i.instrument_id for i in boj_instruments} == {
+    assert {i.instrument_id for i in central_bank_instruments} == {
         "instrument:rate",
         "instrument:rrr",
     }
-    assert {i.instrument_id for i in fsa_instruments} == {
+    assert {i.instrument_id for i in regulator_a_instruments} == {
         "instrument:capital_ratio"
     }
     assert unknown == ()
@@ -271,7 +271,7 @@ def test_add_instrument_records_to_ledger():
     records = ledger.filter(event_type="policy_instrument_state_added")
     assert len(records) == 1
     record = records[0]
-    assert record.object_id == "instrument:boj_policy_rate"
+    assert record.object_id == "instrument:reference_central_bank_policy_rate"
     assert record.target == "authority:reference_central_bank"
     assert record.payload["instrument_type"] == "reserve_requirement"
 
@@ -281,4 +281,4 @@ def test_add_state_does_not_record_when_no_ledger():
     space.add_authority_state(_authority())
     space.add_instrument_state(_instrument())
     assert space.get_authority_state("authority:reference_central_bank") is not None
-    assert space.get_instrument_state("instrument:boj_policy_rate") is not None
+    assert space.get_instrument_state("instrument:reference_central_bank_policy_rate") is not None

@@ -205,16 +205,16 @@ def test_list_contracts_for_bank_returns_all_contracts_with_bank_as_party():
     kernel.contracts.add_contract(
         _loan(
             contract_id="contract:loan_002",
-            lender="bank:smbc",
-            borrower="firm:sony",
+            lender="bank:reference_bank_c",
+            borrower="firm:reference_manufacturer_b",
             principal=2_000.0,
         )
     )
-    # A contract where mufg is borrower (interbank loan).
+    # A contract where the reference bank is borrower (interbank loan).
     kernel.contracts.add_contract(
         _loan(
             contract_id="contract:loan_003",
-            lender="bank:smbc",
+            lender="bank:reference_bank_c",
             borrower="bank:reference_bank_a",
             principal=500.0,
         )
@@ -231,7 +231,7 @@ def test_list_contracts_for_bank_returns_all_contracts_with_bank_as_party():
 
 def test_list_lending_exposures_filters_to_lender_role():
     kernel = _kernel()
-    # Two loans where mufg is lender.
+    # Two loans where the reference bank is lender.
     kernel.contracts.add_contract(
         _loan(
             contract_id="contract:loan_001",
@@ -245,15 +245,15 @@ def test_list_lending_exposures_filters_to_lender_role():
         _loan(
             contract_id="contract:loan_002",
             lender="bank:reference_bank_a",
-            borrower="firm:sony",
+            borrower="firm:reference_manufacturer_b",
             principal=500_000.0,
         )
     )
-    # An interbank loan where mufg is borrower (must NOT be in lending exposures).
+    # An interbank loan where the reference bank is borrower (must NOT be in lending exposures).
     kernel.contracts.add_contract(
         _loan(
             contract_id="contract:loan_003",
-            lender="bank:smbc",
+            lender="bank:reference_bank_c",
             borrower="bank:reference_bank_a",
             principal=300_000.0,
         )
@@ -271,7 +271,7 @@ def test_list_lending_exposures_filters_to_lender_role():
     assert by_id["contract:loan_001"].borrower_id == "firm:reference_manufacturer_a"
     assert by_id["contract:loan_001"].principal == 1_000_000.0
     assert by_id["contract:loan_001"].collateral_asset_ids == ("asset:property_a",)
-    assert by_id["contract:loan_002"].borrower_id == "firm:sony"
+    assert by_id["contract:loan_002"].borrower_id == "firm:reference_manufacturer_b"
     assert by_id["contract:loan_002"].collateral_asset_ids == ()
 
 
@@ -317,7 +317,7 @@ def test_list_lending_exposures_preserves_status():
         _loan(
             contract_id="contract:active",
             lender="bank:reference_bank_a",
-            borrower="firm:sony",
+            borrower="firm:reference_manufacturer_b",
             principal=2_000.0,
             status="active",
         )

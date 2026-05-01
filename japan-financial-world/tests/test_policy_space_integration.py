@@ -122,7 +122,7 @@ def test_policy_space_does_not_mutate_world_books():
     )
     policy.add_instrument_state(
         PolicyInstrumentState(
-            instrument_id="instrument:boj_policy_rate",
+            instrument_id="instrument:reference_central_bank_policy_rate",
             authority_id="authority:reference_central_bank",
             instrument_type="policy_rate",
         )

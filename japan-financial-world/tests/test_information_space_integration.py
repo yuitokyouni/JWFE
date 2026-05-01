@@ -89,7 +89,7 @@ def test_information_space_can_list_signals_by_source():
         InformationSignal(
             signal_id="signal:reference_rating_agency_a_rating_002",
             signal_type="rating_action",
-            subject_id="firm:sony",
+            subject_id="firm:reference_manufacturer_b",
             source_id="source:reference_rating_agency_a",
             published_date="2026-01-01",
         )

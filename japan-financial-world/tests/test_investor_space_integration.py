@@ -107,7 +107,7 @@ def test_investor_space_can_read_constraint_evaluations():
     kernel.prices.set_price("asset:cash", 1.0, "2026-01-01", "system")
     kernel.constraints.add_constraint(
         ConstraintRecord(
-            constraint_id="constraint:gpif_lev",
+            constraint_id="constraint:reference_fund_a_lev",
             owner_id="investor:reference_fund_a",
             constraint_type="max_leverage",
             threshold=0.7,
@@ -273,7 +273,7 @@ def test_investor_space_does_not_mutate_world_books():
     kernel.prices.set_price("asset:aapl", 150.0, "2026-01-01", "exchange")
     kernel.constraints.add_constraint(
         ConstraintRecord(
-            constraint_id="constraint:gpif_nav",
+            constraint_id="constraint:reference_fund_a_nav",
             owner_id="investor:reference_fund_a",
             constraint_type="min_net_asset_value",
             threshold=0.0,

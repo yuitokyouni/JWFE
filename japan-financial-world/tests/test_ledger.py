@@ -36,7 +36,7 @@ def test_ledger_jsonl_roundtrip():
         "signal_emitted",
         timestamp=datetime(2026, 1, 1, tzinfo=timezone.utc),
         simulation_date="2026-01-01",
-        source="media:nikkei_like",
+        source="media:reference_news_outlet",
         target="investor:macro_fund_a",
         object_id="signal:earnings_warning_001",
         payload={"topic": "earnings_warning"},
