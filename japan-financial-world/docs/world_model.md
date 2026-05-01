@@ -4286,3 +4286,98 @@ The book writes only to itself + the ledger (via the existing `Ledger.append` pa
 | v1.8.11 `ObservationMenu` builder | Code. | After v1.8.10 |
 | v1.8.12 Investor + Bank Attention Demo | Code. | After v1.8.11 |
 | v1.9 Living Reference World Demo | Code + tests. | After v1.8.12 |
+
+## 52. v1.8.10 Exposure / Dependency Layer
+
+§52 (v1.8.10) implements the v1.8.8 hardening's **exposure hook** as a kernel-level book. `ExposureBook` records *who depends on which world variable, in what direction, with what synthetic dependency strength*. It does **not** compute impacts, calibrate sensitivities, multiply variable values by magnitudes, adjust valuations, update DSCR / LTV / leverage, or simulate transmission chains.
+
+§52 closes the source / scope / **exposure** hook chain that §50.1 named. Together with `WorldVariableBook` (§51), the v1.8.x line now has the data shape needed for v1.8.11's `ObservationMenu` builder to surface "variables that matter to this subject" without inventing the relationship at runtime.
+
+### 52.1 What lands in v1.8.10
+
+- `world/exposures.py`:
+  - `ExposureRecord` immutable dataclass with 14 fields per the v1.8.10 spec: `exposure_id`, `subject_id`, `subject_type`, `variable_id`, `exposure_type`, `metric`, `direction`, `magnitude`, `unit` (default `"synthetic_strength"`), `confidence` (default `1.0`), `effective_from?`, `effective_to?`, `source_ref_ids`, `metadata`. `magnitude` and `confidence` are validated in `[0.0, 1.0]` (rejecting bool which is a subclass of int). `direction` is a free-form **label** (suggested vocabulary: `"positive"` / `"negative"` / `"mixed"` / `"neutral"` / `"nonlinear"`) — the book does no sign math.
+  - `ExposureRecord.is_active_as_of(as_of_date) -> bool` — open-ended bounds (`None`) are treated as `±∞`. The book's `list_active_as_of(...)` filter reuses this property.
+  - `ExposureBook` append-only store with the v1.8.10 API: `add_exposure`, `get_exposure`, `list_exposures`, `list_by_subject`, `list_by_subject_type`, `list_by_variable`, `list_by_exposure_type`, `list_by_metric`, `list_by_direction`, `list_active_as_of`, `snapshot`.
+  - Errors: `ExposureError` (base), `DuplicateExposureError`, `UnknownExposureError`.
+- `world/ledger.py`: new `RecordType.EXPOSURE_ADDED = "exposure_added"`. `add_exposure` writes the entry when a ledger is wired; `source` carries `subject_id` and `target` carries `variable_id` so the source→target shape of a v1 ledger record matches the dependency direction.
+- `world/kernel.py`: new `exposures: ExposureBook` field; the standard `__post_init__` wiring shares the kernel's ledger and clock with the book.
+- `tests/test_exposures.py`: 59 tests covering field validation (parametrized rejection of empty required strings, magnitude / confidence bounds, bool rejection on numeric fields, inverted validity windows, empty entries in `source_ref_ids`); `is_active_as_of` semantics (inside / before / after / inclusive at bounds / open-ended on each side / both bounds open); date coercion; tuple normalization; frozen dataclass; `to_dict` round-trip; CRUD with `DuplicateExposureError` / `UnknownExposureError`; cross-reference rule (`variable_id` not validated against `WorldVariableBook`); every filter listing using a six-record realistic synthetic seed (food processor / property operator / bank / macro fund / electricity-intensive manufacturer / AI-exposed labor sector); `list_active_as_of` filtering with date strings and `date` objects; snapshot determinism with `exposure_count` and sorted-by-id record list; ledger emission of `EXPOSURE_ADDED`; kernel wiring (`exposures` field + shared ledger / clock); no-mutation guarantee against every other v0/v1 source-of-truth book including `InteractionBook`, `RoutineBook`, `AttentionBook`, and `WorldVariableBook`; and the auto-execution prohibition (`tick()` / `run()` produce zero new exposures).
+
+### 52.2 Synthetic dependency strength, not calibrated sensitivity
+
+`ExposureRecord.magnitude` is in `[0.0, 1.0]` — a **synthetic dependency strength**, not a calibrated sensitivity. v1.8.10 deliberately rejects out-of-bounds magnitudes so that v1.8.11+ consumers can rely on the bound when computing future ranking weights. v2 / v3 calibration may attach real sensitivity numbers under a different schema (e.g., `metadata["calibration_status"] = "public_data_calibrated"` plus a separate calibrated-sensitivity field), but v1.8.10 ships the synthetic shape only.
+
+`direction` is a **label**, not arithmetic. The book stores `"positive"` / `"negative"` / `"mixed"` / `"neutral"` / `"nonlinear"` (or any other free-form string) verbatim. v1.8.11+ consumers may interpret the label; v1.8.10 does not.
+
+### 52.3 Six illustrative exposures (the v1.8.10 spec examples)
+
+The test seed exercises all six examples called out in the v1.8.10 task:
+
+| Subject | Variable | Metric (transmission target) | Direction | Magnitude |
+| --- | --- | --- | --- | --- |
+| `firm:reference_food_processor_a` | `variable:petrochemical_input_cost` | `packaging_margin_pressure` | positive | 0.45 |
+| `firm:reference_property_operator_a` | `variable:policy_rate` | `debt_service_burden` | positive | 0.7 |
+| `bank:reference_bank_a` | `variable:land_price_index_reference` | `collateral_value` | positive | 0.6 |
+| `investor:reference_macro_fund_a` | `variable:usd_jpy` | `portfolio_translation_exposure` | mixed | 0.4 |
+| `firm:reference_electric_manufacturer_a` | `variable:electricity_price_index` | `operating_cost_pressure` | positive | 0.55 |
+| `sector:reference_labor_sector_a` | `variable:automation_adoption_index` | `labor_displacement_risk` | negative | 0.3 |
+
+These are **synthetic** records. The numbers are illustrative round figures chosen for traceability. v2 / v3 calibration may attach Japan-specific exposure data; v1.8.10 stays neutral.
+
+### 52.4 Boundaries
+
+§52 is a storage + lookup milestone. v1.8.10 does **not** add:
+
+- Impact estimation. No multiplication of `magnitude` by any `VariableObservation.value`. No transmission simulation.
+- Sensitivity calibration. v1.8.10 uses synthetic strengths only; v2 / v3 calibrate.
+- Valuation adjustment. The book does not touch `ValuationBook`.
+- DSCR / LTV / leverage updates. The book does not touch `ConstraintBook` or `BalanceSheetView`.
+- Scenario engine, stochastic processes, macro / commodity / power / technology dynamics, policy reaction logic, price formation, trading, lending decisions, Japan calibration, real-data ingestion. All v1.7 / v1.8.x prohibitions are inherited.
+- Auto-firing on `tick()` / `run()`. The book is read / written only by direct caller invocations — verified by the auto-execution-prohibition test.
+
+### 52.5 The v1.8.8 hardening's hook chain — now complete
+
+§50.1 (the v1.8.8 hardening) named three required hooks: source, scope, exposure. With v1.8.10 the chain is data-complete:
+
+```
+ReferenceVariableSpec.source_space_id, source_id      — source hook   (v1.8.9)
+ReferenceVariableSpec.related_*_ids,                  — scope hook    (v1.8.9)
+                       observability_scope,
+                       typical_consumer_space_ids
+ExposureRecord (subject_id × variable_id)             — exposure hook (v1.8.10)
+```
+
+A future v1.8.11 `ObservationMenu` builder, given a subject id, can:
+
+1. Look up the subject's `ExposureRecord`s via
+   `kernel.exposures.list_by_subject(subject_id)`.
+2. For each exposure, fetch the variable's spec and its latest visible observation via `kernel.variables.get_variable(...)` and `kernel.variables.latest_observation(variable_id, as_of_date=menu_date)`.
+3. Surface the joined `(variable, observation, exposure)` triples to the subject's `AttentionProfile` for selection.
+4. The selected observations flow into `RoutineExecutionRequest.selected_observation_set_ids` and ultimately into a `RoutineRunRecord.input_refs`.
+
+Each step is opt-in. v1.8.10 does **not** implement the join; it only persists the data.
+
+### 52.6 v1.8.10 success criteria
+
+§52 is complete when **all** hold:
+
+1. `world/exposures.py`, the `EXPOSURE_ADDED` ledger type, and the `exposures` kernel field exist and behave per §52.1.
+2. `tests/test_exposures.py` passes (59 tests).
+3. The full test suite passes (1175 tests = 1116 prior + 59 exposures).
+4. `compileall world spaces tests examples` is clean and `ruff check .` from the repo root is clean.
+5. No existing test was modified; no existing record shape, book API, scheduler extension, or ledger record type was altered.
+6. `ExposureBook` does not mutate any other v0 / v1 source-of-truth book — verified by the explicit no-mutation test.
+7. `magnitude` and `confidence` are enforced in `[0.0, 1.0]` (with `bool` rejected) so v1.8.11+ consumers can rely on the bound.
+
+### 52.7 Position in the v1.8.x sequence
+
+| Milestone | Scope | Status |
+| --- | --- | --- |
+| v1.8.7 Corporate Quarterly Reporting Routine | First concrete routine. | Shipped |
+| v1.8.8 Reference Variable Layer — Design (+ hardening) | Design (§50, §50.1). | Shipped |
+| v1.8.9 WorldVariableBook | Code (§51). | Shipped |
+| **v1.8.10 Exposure / Dependency Layer** | Code (§52). Storage + lookup only. | **Shipped** |
+| v1.8.11 `ObservationMenu` builder | Code. | Next |
+| v1.8.12 Investor + Bank Attention Demo | Code. | After v1.8.11 |
+| v1.9 Living Reference World Demo | Code + tests. | After v1.8.12 |

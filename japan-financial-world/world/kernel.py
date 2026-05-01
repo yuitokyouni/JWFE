@@ -11,6 +11,7 @@ from world.clock import Clock
 from world.constraints import ConstraintBook, ConstraintEvaluator
 from world.contracts import ContractBook
 from world.event_bus import EventBus
+from world.exposures import ExposureBook
 from world.external_processes import ExternalProcessBook
 from world.institutions import InstitutionBook
 from world.interactions import InteractionBook
@@ -60,6 +61,7 @@ class WorldKernel:
     routines: RoutineBook = field(default_factory=RoutineBook)
     attention: AttentionBook = field(default_factory=AttentionBook)
     variables: WorldVariableBook = field(default_factory=WorldVariableBook)
+    exposures: ExposureBook = field(default_factory=ExposureBook)
     routine_engine: RoutineEngine | None = None
 
     def __post_init__(self) -> None:
@@ -77,6 +79,7 @@ class WorldKernel:
             self.routines,
             self.attention,
             self.variables,
+            self.exposures,
         ):
             if book.ledger is None:
                 book.ledger = self.ledger

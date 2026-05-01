@@ -1,11 +1,12 @@
 # Test Inventory
 
-Snapshot of the test suite at **v1.8.9** (`WorldVariableBook`):
-`1116 / 1116 passing` (444 v0 + 188 v1.0-v1.7 frozen reference +
-484 post-v1.7 additions covering reference demo, replay, manifest,
-catalog-shape, experiment harness, renamed WorldID tests,
-interactions, routines, attention, routine engine, the first
-concrete routine, and the world-variable storage layer).
+Snapshot of the test suite at **v1.8.10** (`Exposure / Dependency
+Layer`): `1175 / 1175 passing` (444 v0 + 188 v1.0-v1.7 frozen
+reference + 543 post-v1.7 additions covering reference demo,
+replay, manifest, catalog-shape, experiment harness, renamed
+WorldID tests, interactions, routines, attention, routine engine,
+the first concrete routine, the world-variable storage layer, and
+the exposure / dependency storage layer).
 
 This inventory is grouped by what each component verifies. The numbers in
 parentheses are test counts per file. Run the full suite with:
@@ -273,6 +274,35 @@ no-mutation guarantee.
   `RecordType.INTERACTION_ADDED`; kernel wiring; no-mutation
   guarantee against every other v0 / v1 source-of-truth book.
 
+## Exposure / dependency layer (v1.8.10)
+
+- `test_exposures.py` (59) — `ExposureRecord` field validation
+  (parametrized rejection of empty required strings, magnitude /
+  confidence bounds in `[0.0, 1.0]`, bool rejection on numeric
+  fields, inverted validity windows, empty entries in
+  `source_ref_ids`); `is_active_as_of` semantics covering inside
+  / before / after / inclusive at bounds / open-ended on each
+  side / both bounds open cases; date coercion on optional date
+  fields; tuple normalization for `source_ref_ids`; frozen
+  dataclass; `to_dict` round-trip; CRUD with
+  `DuplicateExposureError` / `UnknownExposureError`;
+  cross-reference rule (`variable_id` NOT validated against
+  `WorldVariableBook`); every filter listing using a
+  six-record realistic synthetic seed (food processor /
+  property operator / bank / macro fund / electricity-intensive
+  manufacturer / AI-exposed labor sector — exactly the
+  examples called out in the v1.8.10 task);
+  `list_active_as_of` filtering with both ISO date strings and
+  `date` objects; snapshot determinism with `exposure_count`
+  and sorted-by-id record list; ledger emission of
+  `RecordType.EXPOSURE_ADDED` (`source = subject_id`,
+  `target = variable_id`); kernel wiring (`exposures` field +
+  shared ledger / clock); no-mutation guarantee against every
+  other v0 / v1 source-of-truth book including
+  `InteractionBook`, `RoutineBook`, `AttentionBook`, and
+  `WorldVariableBook`; `kernel.tick()` and `kernel.run(days=N)`
+  do NOT auto-create exposures.
+
 ## World variable book (v1.8.9)
 
 - `test_variables.py` (91) — `ReferenceVariableSpec` and
@@ -464,7 +494,7 @@ no-mutation guarantee.
 | Reference loop (v1.6)            | 1     | 5     |
 | **v1 subtotal**                  | **7** | **188** |
 
-### v1.7-public-rc1+ / v1.8 / v1.8.3 / v1.8.4 / v1.8.5 / v1.8.6 / v1.8.7 / v1.8.9 additions
+### v1.7-public-rc1+ / v1.8 / v1.8.3 / v1.8.4 / v1.8.5 / v1.8.6 / v1.8.7 / v1.8.9 / v1.8.10 additions
 
 | Component                               | Files | Tests |
 | --------------------------------------- | ----- | ----- |
@@ -480,7 +510,8 @@ no-mutation guarantee.
 | Routine engine (v1.8.6)                 | 1     | 50    |
 | Corporate quarterly reporting (v1.8.7)  | 1     | 26    |
 | World variable book (v1.8.9)            | 1     | 91    |
-| **post-v1.7 subtotal**                  | **12**| **484** |
+| Exposure / dependency layer (v1.8.10)   | 1     | 59    |
+| **post-v1.7 subtotal**                  | **13**| **543** |
 
 ### v0 + v1 + post-v1.7 totals
 
@@ -488,8 +519,8 @@ no-mutation guarantee.
 | -------------------------------- | ----- | ----- |
 | v0                               | 35    | 444   |
 | v1.0–v1.7 frozen reference       | 7     | 188   |
-| post-v1.7 (v1.7-public-rc1+ / v1.8 / v1.8.3 / v1.8.4 / v1.8.5 / v1.8.6 / v1.8.7 / v1.8.9) | 12 | 484 |
-| **Total**                        | **54**| **1116** |
+| post-v1.7 (v1.7-public-rc1+ / v1.8 / v1.8.3 / v1.8.4 / v1.8.5 / v1.8.6 / v1.8.7 / v1.8.9 / v1.8.10) | 13 | 543 |
+| **Total**                        | **55**| **1175** |
 
 ## How to interpret a failing test
 

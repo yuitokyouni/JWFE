@@ -65,6 +65,7 @@ class RecordType(str, Enum):
     OBSERVATION_SET_SELECTED = "observation_set_selected"
     VARIABLE_ADDED = "variable_added"
     VARIABLE_OBSERVATION_ADDED = "variable_observation_added"
+    EXPOSURE_ADDED = "exposure_added"
     STATE_SNAPSHOT_CREATED = "state_snapshot_created"
     WARNING = "warning"
     ERROR = "error"
