@@ -11,7 +11,15 @@ name: CI
 
 on:
   push:
-    branches: ["**"]
+    branches: [main]
+    # Version tags (v0.16, v1.7-public-rc1, v1.8-public-release, ...)
+    # gate the public-release workflow: tagging triggers the same
+    # tests + lint + demo + secret-scan jobs as a push to main, so a
+    # red tag run blocks the release. Pre-tag, pushing the commit to
+    # main runs CI once; tagging then runs CI again on the same
+    # commit under the tag ref. Both must be green for a final
+    # public-release tag.
+    tags: ["v*"]
   pull_request:
     branches: ["**"]
 
