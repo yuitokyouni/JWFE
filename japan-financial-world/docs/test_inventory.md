@@ -1,11 +1,11 @@
 # Test Inventory
 
-Snapshot of the test suite at **v1.8.5** (`AttentionProfile +
-ObservationMenu + SelectedObservationSet`): `949 / 949 passing` (444
-v0 + 188 v1.0-v1.7 frozen reference + 317 post-v1.7 additions
-covering reference demo, replay, manifest, catalog-shape,
-experiment harness, renamed WorldID tests, interactions, routines,
-and attention).
+Snapshot of the test suite at **v1.8.6** (`Routine Engine
+plumbing`): `999 / 999 passing` (444 v0 + 188 v1.0-v1.7 frozen
+reference + 367 post-v1.7 additions covering reference demo,
+replay, manifest, catalog-shape, experiment harness, renamed
+WorldID tests, interactions, routines, attention, and routine
+engine).
 
 This inventory is grouped by what each component verifies. The numbers in
 parentheses are test counts per file. Run the full suite with:
@@ -273,6 +273,41 @@ no-mutation guarantee.
   `RecordType.INTERACTION_ADDED`; kernel wiring; no-mutation
   guarantee against every other v0 / v1 source-of-truth book.
 
+## Routine engine (v1.8.6)
+
+- `test_routine_engine.py` (50) — `RoutineExecutionRequest` field
+  validation (parametrized rejection of empty required strings,
+  empty entries in tuple fields); frozen dataclass + `to_dict`
+  round-trip; `execute_request` end-to-end happy path producing
+  exactly one `RoutineRunRecord`; `RoutineExecutionResult`
+  mirrors the stored record; default `run_id` format
+  (`"run:" + request_id`) and metadata-`run_id` override; date
+  semantics (request override > clock fallback > controlled
+  `RoutineExecutionMissingDateError`); `collect_selected_refs`
+  preserves declaration order across selections and raises
+  `RoutineExecutionUnknownSelectionError` on missing ids;
+  explicit + selected refs combine deterministically with
+  first-occurrence dedup; status defaults
+  (`"completed"` with inputs / `"degraded"` without; explicit
+  override preserved); interaction compatibility (compatible
+  passes; not-in-allowed-list raises; not-admitting-routine-type
+  raises; unknown-interaction fails execution with
+  `RoutineExecutionIncompatibleInteractionError`); attention
+  compatibility (unknown selection raises;
+  subset-of-menu NOT enforced per v1.8.5);
+  `RoutineExecutionValidationError` on unknown / disabled
+  routine; `parent_record_ids` flow from metadata to record;
+  `selected_observation_set_ids` stored under run record's
+  `metadata`; `validate_request` returns the same shape and
+  raises the same controlled errors; `RoutineBook` ledger emits
+  exactly one `routine_run_recorded` per request via the
+  existing `add_run_record` path; kernel exposes
+  `routine_engine`; `kernel.tick()` and `kernel.run(days=N)` do
+  NOT auto-execute; no-mutation guarantee against every other
+  v0 / v1 source-of-truth book including `InteractionBook`,
+  `AttentionBook`, and `RoutineBook` snapshot before-and-after;
+  the error hierarchy.
+
 ## Attention (v1.8.5)
 
 - `test_attention.py` (102) — `AttentionProfile`,
@@ -367,7 +402,7 @@ no-mutation guarantee.
 | Reference loop (v1.6)            | 1     | 5     |
 | **v1 subtotal**                  | **7** | **188** |
 
-### v1.7-public-rc1+ / v1.8 / v1.8.3 / v1.8.4 / v1.8.5 additions
+### v1.7-public-rc1+ / v1.8 / v1.8.3 / v1.8.4 / v1.8.5 / v1.8.6 additions
 
 | Component                               | Files | Tests |
 | --------------------------------------- | ----- | ----- |
@@ -380,7 +415,8 @@ no-mutation guarantee.
 | Interaction topology (v1.8.3)           | 1     | 50    |
 | Routines (v1.8.4)                       | 1     | 72    |
 | Attention (v1.8.5)                      | 1     | 102   |
-| **post-v1.7 subtotal**                  | **9** | **317** |
+| Routine engine (v1.8.6)                 | 1     | 50    |
+| **post-v1.7 subtotal**                  | **10**| **367** |
 
 ### v0 + v1 + post-v1.7 totals
 
@@ -388,8 +424,8 @@ no-mutation guarantee.
 | -------------------------------- | ----- | ----- |
 | v0                               | 35    | 444   |
 | v1.0–v1.7 frozen reference       | 7     | 188   |
-| post-v1.7 (v1.7-public-rc1+ / v1.8 / v1.8.3 / v1.8.4 / v1.8.5) | 9 | 317 |
-| **Total**                        | **51**| **949** |
+| post-v1.7 (v1.7-public-rc1+ / v1.8 / v1.8.3 / v1.8.4 / v1.8.5 / v1.8.6) | 10 | 367 |
+| **Total**                        | **52**| **999** |
 
 ## How to interpret a failing test
 

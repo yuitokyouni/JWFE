@@ -20,6 +20,7 @@ from world.phases import IntradayPhaseSpec, PhaseSequence
 from world.prices import PriceBook
 from world.registry import RegisteredObject, Registry
 from world.relationships import RelationshipCapitalBook
+from world.routine_engine import RoutineEngine
 from world.routines import RoutineBook
 from world.scheduler import Phase, Scheduler, ScheduledTask, TaskSpec
 from world.signals import SignalBook
@@ -57,6 +58,7 @@ class WorldKernel:
     interactions: InteractionBook = field(default_factory=InteractionBook)
     routines: RoutineBook = field(default_factory=RoutineBook)
     attention: AttentionBook = field(default_factory=AttentionBook)
+    routine_engine: RoutineEngine | None = None
 
     def __post_init__(self) -> None:
         for book in (
@@ -101,6 +103,21 @@ class WorldKernel:
                 valuations=self.valuations,
                 prices=self.prices,
                 ledger=self.ledger,
+                clock=self.clock,
+            )
+
+        # v1.8.6 routine engine — thin plumbing that turns
+        # RoutineExecutionRequest into a RoutineRunRecord on the
+        # already-wired RoutineBook. The engine reads from
+        # RoutineBook + InteractionBook + AttentionBook and writes
+        # only to RoutineBook (via add_run_record's existing ledger
+        # emission path). It does NOT hook into tick() / run() —
+        # execution is caller-initiated.
+        if self.routine_engine is None:
+            self.routine_engine = RoutineEngine(
+                routines=self.routines,
+                interactions=self.interactions,
+                attention=self.attention,
                 clock=self.clock,
             )
 

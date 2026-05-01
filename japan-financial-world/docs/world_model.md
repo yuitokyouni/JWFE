@@ -3878,3 +3878,68 @@ Cross-references (`actor_id`, `attention_profile_id`, `menu_id`, `routine_run_id
 | v1.8.7 Corporate Reporting Routine | First concrete routine using `corporate_quarterly_reporting` on the diagonal `Corporate → Corporate` channel. | After v1.8.6 |
 | v1.8.8 Investor + Bank Attention Demo | Two more concrete routines using heterogeneous attention. | After v1.8.7 |
 | v1.9 Living Reference World Demo | Year-long run with no external observation; non-empty ledger on every reporting / review cycle. | After v1.8.8 |
+
+## 48. v1.8.6 Routine Engine Plumbing
+
+§48 (v1.8.6) implements the *thin execution service* that turns a `RoutineExecutionRequest` plus selected observation records (§47) into one auditable `RoutineRunRecord` (§46), validating interaction compatibility against the topology (§45) along the way. The engine is **plumbing, not behavior**: it generates no signals, valuations, prices, contracts, ownership changes, or economic actions. It does not hook into `tick()` / `run()`.
+
+### 48.1 What lands in v1.8.6
+
+- `world/routine_engine.py`:
+  - `RoutineExecutionRequest` immutable dataclass: `request_id`, `routine_id`, `as_of_date?`, `phase_id?`, `interaction_ids`, `selected_observation_set_ids`, `explicit_input_refs`, `output_refs`, `status?`, `metadata`. The two reserved metadata keys `parent_record_ids` and `run_id` are honored if present.
+  - `RoutineExecutionResult` immutable dataclass: mirrors the resulting `RoutineRunRecord` plus `request_id` for caller-side correlation.
+  - `RoutineEngine` service: `execute_request(request) -> RoutineExecutionResult`, `validate_request(request) -> dict`, `collect_selected_refs(selected_observation_set_ids) -> tuple[str, ...]`. Constructed with `RoutineBook`, `InteractionBook`, `AttentionBook`, optional `Clock`. Stateless beyond its references to those books.
+  - Errors: `RoutineExecutionError` (base), `RoutineExecutionValidationError`, `RoutineExecutionMissingDateError`, `RoutineExecutionIncompatibleInteractionError`, `RoutineExecutionUnknownSelectionError`.
+- `world/kernel.py`: new `routine_engine: RoutineEngine | None = None` field, constructed in `__post_init__` from the kernel's `routines` / `interactions` / `attention` / `clock` if not already supplied. The standard `tick()` / `run()` paths are unchanged — execution is caller-initiated only.
+- `tests/test_routine_engine.py`: 50 tests covering request validation, execute happy path, result-mirrors-stored-record contract, default `run_id` format (`"run:" + request_id`) and metadata override, date defaulting (request → clock → controlled error), selected-ref collection (concatenation order; unknown selection raises), explicit + selected combine deterministically with first-occurrence dedup, status semantics (default `"completed"` with inputs / `"degraded"` without; explicit override preserved), interaction compatibility (compatible passes; not-in-allowed-list raises; not-admitting-routine-type raises; unknown-interaction fails execution), attention compatibility (unknown selection raises; subset-of-menu NOT enforced per v1.8.5), unknown-routine raises, disabled-routine rejected, `parent_record_ids` flow from metadata to record, `selected_observation_set_ids` stored under run record's `metadata`, `validate_request` returns the same shape the engine uses internally and raises the same controlled errors as `execute_request`, `RoutineBook` ledger emits exactly one `routine_run_recorded` per request, kernel exposes the engine, `tick()` and `run()` do not auto-execute, no-mutation guarantee against every other v0/v1 source-of-truth book, and the error hierarchy.
+
+### 48.2 Execution semantics
+
+The engine validates → resolves → writes:
+
+1. **Resolve routine.** Look up `request.routine_id` in `RoutineBook`. Unknown id → `RoutineExecutionValidationError`. Disabled routine → `RoutineExecutionValidationError` (v1.8.6 chooses *reject* over *allow*).
+2. **Resolve as-of date.** `request.as_of_date` if supplied; else `clock.current_date`; else `RoutineExecutionMissingDateError`.
+3. **Validate interactions.** For each `interaction_id` in `request.interaction_ids`, call `RoutineBook.routine_can_use_interaction(routine_id, interaction_id, interactions)`. The v1.8.4 predicate returns `False` on unknown ids; the engine treats that as a fatal `RoutineExecutionIncompatibleInteractionError` so the failure is loud (the engine cannot execute against a channel that does not exist).
+4. **Collect selected refs.** Walk `selected_observation_set_ids`, look each up in `AttentionBook`, concatenate `selected_refs` in input declaration order. Unknown selection → `RoutineExecutionUnknownSelectionError`. Subset-of-menu is **not** enforced (per v1.8.5's documented decision).
+5. **Resolve input refs.** `final = dedupe(explicit_input_refs ++ collected_selected_refs)` with first-occurrence ordering. v1.8.6 documents this as the engine's canonical input shape.
+6. **Compute status.** Explicit `request.status` wins. Otherwise default to `"completed"` if resolved input refs are non-empty, `"degraded"` if empty (v1.8.1 anti-scenario discipline — a run with no inputs is *degraded*, not *failed*).
+7. **Build the run record.** Reserved metadata keys (`parent_record_ids`, `run_id`) are pulled out; `metadata["selected_observation_set_ids"]` is set; `RoutineRunRecord.routine_type` and `owner_space_id` are denormalized from the spec.
+8. **Persist.** `RoutineBook.add_run_record(record)` writes the record and emits `ROUTINE_RUN_RECORDED` through its existing ledger path. The engine adds **no other ledger writes**.
+
+### 48.3 Boundaries
+
+§48 is plumbing. v1.8.6 does **not** add:
+
+- Concrete routines. Corporate reporting / valuation refresh / bank review / investor review / etc. are v1.8.7+.
+- Automatic menu construction. Menus arrive on `AttentionBook` already built (per v1.8.5).
+- Selection logic. Selections arrive on `AttentionBook` already chosen.
+- Signal generation, valuation generation, price formation, trading, lending decisions, corporate actions, policy reaction functions, Japan calibration, real data, or any external-shock scenario engine. All v1.7 / v1.8.1 / v1.8.2 / v1.8.3 / v1.8.4 / v1.8.5 prohibitions are inherited.
+- Scheduler integration. `RoutineSpec.frequency` is still a label only; nothing in the engine registers or fires tasks against the scheduler.
+
+The engine writes only to `RoutineBook` and only via `add_run_record`. Cross-references on the request (`interaction_ids`, `selected_observation_set_ids`) are validated for existence; other ids (`explicit_input_refs`, `output_refs`, `parent_record_ids`) are recorded as data, per the v0 / v1 cross-reference rule.
+
+### 48.4 v1.8.6 success criteria
+
+§48 is complete when **all** hold:
+
+1. `world/routine_engine.py` and the `routine_engine` kernel field exist and behave per §48.1 / §48.2.
+2. `tests/test_routine_engine.py` passes (50 tests).
+3. The full test suite passes (999 tests = 949 prior + 50 engine).
+4. `compileall world spaces tests examples` is clean and `ruff check .` from the repo root is clean.
+5. No existing test was modified; no existing record shape, book API, scheduler extension, or ledger record type was altered.
+6. The engine does not mutate any other v0 / v1 source-of-truth book — verified by an explicit no-mutation test.
+7. `kernel.tick()` and `kernel.run(days=N)` do not execute routines automatically — verified by tests that exercise both paths against a populated kernel and assert zero `RoutineRunRecord` entries land.
+
+### 48.5 Revised v1.8.x sequence
+
+| Milestone | Scope | Status |
+| --- | --- | --- |
+| v1.8.1 Endogenous Reference Dynamics | Design (§43). | Shipped |
+| v1.8.2 Interaction Topology + Attention | Design (§44). | Shipped |
+| v1.8.3 InteractionBook + Tensor View | Code (§45). | Shipped |
+| v1.8.4 RoutineBook + RoutineRunRecord | Code (§46). | Shipped |
+| v1.8.5 AttentionProfile + ObservationMenu + SelectedObservationSet | Code (§47). | Shipped |
+| **v1.8.6 Routine Engine plumbing** | Code (§48). | **Shipped** |
+| v1.8.7 Corporate Reporting Routine | First concrete routine using `corporate_quarterly_reporting` on the diagonal `Corporate → Corporate` channel. | Next |
+| v1.8.8 Investor + Bank Attention Demo | Two more concrete routines using heterogeneous attention. | After v1.8.7 |
+| v1.9 Living Reference World Demo | Year-long run with no external observation; non-empty ledger on every reporting / review cycle. | After v1.8.8 |
