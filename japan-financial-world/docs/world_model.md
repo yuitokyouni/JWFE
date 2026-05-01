@@ -4284,7 +4284,8 @@ The book writes only to itself + the ledger (via the existing `Ledger.append` pa
 | v1.8.9 WorldVariableBook | Code (§51). Storage + lookup only. | Shipped |
 | v1.8.10 Exposure / Dependency Layer | Code (§52). | Shipped |
 | v1.8.11 `ObservationMenu` builder | Code (§53). Read-only join. | Shipped |
-| **v1.8.12 Attention Variable Hooks + Investor / Bank Attention Demo** | Code (§54). Heterogeneous attention. | **Shipped** |
+| v1.8.12 Attention Variable Hooks + Investor / Bank Attention Demo | Code (§54). Heterogeneous attention. | Shipped |
+| **v1.8.13 Investor / Bank Review Routines** | Code (§55). Routines consume attention. | **Shipped** |
 | v1.9 Living Reference World Demo | Code + tests. | Next |
 
 ## 52. v1.8.10 Exposure / Dependency Layer
@@ -4379,7 +4380,8 @@ Each step is opt-in. v1.8.10 does **not** implement the join; it only persists t
 | v1.8.9 WorldVariableBook | Code (§51). | Shipped |
 | **v1.8.10 Exposure / Dependency Layer** | Code (§52). Storage + lookup only. | **Shipped** |
 | v1.8.11 `ObservationMenu` builder | Code (§53). Read-only join. | Shipped |
-| **v1.8.12 Attention Variable Hooks + Investor / Bank Attention Demo** | Code (§54). Heterogeneous attention. | **Shipped** |
+| v1.8.12 Attention Variable Hooks + Investor / Bank Attention Demo | Code (§54). Heterogeneous attention. | Shipped |
+| **v1.8.13 Investor / Bank Review Routines** | Code (§55). Routines consume attention. | **Shipped** |
 | v1.9 Living Reference World Demo | Code + tests. | Next |
 
 ## 53. v1.8.11 ObservationMenu Builder
@@ -4449,7 +4451,8 @@ The join is the v1.8.8 hardening's **exposure hook** in code:
 | v1.8.9 WorldVariableBook | Code (§51). | Shipped |
 | v1.8.10 Exposure / Dependency Layer | Code (§52). | Shipped |
 | v1.8.11 `ObservationMenu` builder | Code (§53). Read-only join. | Shipped |
-| **v1.8.12 Attention Variable Hooks + Investor / Bank Attention Demo** | Code (§54). Heterogeneous attention. | **Shipped** |
+| v1.8.12 Attention Variable Hooks + Investor / Bank Attention Demo | Code (§54). Heterogeneous attention. | Shipped |
+| **v1.8.13 Investor / Bank Review Routines** | Code (§55). Routines consume attention. | **Shipped** |
 | v1.9 Living Reference World Demo | Code + tests. | Next |
 
 ## 54. v1.8.12 Attention Variable Hooks + Investor / Bank Attention Demo
@@ -4531,5 +4534,82 @@ The shared / diverging structure is computed in the `InvestorBankAttentionDemoRe
 | v1.8.9 WorldVariableBook | Code (§51). | Shipped |
 | v1.8.10 Exposure / Dependency Layer | Code (§52). | Shipped |
 | v1.8.11 `ObservationMenu` builder | Code (§53). | Shipped |
-| **v1.8.12 Attention Variable Hooks + Investor / Bank Attention Demo** | Code (§54). | **Shipped** |
+| v1.8.12 Attention Variable Hooks + Investor / Bank Attention Demo | Code (§54). | Shipped |
+| **v1.8.13 Investor / Bank Review Routines** | Code (§55). | **Shipped** |
 | v1.9 Living Reference World Demo | Year-long run on the routine + topology + attention + variable stack. | Next |
+
+## 55. v1.8.13 Investor / Bank Review Routines
+
+§55 (v1.8.13) closes the v1.8.x endogenous chain by giving heterogeneous attention a **consumer**: two narrow concrete review routines (`investor_review` and `bank_review`) that read `SelectedObservationSet` records through the existing v1.8.6 `RoutineEngine` and emit synthetic review notes. The full chain — *corporate reporting → menus → heterogeneous selected observations → investor / bank review run records → synthetic review notes* — is now reconstructable from the ledger alone, with zero economic behavior at any link.
+
+§55 is the first place where "the investor reviews" and "the bank reviews" exist as recorded simulation events, not just as data shapes the v1.8.5 / v1.8.12 layers can describe. The routines are caller-initiated, structurally narrow (a self-loop within their own space), and forbidden from any economic mutation.
+
+### 55.1 What lands in v1.8.13
+
+- `world/reference_reviews.py` — new module:
+  - Controlled vocabulary constants: `INVESTOR_REVIEW_ROUTINE_TYPE = "investor_review"`, `BANK_REVIEW_ROUTINE_TYPE = "bank_review"`, `INVESTOR_REVIEW_INTERACTION_ID = "interaction:investors.investor_review"`, `BANK_REVIEW_INTERACTION_ID = "interaction:banking.bank_credit_review"`, `INVESTOR_REVIEW_SIGNAL_TYPE = "investor_review_note"`, `BANK_REVIEW_SIGNAL_TYPE = "bank_review_note"`.
+  - `register_investor_review_interaction(kernel)` / `register_bank_review_interaction(kernel)` — idempotent helpers that register the Investors→Investors and Banking→Banking self-loop channels (`channel_type` `"investor_review_channel"` / `"bank_credit_review_channel"`) with `routine_types_that_may_use_this_channel` locked to the matching routine type.
+  - `register_investor_review_routine(kernel, *, investor_id)` / `register_bank_review_routine(kernel, *, bank_id)` — idempotent helpers that register a per-actor `RoutineSpec` with the matching `allowed_interaction_ids`. `optional_input_ref_types = ("InformationSignal", "VariableObservation", "ExposureRecord")` mirrors the v1.8.12 attention surface; `output_ref_types = ("InformationSignal",)` names the review-note signal.
+  - `run_investor_review(kernel, *, investor_id, selected_observation_set_ids, as_of_date=None, ...)` / `run_bank_review(kernel, *, bank_id, selected_observation_set_ids, as_of_date=None, ...)` — the run helpers. Build a `RoutineExecutionRequest`, call `kernel.routine_engine.execute_request(...)`, and emit one synthetic review-note signal through `kernel.signals.add_signal(...)`.
+  - `ReviewRoutineResult` — immutable result carrying the engine result and the produced signal.
+- `tests/test_reference_review_routines.py` — 32 tests pinning interaction / routine self-loop topology, idempotent registration, single-run-record / single-signal flow, bidirectional run↔signal links, ledger ordering (`routine_run_recorded` → `signal_added`), selected-ref consumption, payload-count integrity, status semantics (`completed` when refs flow through, `degraded` when they don't — anti-scenario), date defaulting, determinism, no-mutation guarantees against `valuations`, `prices`, `ownership`, `contracts`, `constraints`, `exposures`, `variables`, `attention`, `institutions`, `external_processes`, `relationships`, no auto-firing from `tick()` / `run()`, and synthetic-only identifiers (with a word-boundary check that handles substrings like `tse` ⊂ `itself`).
+
+### 55.2 The endogenous chain, end to end
+
+With v1.8.13 in the tree, a kernel can be driven through this audit trace from a single deterministic seed:
+
+1. **Corporate report** — `run_corporate_quarterly_reporting(kernel, firm_id=...)` writes one `RoutineRunRecord` and one `corporate_quarterly_report` `InformationSignal` through the existing v1.8.7 path.
+2. **Menus + heterogeneous selections** — `run_investor_bank_attention_demo(kernel, firm_id=..., investor_id=..., bank_id=...)` writes two `ObservationMenu` records (one per actor, via the v1.8.11 `ObservationMenuBuilder`) and two `SelectedObservationSet` records (one per actor, via the v1.8.12 structural selection rule).
+3. **Reviews** — `run_investor_review(kernel, investor_id=..., selected_observation_set_ids=(investor_selection_id,))` and `run_bank_review(kernel, bank_id=..., selected_observation_set_ids=(bank_selection_id,))` each write one `RoutineRunRecord` (with the selected refs in `input_refs`) and one review-note signal.
+
+Every step is caller-initiated. Every step writes only to its own book(s) and the shared ledger. No price, valuation, ownership, contract, exposure, variable, attention, institution, or external-process state changes anywhere in the chain.
+
+### 55.3 Review signal payload — count summaries only
+
+The investor / bank review notes carry **structural counts**, not economic interpretation. Each note's `payload` includes:
+
+- `actor_id`, `review_type`, `as_of_date`, `status`, `statement`.
+- `selected_ref_count` — total resolved input refs (after engine dedup).
+- `selected_signal_count` / `selected_variable_observation_count` / `selected_exposure_count` — how many of those refs the helper could resolve in `SignalBook` / `WorldVariableBook` / `ExposureBook` respectively.
+- `selected_other_count` — anything that didn't classify (so the four counts always sum to `selected_ref_count`).
+- `selected_observation_set_ids` — the ids that were passed in.
+
+The four counts are **descriptive**, not normative: v1.8.13 does not score risk, flag covenants, take views, generate buy / sell / hold notes, or otherwise interpret the selected refs. The note is an audit artifact — proof that the routine ran, with what shape of input, on what date.
+
+### 55.4 Anti-scope (what v1.8.13 deliberately does not do)
+
+§55 is a *consumer-routine* milestone. v1.8.13 does **not** add:
+
+- Buy / sell / hold decisions, portfolio rebalancing, lending decisions, covenant enforcement, credit-line repricing.
+- Valuation refresh, impact estimation, sensitivity calculation, DSCR / LTV updates, liquidity stress, scenario rollout.
+- Price formation, trading, market-making, corporate actions, policy reactions.
+- Real Japan calibration. All ids and values are synthetic; the v1 forbidden-token list (`world/experiment.py::_FORBIDDEN_TOKENS`) is honored.
+- Auto-firing. The routines run only when a caller invokes `run_investor_review` / `run_bank_review`. `tick()` and `run()` never trigger them.
+- New ledger record types. Run records flow through `ROUTINE_RUN_RECORDED`; review notes flow through `SIGNAL_ADDED`.
+- Cross-reference validation beyond what the engine already does (the engine validates that the routine, the supplied selections, and the supplied interaction exist; the cross-references inside the selection — signal ids, variable observation ids, exposure ids — are recorded as data per the v0/v1 rule).
+
+### 55.5 v1.8.13 success criteria
+
+§55 is complete when **all** hold:
+
+1. `world/reference_reviews.py` exports the six controlled-vocabulary constants, the four registration helpers, the two run helpers, and `ReviewRoutineResult`, and the routines self-loop on Investors→Investors and Banking→Banking respectively.
+2. Each `run_*_review` call writes exactly one `RoutineRunRecord` and exactly one `InformationSignal`, in that order on the ledger, with bidirectional run↔signal links.
+3. Selected `SelectedObservationSet` ids flow through into `RoutineRunRecord.input_refs` (the engine collects them); the review note's count summaries match.
+4. Status defaults to `"completed"` when refs flow through and `"degraded"` when they don't (anti-scenario rule).
+5. The full test suite passes (1289 tests = 1257 prior + 32 review).
+6. `compileall world spaces tests examples` is clean and `ruff check .` from the repo root is clean.
+7. The review routines do not mutate `valuations`, `prices`, `ownership`, `contracts`, `constraints`, `exposures`, `variables`, `attention` (beyond reading the supplied selection), `institutions`, `external_processes`, or `relationships` — verified by direct snapshot equality.
+8. `kernel.tick()` and `kernel.run(days=N)` do NOT auto-fire either review routine — verified by direct test.
+9. Determinism: identical kernels seeded identically produce identical run ids, signal ids, and signal payloads.
+10. All identifiers are synthetic and pass a word-boundary check against the v1 forbidden-token list.
+
+### 55.6 Position in the v1.8.x sequence
+
+| Milestone | Scope | Status |
+| --- | --- | --- |
+| v1.8.10 Exposure / Dependency Layer | Code (§52). | Shipped |
+| v1.8.11 `ObservationMenu` builder | Code (§53). | Shipped |
+| v1.8.12 Attention Variable Hooks + Investor / Bank Attention Demo | Code (§54). | Shipped |
+| **v1.8.13 Investor / Bank Review Routines** | Code (§55). | **Shipped** |
+| v1.9 Living Reference World Demo | Year-long run on the full endogenous chain. | Next |
+

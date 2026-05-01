@@ -1,15 +1,15 @@
 # Test Inventory
 
-Snapshot of the test suite at **v1.8.12** (`Attention Variable
-Hooks + Investor / Bank Attention Demo`): `1257 / 1257 passing`
-(444 v0 + 188 v1.0-v1.7 frozen reference + 625 post-v1.7
-additions covering reference demo, replay, manifest,
-catalog-shape, experiment harness, renamed WorldID tests,
-interactions, routines, attention, routine engine, the first
-concrete routine, the world-variable storage layer, the exposure
-/ dependency storage layer, the observation-menu builder join
-service, and the heterogeneous-attention investor / bank
-demo).
+Snapshot of the test suite at **v1.8.13** (`Investor / Bank
+Review Routines`): `1289 / 1289 passing` (444 v0 + 188 v1.0-v1.7
+frozen reference + 657 post-v1.7 additions covering reference
+demo, replay, manifest, catalog-shape, experiment harness,
+renamed WorldID tests, interactions, routines, attention, routine
+engine, the corporate quarterly reporting routine, the
+world-variable storage layer, the exposure / dependency storage
+layer, the observation-menu builder join service, the
+heterogeneous-attention investor / bank demo, and the investor /
+bank review routines).
 
 This inventory is grouped by what each component verifies. The numbers in
 parentheses are test counts per file. Run the full suite with:
@@ -276,6 +276,44 @@ no-mutation guarantee.
   determinism; snapshot determinism; ledger emission of
   `RecordType.INTERACTION_ADDED`; kernel wiring; no-mutation
   guarantee against every other v0 / v1 source-of-truth book.
+
+## Investor / bank review routines (v1.8.13)
+
+- `test_reference_review_routines.py` (32) — interaction
+  registration on the Investors → Investors and Banking → Banking
+  self-loops (channel types `investor_review_channel` /
+  `bank_credit_review_channel`, `routine_types_that_may_use_this_channel`
+  locked to the matching review type, idempotent re-registration);
+  per-actor routine registration with the matching
+  `allowed_interaction_ids`, idempotent re-registration, defensive
+  rejection of empty `investor_id` / `bank_id`; the run flow
+  writes exactly one `RoutineRunRecord` (via
+  `RoutineEngine.execute_request` → `RoutineBook.add_run_record`)
+  and exactly one `InformationSignal` (via
+  `SignalBook.add_signal`), with bidirectional run↔signal links
+  (`output_refs` ⊇ `{signal_id}` and `related_ids ==
+  (run_id,)`, `metadata["routine_run_id"] == run_id`); ledger
+  ordering pinned to `routine_run_recorded` → `signal_added`;
+  selected `SelectedObservationSet` ids flow through the engine
+  into `RoutineRunRecord.input_refs`; payload count summaries
+  (`selected_signal_count`, `selected_variable_observation_count`,
+  `selected_exposure_count`, `selected_other_count`) sum to
+  `selected_ref_count`; status defaults to `"completed"` when
+  refs flow through and `"degraded"` when they don't (anti-scenario
+  rule), including the empty-selection edge case; date defaulting
+  to `kernel.clock.current_date`, explicit `as_of_date` override;
+  determinism (same kernel + seed → same run id, signal id, and
+  payload across fresh kernels); strict no-mutation guarantees
+  against `valuations`, `prices`, `ownership`, `contracts`,
+  `constraints`, `exposures`, `variables`, `attention`,
+  `institutions`, `external_processes`, `relationships`; only
+  `RoutineBook` and `SignalBook` grow under the routine's writes;
+  `kernel.tick()` and `kernel.run(days=N)` do NOT auto-fire
+  either review routine; investor and bank `input_refs` differ
+  when the underlying selections differ (heterogeneous attention
+  propagates); synthetic-only identifiers verified with a
+  word-boundary check that handles substring false positives
+  (`tse` ⊂ `itself`).
 
 ## Reference attention demo + variable hooks (v1.8.12)
 
@@ -579,7 +617,7 @@ no-mutation guarantee.
 | Reference loop (v1.6)            | 1     | 5     |
 | **v1 subtotal**                  | **7** | **188** |
 
-### v1.7-public-rc1+ / v1.8 / v1.8.3 / v1.8.4 / v1.8.5 / v1.8.6 / v1.8.7 / v1.8.9 / v1.8.10 / v1.8.11 / v1.8.12 additions
+### v1.7-public-rc1+ / v1.8 / v1.8.3 / v1.8.4 / v1.8.5 / v1.8.6 / v1.8.7 / v1.8.9 / v1.8.10 / v1.8.11 / v1.8.12 / v1.8.13 additions
 
 | Component                               | Files | Tests |
 | --------------------------------------- | ----- | ----- |
@@ -598,7 +636,8 @@ no-mutation guarantee.
 | Exposure / dependency layer (v1.8.10)   | 1     | 59    |
 | Observation menu builder (v1.8.11)      | 1     | 50    |
 | Reference attention demo (v1.8.12)      | 1     | 23    |
-| **post-v1.7 subtotal**                  | **15**| **625** |
+| Reference review routines (v1.8.13)     | 1     | 32    |
+| **post-v1.7 subtotal**                  | **16**| **657** |
 
 ### v0 + v1 + post-v1.7 totals
 
@@ -606,8 +645,8 @@ no-mutation guarantee.
 | -------------------------------- | ----- | ----- |
 | v0                               | 35    | 444   |
 | v1.0–v1.7 frozen reference       | 7     | 188   |
-| post-v1.7 (v1.7-public-rc1+ / v1.8 / v1.8.3 / v1.8.4 / v1.8.5 / v1.8.6 / v1.8.7 / v1.8.9 / v1.8.10 / v1.8.11 / v1.8.12) | 15 | 625 |
-| **Total**                        | **57**| **1257** |
+| post-v1.7 (v1.7-public-rc1+ / v1.8 / v1.8.3 / v1.8.4 / v1.8.5 / v1.8.6 / v1.8.7 / v1.8.9 / v1.8.10 / v1.8.11 / v1.8.12 / v1.8.13) | 16 | 657 |
+| **Total**                        | **58**| **1289** |
 
 ## Auditing for jurisdiction-neutral identifiers
 
