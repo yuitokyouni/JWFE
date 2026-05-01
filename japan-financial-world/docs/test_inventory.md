@@ -1,10 +1,10 @@
 # Test Inventory
 
-Snapshot of the test suite at **v1.8.3** (`InteractionBook + Tensor View`):
-`775 / 775 passing` (444 v0 + 188 v1.0-v1.7 frozen reference + 143
+Snapshot of the test suite at **v1.8.4** (`RoutineBook + RoutineRunRecord`):
+`847 / 847 passing` (444 v0 + 188 v1.0-v1.7 frozen reference + 215
 post-v1.7 additions covering reference demo, replay, manifest,
-catalog-shape, experiment harness, renamed WorldID tests, and
-interactions).
+catalog-shape, experiment harness, renamed WorldID tests,
+interactions, and routines).
 
 This inventory is grouped by what each component verifies. The numbers in
 parentheses are test counts per file. Run the full suite with:
@@ -272,6 +272,35 @@ no-mutation guarantee.
   `RecordType.INTERACTION_ADDED`; kernel wiring; no-mutation
   guarantee against every other v0 / v1 source-of-truth book.
 
+## Routines (v1.8.4)
+
+- `test_routines.py` (72) — `RoutineSpec` and
+  `RoutineRunRecord` field validation (parametrized rejection of
+  empty required strings, non-bool `enabled`, empty entries in
+  tuple fields); date coercion on `as_of_date`; tuple
+  normalization; `RoutineBook` CRUD for both record types with
+  duplicate rejection (`DuplicateRoutineError` /
+  `DuplicateRoutineRunError`); every filter listing
+  (`list_by_type` / `list_by_owner_space` / `list_by_frequency`
+  / `list_for_interaction` for routines;
+  `list_runs_by_routine` / `list_runs_by_date` /
+  `list_runs_by_status` for runs); disabled-by-default + the
+  `include_disabled=True` opt-in; the recommended status
+  vocabulary (`"completed"` / `"partial"` / `"degraded"` /
+  `"failed"`) round-trips cleanly; `missing_input_policy`
+  defaults to `"degraded"` and stores any free-form label;
+  `parent_record_ids` preserved on run records;
+  `routine_can_use_interaction` predicate covering the positive
+  case, the routine-type-not-allowed case, the
+  not-in-allowed-interaction-ids case, the unknown-routine
+  raises (`UnknownRoutineError`) case, the unknown-interaction
+  returns False case, the empty-allowed-types-means-any case,
+  and the no-mutation guarantee; snapshot determinism with
+  separate enabled / disabled counts; ledger emission of
+  `RecordType.ROUTINE_ADDED` and `RecordType.ROUTINE_RUN_RECORDED`;
+  kernel wiring; no-mutation guarantee against every other v0 /
+  v1 source-of-truth book including `InteractionBook`.
+
 ## Test count by component
 
 ### v0 components (frozen at v0.16)
@@ -302,7 +331,7 @@ no-mutation guarantee.
 | Reference loop (v1.6)            | 1     | 5     |
 | **v1 subtotal**                  | **7** | **188** |
 
-### v1.7-public-rc1+ / v1.8 / v1.8.3 additions
+### v1.7-public-rc1+ / v1.8 / v1.8.3 / v1.8.4 additions
 
 | Component                               | Files | Tests |
 | --------------------------------------- | ----- | ----- |
@@ -313,7 +342,8 @@ no-mutation guarantee.
 | Experiment harness config (v1.8)        | 1     | 43    |
 | WorldID tests (renamed from tests.py)   | 1     | 12    |
 | Interaction topology (v1.8.3)           | 1     | 50    |
-| **post-v1.7 subtotal**                  | **7** | **143** |
+| Routines (v1.8.4)                       | 1     | 72    |
+| **post-v1.7 subtotal**                  | **8** | **215** |
 
 ### v0 + v1 + post-v1.7 totals
 
@@ -321,8 +351,8 @@ no-mutation guarantee.
 | -------------------------------- | ----- | ----- |
 | v0                               | 35    | 444   |
 | v1.0–v1.7 frozen reference       | 7     | 188   |
-| post-v1.7 (v1.7-public-rc1+ / v1.8 / v1.8.3) | 7  | 143   |
-| **Total**                        | **49**| **775** |
+| post-v1.7 (v1.7-public-rc1+ / v1.8 / v1.8.3 / v1.8.4) | 8 | 215  |
+| **Total**                        | **50**| **847** |
 
 ## How to interpret a failing test
 

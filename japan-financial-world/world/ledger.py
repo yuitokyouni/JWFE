@@ -58,6 +58,8 @@ class RecordType(str, Enum):
     RELATIONSHIP_ADDED = "relationship_added"
     RELATIONSHIP_STRENGTH_UPDATED = "relationship_strength_updated"
     INTERACTION_ADDED = "interaction_added"
+    ROUTINE_ADDED = "routine_added"
+    ROUTINE_RUN_RECORDED = "routine_run_recorded"
     STATE_SNAPSHOT_CREATED = "state_snapshot_created"
     WARNING = "warning"
     ERROR = "error"

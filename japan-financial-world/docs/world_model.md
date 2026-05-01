@@ -3732,3 +3732,77 @@ The book stores possible channels; it does not execute them. Cross-references (`
 6. `InteractionBook` does not mutate `OwnershipBook`, `ContractBook`, `PriceBook`, `ConstraintBook`, `SignalBook`, `ValuationBook`, `InstitutionBook`, `ExternalProcessBook`, or `RelationshipCapitalBook` — verified by an explicit no-mutation test that reads their snapshots before and after the v1.8.3 read APIs run.
 
 After §45 ships, the v1.8.4 milestone can land `RoutineBook` + the attention machinery against this storage layer without re-litigating either the topology shape or the §43 endogenous-dynamics direction.
+
+## 46. v1.8.4 RoutineBook + RoutineRunRecord
+
+§46 (v1.8.4) implements the §43 (v1.8.1) endogenous-dynamics design's *storage layer*: a kernel-level `RoutineBook` that stores **scheduled endogenous routine specifications** and **auditable per-execution run records**, integrated with the §45 (v1.8.3) `InteractionBook` through a single read-only compatibility predicate.
+
+§46 is intentionally **narrower** than the v1.8.2 design's draft v1.8.4 ("RoutineBook + AttentionProfile + ObservationMenu + SelectedObservationSet"). The four-layer landing was too large; v1.8.4 ships only `RoutineBook` + `RoutineRunRecord`. `AttentionProfile`, `ObservationMenu`, and `SelectedObservationSet` move to v1.8.5+.
+
+§46 does **not** ship execution. The book stores specs and run records; it does not schedule, fire, or otherwise *run* any routine. The Routine Engine that performs execution is a later milestone.
+
+### 46.1 What lands in v1.8.4
+
+- `world/routines.py`:
+  - `RoutineSpec` immutable dataclass: `routine_id`, `routine_type`, `owner_space_id`, `frequency`, `owner_id?`, `phase_id?`, `enabled`, `required_input_ref_types`, `optional_input_ref_types`, `output_ref_types`, `allowed_interaction_ids`, `missing_input_policy` (default `"degraded"`), `metadata`. The default `missing_input_policy="degraded"` is the v1.8.1 anti-scenario default — a routine with missing optional inputs still produces output; only the status flags the partial run.
+  - `RoutineRunRecord` immutable dataclass: `run_id`, `routine_id`, `routine_type`, `owner_space_id`, `as_of_date`, `status`, `owner_id?`, `phase_id?`, `input_refs`, `output_refs`, `interaction_ids`, `parent_record_ids`, `metadata`. Denormalized (`routine_type` and `owner_space_id` copied from the spec) so the audit record is self-contained.
+  - `RoutineBook` append-only store: `add_routine`, `get_routine`, `list_routines`, `list_by_type`, `list_by_owner_space`, `list_by_frequency`, `list_for_interaction`, `add_run_record`, `get_run_record`, `list_runs_by_routine`, `list_runs_by_date`, `list_runs_by_status`, `snapshot`, plus the `routine_can_use_interaction(routine_id, interaction_id, interactions_book) -> bool` predicate.
+  - `RoutineError`, `DuplicateRoutineError`, `DuplicateRoutineRunError`, `UnknownRoutineError`, `UnknownRoutineRunError`.
+- `world/ledger.py`: new `RecordType.ROUTINE_ADDED = "routine_added"` and `RecordType.ROUTINE_RUN_RECORDED = "routine_run_recorded"`. `add_routine` writes the former; `add_run_record` writes the latter, preserving `parent_record_ids` on the ledger entry.
+- `world/kernel.py`: new `routines: RoutineBook` field; the standard `__post_init__` wiring shares the kernel's ledger and clock.
+- `tests/test_routines.py`: 72 tests covering `RoutineSpec` + `RoutineRunRecord` field validation, CRUD + duplicate rejection for both, every filter listing for routines and run records, the disabled-by-default rule, the recommended status vocabulary (`"completed"` / `"partial"` / `"degraded"` / `"failed"`), the `"degraded"` default for `missing_input_policy`, `parent_record_ids` preservation, the predicate's positive and negative cases (including the empty-allowed "any routine type" semantics inherited from §45), unknown-routine raises / unknown-interaction returns False, snapshot determinism, ledger emission of both new `RecordType` members, kernel wiring, and a no-mutation guarantee against every other v0/v1 source-of-truth book.
+
+### 46.2 The compatibility predicate
+
+`routine_can_use_interaction(routine_id, interaction_id, interactions_book) -> bool` is the **only** integration point between `RoutineBook` and `InteractionBook` in v1.8.4. Both sides must agree:
+
+- The routine declares the channel by listing `interaction_id` in its `RoutineSpec.allowed_interaction_ids`.
+- The interaction admits the routine type either by listing `RoutineSpec.routine_type` in its `InteractionSpec.routine_types_that_may_use_this_channel` *or* by leaving that tuple empty (the §45 / §44 "any routine type" semantics).
+
+Behavior on missing inputs:
+
+- Unknown `routine_id` → raises `UnknownRoutineError` (the routine half is local to this book; the caller should know its own routine ids).
+- Unknown `interaction_id` → returns `False` (the interaction half is in another book; predicates should not raise on a closed-world miss). This keeps the predicate safe to call against any pair of ids without crash, which matters for downstream attention / engine milestones that may probe the topology speculatively.
+
+The predicate is pure: it reads both books and mutates neither.
+
+### 46.3 Boundaries
+
+§46 is a storage + audit milestone. v1.8.4 does **not** add:
+
+- Execution. `RoutineBook.add_run_record` records that a routine ran; nothing in v1.8.4 *causes* it to run.
+- Scheduler integration. `RoutineSpec.frequency` is a free-form label; no scheduler tasks are registered.
+- `AttentionProfile`, `ObservationMenu`, `SelectedObservationSet`. Those move to v1.8.5+.
+- Concrete routines. `corporate_quarterly_reporting`, `valuation_refresh`, `bank_review`, `investor_review`, `relationship_refresh`, `information_staleness_update`, `debt_maturity_aging` — all v1.8.6+ milestones.
+- Price formation, trading, lending decisions, corporate actions, policy reaction functions, Japan calibration, real data, or any external-shock scenario engine. All v1.7 / v1.8.1 / v1.8.2 / v1.8.3 prohibitions are inherited.
+
+Cross-references on records (`allowed_interaction_ids` on a spec; `input_refs` / `output_refs` / `interaction_ids` / `parent_record_ids` on a run record) are recorded as data and **not** validated against any other book, per the v0 / v1 cross-reference rule.
+
+### 46.4 v1.8.4 success criteria
+
+§46 is complete when **all** hold:
+
+1. `world/routines.py`, the two new ledger types, and the `routines` kernel field exist and behave per §46.1.
+2. `tests/test_routines.py` passes (72 tests).
+3. The full test suite passes (847 tests = 775 prior + 72 routines).
+4. `compileall world spaces tests examples` is clean and `ruff check .` from the repo root is clean.
+5. No existing test was modified; no existing record shape, book API, scheduler extension, or ledger record type was altered.
+6. `RoutineBook` does not mutate any other v0 / v1 source-of-truth book (`OwnershipBook`, `ContractBook`, `PriceBook`, `ConstraintBook`, `SignalBook`, `ValuationBook`, `InstitutionBook`, `ExternalProcessBook`, `RelationshipCapitalBook`, `InteractionBook`) — verified by an explicit no-mutation test.
+
+### 46.5 Revised v1.8.x sequence
+
+The v1.8.2 design's milestone table named v1.8.4 as "AttentionProfile + ObservationMenu + Routine engine plumbing." §46 splits that landing:
+
+| Milestone | Scope | Status |
+| --- | --- | --- |
+| v1.8.1 Endogenous Reference Dynamics | Design (§43). | Shipped |
+| v1.8.2 Interaction Topology + Attention | Design (§44). | Shipped |
+| v1.8.3 InteractionBook + Tensor View | Code (§45). | Shipped |
+| **v1.8.4 RoutineBook + RoutineRunRecord** | Code (§46). Storage + audit only. | **Shipped** |
+| v1.8.5 AttentionProfile / ObservationMenu / SelectedObservationSet | Code. The §44 attention layer that v1.8.4 deferred. | Next |
+| v1.8.6 Routine engine (execution) | Code. Schedule-and-fire wiring that consumes routines + attention to produce `RoutineRunRecord` entries automatically. | After v1.8.5 |
+| v1.8.7 Corporate Reporting Routine | First concrete routine. | After v1.8.6 |
+| v1.8.8 Investor + Bank Attention Demo | Two more concrete routines using heterogeneous attention. | After v1.8.7 |
+| v1.9 Living Reference World Demo | Year-long run with no external observation; non-empty ledger on every reporting / review cycle. | After v1.8.8 |
+
+The split keeps each milestone reviewable; previously v1.8.4 carried four record types, four ledger event types, and a view builder, which is too much to land in one PR.
