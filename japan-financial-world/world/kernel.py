@@ -12,6 +12,7 @@ from world.contracts import ContractBook
 from world.event_bus import EventBus
 from world.external_processes import ExternalProcessBook
 from world.institutions import InstitutionBook
+from world.interactions import InteractionBook
 from world.ledger import Ledger
 from world.ownership import OwnershipBook
 from world.phases import IntradayPhaseSpec, PhaseSequence
@@ -51,6 +52,7 @@ class WorldKernel:
     relationships: RelationshipCapitalBook = field(
         default_factory=RelationshipCapitalBook
     )
+    interactions: InteractionBook = field(default_factory=InteractionBook)
 
     def __post_init__(self) -> None:
         for book in (
@@ -63,6 +65,7 @@ class WorldKernel:
             self.institutions,
             self.external_processes,
             self.relationships,
+            self.interactions,
         ):
             if book.ledger is None:
                 book.ledger = self.ledger

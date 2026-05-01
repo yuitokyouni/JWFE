@@ -1,7 +1,10 @@
 # Test Inventory
 
-Snapshot of the test suite at the **v1.7 freeze**: `632 / 632 passing`
-(444 v0 + 188 v1).
+Snapshot of the test suite at **v1.8.3** (`InteractionBook + Tensor View`):
+`775 / 775 passing` (444 v0 + 188 v1.0-v1.7 frozen reference + 143
+post-v1.7 additions covering reference demo, replay, manifest,
+catalog-shape, experiment harness, renamed WorldID tests, and
+interactions).
 
 This inventory is grouped by what each component verifies. The numbers in
 parentheses are test counts per file. Run the full suite with:
@@ -222,6 +225,53 @@ no-mutation guarantee.
   audit trails, and that the runner does not mutate any state
   outside the books that own each record type.
 
+## Reference demo + replay + manifest (v1.7-public-rc1+)
+
+- `test_reference_demo.py` (10) — the FWE Reference Demo runs
+  end-to-end, populates eight spaces, emits all seven loop
+  record types, links `parent_record_ids` correctly, does not
+  mutate seeded prices / ownership, and uses only neutral
+  identifiers.
+- `test_reference_demo_replay.py` (6) — replay-determinism gate:
+  two runs of the demo produce equal canonical ledger traces and
+  equal SHA-256 digests.
+- `test_reference_demo_manifest.py` (14) — manifest contract:
+  required fields, ledger digest matches `replay_utils`, sha256
+  hex shape, deterministic write, atomic parent-dir creation,
+  graceful git-unavailable / not-a-repo paths, no ledger
+  mutation.
+- `test_reference_demo_catalog_shape.py` (8) — catalog-shape
+  regression: `catalog["loop"]` is a Mapping with all 18 keys
+  the runner reads; fails loudly if a degraded YAML parser is in
+  use (PyYAML missing).
+
+## Experiment harness (v1.8)
+
+- `test_experiment_config.py` (43) — config schema (load,
+  required-field validation, type / value validation, optional-
+  section defaults), synthetic-only guard, code-built-config
+  validation, base-config digest equivalence with the demo,
+  manifest + digest write / skip, unimplemented-override
+  boundaries, and a no-side-effects-on-the-demo regression.
+- `test_ids.py` (12) — `WorldID` parsing, `build_world_id`,
+  invalid-id rejection, `category_for_kind`. (Renamed from
+  `tests.py` at v1.7-public-rc1+.)
+
+## Interaction topology (v1.8.3)
+
+- `test_interactions.py` (50) — `InteractionSpec` field
+  validation; `InteractionBook` CRUD + duplicate rejection; every
+  filter listing (by source space / target space / between
+  spaces / interaction type / channel type / routine type);
+  disabled-by-default + `include_disabled=True`; self-loops on
+  the diagonal (`corporate → corporate`, `investors → investors`,
+  `information → information`); channel multiplicity in one cell;
+  tensor view shape `S × S × C` and determinism; matrix view
+  count / enabled-count / channel-types / interaction-ids and
+  determinism; snapshot determinism; ledger emission of
+  `RecordType.INTERACTION_ADDED`; kernel wiring; no-mutation
+  guarantee against every other v0 / v1 source-of-truth book.
+
 ## Test count by component
 
 ### v0 components (frozen at v0.16)
@@ -252,13 +302,27 @@ no-mutation guarantee.
 | Reference loop (v1.6)            | 1     | 5     |
 | **v1 subtotal**                  | **7** | **188** |
 
-### v0 + v1 totals
+### v1.7-public-rc1+ / v1.8 / v1.8.3 additions
+
+| Component                               | Files | Tests |
+| --------------------------------------- | ----- | ----- |
+| Reference demo (v1.7-public-rc1)        | 1     | 10    |
+| Replay determinism (v1.7-public-rc1+)   | 1     | 6     |
+| Manifest (v1.7-public-rc1+)             | 1     | 14    |
+| Catalog-shape regression (v1.7-public-rc1+) | 1 | 8     |
+| Experiment harness config (v1.8)        | 1     | 43    |
+| WorldID tests (renamed from tests.py)   | 1     | 12    |
+| Interaction topology (v1.8.3)           | 1     | 50    |
+| **post-v1.7 subtotal**                  | **7** | **143** |
+
+### v0 + v1 + post-v1.7 totals
 
 | Layer                            | Files | Tests |
 | -------------------------------- | ----- | ----- |
 | v0                               | 35    | 444   |
-| v1                               | 7     | 188   |
-| **Total**                        | **42**| **632** |
+| v1.0–v1.7 frozen reference       | 7     | 188   |
+| post-v1.7 (v1.7-public-rc1+ / v1.8 / v1.8.3) | 7  | 143   |
+| **Total**                        | **49**| **775** |
 
 ## How to interpret a failing test
 

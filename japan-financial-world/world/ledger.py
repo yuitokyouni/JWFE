@@ -57,6 +57,7 @@ class RecordType(str, Enum):
     EXTERNAL_SCENARIO_PATH_ADDED = "external_scenario_path_added"
     RELATIONSHIP_ADDED = "relationship_added"
     RELATIONSHIP_STRENGTH_UPDATED = "relationship_strength_updated"
+    INTERACTION_ADDED = "interaction_added"
     STATE_SNAPSHOT_CREATED = "state_snapshot_created"
     WARNING = "warning"
     ERROR = "error"

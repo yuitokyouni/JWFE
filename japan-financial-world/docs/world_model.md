@@ -3660,3 +3660,75 @@ Topology does not decide behavior. Attention does not execute trades or lending 
 3. This section (§44) records the design in the constitutional log.
 4. No `world/`, `spaces/`, `examples/`, or `tests/` file is modified. The 725-test baseline is unchanged.
 5. v1.8.3 reviewers can land `InteractionBook` against the proposed `InteractionSpec` shape without re-litigating direction; v1.8.4 reviewers can land the attention machinery against the proposed `AttentionProfile` / `ObservationMenu` / `SelectedObservationSet` shapes without re-litigating direction.
+
+## 45. v1.8.3 InteractionBook + Tensor View
+
+§45 (v1.8.3) implements the v1.8.2 design's storage layer: a kernel-level `InteractionBook` that stores **possible** directed interaction channels between spaces (and optionally between specific world objects), with deterministic tensor / matrix views.
+
+§45 ships **only** the storage. The Routine engine (§43, v1.8.4+), `AttentionProfile` / `ObservationMenu` / `SelectedObservationSet` (§44, v1.8.4) are later milestones that will consume this book; v1.8.3 does not execute any channel, fire any routine, or decide any behavior.
+
+### 45.1 What lands in v1.8.3
+
+- `world/interactions.py`:
+  - `InteractionSpec` immutable dataclass with the 16 fields proposed in §44.2: `interaction_id`, `source_space_id`, `target_space_id`, `interaction_type`, `channel_type`, `direction`, `frequency`, `phase_id`, `visibility`, `enabled`, `required_input_ref_types`, `optional_input_ref_types`, `output_ref_types`, `routine_types_that_may_use_this_channel`, `source_id`, `target_id`, `metadata`.
+  - `InteractionBook` append-only store with the §44.3 API: `add_interaction`, `get_interaction`, `list_interactions`, `list_by_source_space`, `list_by_target_space`, `list_between_spaces`, `list_by_type`, `list_by_channel`, `list_for_routine_type`, `snapshot`, plus `build_space_interaction_tensor` and `build_space_interaction_matrix` view helpers.
+  - `InteractionError`, `DuplicateInteractionError`, `UnknownInteractionError`.
+- `world/ledger.py`: new `RecordType.INTERACTION_ADDED = "interaction_added"`. `add_interaction` writes one such record per insert when a ledger is wired.
+- `world/kernel.py`: new `interactions: InteractionBook` field; the standard `__post_init__` wiring shares the kernel's ledger and clock with the book.
+- `tests/test_interactions.py`: 50 tests covering field validation, CRUD + duplicate rejection, every filter listing, the disabled-by-default rule, self-loops on the diagonal, channel multiplicity in one cell, tensor and matrix view shape + determinism, snapshot determinism, ledger emission + the new `RecordType` member, kernel wiring, and a no-mutation guarantee against every other v0/v1 source-of-truth book.
+
+### 45.2 Tensor / matrix view shape
+
+`build_space_interaction_tensor(include_disabled=False)` returns a sparse, deterministically-ordered nested mapping:
+
+```
+T[source_space_id][target_space_id][channel_type] = [interaction_id, ...]
+```
+
+All keys are sorted; the leaf list of `interaction_id`s is sorted. Disabled interactions are excluded by default; pass `include_disabled=True` to retain them.
+
+`build_space_interaction_matrix(include_disabled=False)` is the channel-axis collapse of the tensor:
+
+```
+M[source_space_id][target_space_id] = {
+    "count": int,
+    "enabled_count": int,
+    "channel_types": [channel_type, ...],   # sorted
+    "interaction_ids": [interaction_id, ...],   # sorted
+}
+```
+
+When `include_disabled=False` (default), `count == enabled_count` because disabled rows are filtered out before counting. When `include_disabled=True`, `count` is the unfiltered total and `enabled_count` is the live subset.
+
+### 45.3 Self-loops are first-class
+
+`source_space_id == target_space_id` is a normal case, not an error. The §44 design called the diagonal of the topology load-bearing because most §43 routines live there. v1.8.3 ships specific tests for the three §44 examples:
+
+- `corporate → corporate`: `reporting_preparation` channel (drives the §43.5 corporate quarterly reporting routine in the v1.8.5 milestone).
+- `investors → investors`: `crowding_or_peer_pressure` channel.
+- `information → information`: `analyst_revision_chain` channel.
+
+`build_space_interaction_tensor` includes diagonal cells alongside cross-space cells; the matrix view does the same.
+
+### 45.4 Boundaries
+
+§45 is a storage milestone. v1.8.3 does **not** add:
+
+- Routine engine (the v1.8.4 milestone wires `RoutineSpec` / `RoutineBook` / `RoutineRunRecord` per §43).
+- `AttentionProfile`, `ObservationMenu`, `SelectedObservationSet` (also v1.8.4 per §44).
+- Price formation, trading, lending decisions, corporate actions, policy reaction functions, Japan calibration, real data, or any external-shock scenario engine. All v1.7 / v1.8.1 / v1.8.2 prohibitions are inherited.
+
+The book stores possible channels; it does not execute them. Cross-references (`source_space_id`, `target_space_id`, `source_id`, `target_id`) are recorded as data and **not** validated against the registry, per the v0/v1 cross-reference rule.
+
+### 45.5 v1.8.3 success criteria
+
+§45 is complete when **all** hold:
+
+1. `world/interactions.py`, the `INTERACTION_ADDED` ledger type, and the `interactions` kernel field exist and behave per §45.1.
+2. `tests/test_interactions.py` passes (50 tests).
+3. The full test suite passes (775 tests = 725 prior + 50 interactions).
+4. `compileall world spaces tests examples` is clean and `ruff check .` from the repo root is clean.
+5. No existing test was modified; no existing record shape, book API, scheduler extension, or ledger record type was altered.
+6. `InteractionBook` does not mutate `OwnershipBook`, `ContractBook`, `PriceBook`, `ConstraintBook`, `SignalBook`, `ValuationBook`, `InstitutionBook`, `ExternalProcessBook`, or `RelationshipCapitalBook` — verified by an explicit no-mutation test that reads their snapshots before and after the v1.8.3 read APIs run.
+
+After §45 ships, the v1.8.4 milestone can land `RoutineBook` + the attention machinery against this storage layer without re-litigating either the topology shape or the §43 endogenous-dynamics direction.
