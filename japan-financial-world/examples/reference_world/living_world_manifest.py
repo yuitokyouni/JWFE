@@ -157,6 +157,24 @@ def _summary_from_result(result: LivingReferenceWorldResult) -> dict[str, Any]:
         len(getattr(p, "investor_intent_ids", ()))
         for p in result.per_period_summaries
     )
+    investor_attention_state_total = sum(
+        len(getattr(p, "investor_attention_state_ids", ()))
+        for p in result.per_period_summaries
+    )
+    bank_attention_state_total = sum(
+        len(getattr(p, "bank_attention_state_ids", ()))
+        for p in result.per_period_summaries
+    )
+    attention_feedback_total = sum(
+        len(getattr(p, "investor_attention_feedback_ids", ()))
+        + len(getattr(p, "bank_attention_feedback_ids", ()))
+        for p in result.per_period_summaries
+    )
+    memory_selection_total = sum(
+        len(getattr(p, "investor_memory_selection_ids", ()))
+        + len(getattr(p, "bank_memory_selection_ids", ()))
+        for p in result.per_period_summaries
+    )
     return {
         "run_id": result.run_id,
         "period_count": result.period_count,
@@ -178,6 +196,10 @@ def _summary_from_result(result: LivingReferenceWorldResult) -> dict[str, Any]:
         "market_environment_state_total": market_environment_state_total,
         "firm_financial_state_total": firm_financial_state_total,
         "investor_intent_total": investor_intent_total,
+        "investor_attention_state_total": investor_attention_state_total,
+        "bank_attention_state_total": bank_attention_state_total,
+        "attention_feedback_total": attention_feedback_total,
+        "memory_selection_total": memory_selection_total,
         "created_record_count": result.created_record_count,
     }
 

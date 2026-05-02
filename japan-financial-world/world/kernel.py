@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from typing import Iterator
 
 from world.attention import AttentionBook
+from world.attention_feedback import AttentionFeedbackBook
 from world.balance_sheet import BalanceSheetProjector
 from world.clock import Clock
 from world.constraints import ConstraintBook, ConstraintEvaluator
@@ -99,6 +100,9 @@ class WorldKernel:
     investor_intents: InvestorIntentBook = field(
         default_factory=InvestorIntentBook
     )
+    attention_feedback: AttentionFeedbackBook = field(
+        default_factory=AttentionFeedbackBook
+    )
     routine_engine: RoutineEngine | None = None
     observation_menu_builder: ObservationMenuBuilder | None = None
     # v1.12.3 — read-only evidence resolution service. Stateless;
@@ -134,6 +138,7 @@ class WorldKernel:
             self.market_environments,
             self.firm_financial_states,
             self.investor_intents,
+            self.attention_feedback,
         ):
             if book.ledger is None:
                 book.ledger = self.ledger

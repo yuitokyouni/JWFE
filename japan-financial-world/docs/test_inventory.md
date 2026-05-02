@@ -1,22 +1,25 @@
 # Test Inventory
 
-Snapshot of the test suite at **v1.12.7** (`Attention-conditioned
-mechanism integration` — orchestrator-level milestone that closes
-the v1.12.4 → v1.12.6 sequence: the per-period valuation phase
-and per-period bank credit review phase in
-`world/reference_living_world.py` switch from the pre-existing
-v1.9.5 / v1.9.7 helpers to the v1.12.5 / v1.12.6
-attention-conditioned helpers, so the default living reference
-world demo now uses the v1.12.3 `EvidenceResolver` substrate for
-**three mechanisms end-to-end** — investor intent (since v1.12.4),
-valuation lite (new in v1.12.7), and bank credit review lite
-(new in v1.12.7); per-period record count and per-run window
-unchanged from v1.12.4–v1.12.6; default-fixture
-`living_world_digest` moves from `d6b25704...` to
-`2c748aa6e37b679d9d52984e7f2c252d434e6a2192f7fa58b71866e59f54b709`
+Snapshot of the test suite at **v1.12.8** (`Next-period attention
+feedback` — the **first cross-period attention feedback loop** in
+public FWE: each period writes one
+`ActorAttentionStateRecord` + one `AttentionFeedbackRecord` per
+investor + per bank, chained via `previous_attention_state_id`;
+at period N+1 the orchestrator builds a memory
+`SelectedObservationSet` from the prior state's `focus_labels`
++ `source_*_ids` so the v1.12.4 / v1.12.5 / v1.12.6 helpers see
+**wider selected evidence than period N**; the headline test
+pins *period N+1's investor-intent record references 2
+selections (period + memory) vs period N's 1 selection*, and
+*period N+1's resolved dialogue evidence is strictly wider than
+period N's* — proving the cross-period loop closed; per-period
+record count moves from 71 to 79 (period 0) / 81 (period 1+);
+per-run window widens from `[284, 316]` to `[316, 364]`;
+default-fixture `living_world_digest` moves from `2c748aa6...`
+to `3002a499df6aff5c37628df5f14fbb3186481b276fab36a4fe2f13a89c5feeff`
 by design — pinned in a regression test):
-`2613 / 2613 passing` (444 v0 + 188 v1.0-v1.7 frozen reference +
-1981 post-v1.7 additions covering reference demo, replay, manifest,
+`2725 / 2725 passing` (444 v0 + 188 v1.0-v1.7 frozen reference +
+2093 post-v1.7 additions covering reference demo, replay, manifest,
 catalog-shape, experiment harness, renamed WorldID tests,
 interactions, routines, attention, routine engine, the corporate
 quarterly reporting routine, the world-variable storage layer, the
@@ -1375,8 +1378,9 @@ no-mutation guarantee.
 | -------------------------------- | ----- | ----- |
 | v0                               | 35    | 444   |
 | v1.0–v1.7 frozen reference       | 7     | 188   |
-| post-v1.7 (v1.7-public-rc1+ / v1.8.x / v1.9.0 / v1.9.1-prep / v1.9.1 / v1.9.2 / v1.9.3 / v1.9.3.1 / CLI argv pin / v1.9.4 / v1.9.5 / v1.9.6 / v1.9.7 / v1.9.8 / v1.10.1 / v1.10.2 / v1.10.3 / v1.10.4 / v1.10.4.1 / v1.10.5 / v1.11.0 / v1.11.1 / v1.11.2 / v1.12.0 / v1.12.1 / v1.12.2 / v1.12.3 / v1.12.4 / v1.12.5 / v1.12.6 / v1.12.7) | 39 | 1981 |
-| **Total**                        | **81**| **2613** |
+| Attention feedback (v1.12.8)        | 1     | 102   |
+| post-v1.7 (v1.7-public-rc1+ / v1.8.x / v1.9.0 / v1.9.1-prep / v1.9.1 / v1.9.2 / v1.9.3 / v1.9.3.1 / CLI argv pin / v1.9.4 / v1.9.5 / v1.9.6 / v1.9.7 / v1.9.8 / v1.10.1 / v1.10.2 / v1.10.3 / v1.10.4 / v1.10.4.1 / v1.10.5 / v1.11.0 / v1.11.1 / v1.11.2 / v1.12.0 / v1.12.1 / v1.12.2 / v1.12.3 / v1.12.4 / v1.12.5 / v1.12.6 / v1.12.7 / v1.12.8) | 40 | 2093 |
+| **Total**                        | **82**| **2725** |
 
 ## Auditing for jurisdiction-neutral identifiers
 

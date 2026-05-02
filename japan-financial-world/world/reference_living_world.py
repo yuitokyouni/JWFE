@@ -87,6 +87,15 @@ from world.market_conditions import (
 from world.market_surface_readout import build_capital_market_readout
 from world.market_environment import build_market_environment_state
 from world.firm_state import run_reference_firm_financial_state_update
+from world.attention_feedback import (
+    FOCUS_LABEL_DIALOGUE,
+    FOCUS_LABEL_ENGAGEMENT,
+    FOCUS_LABEL_ESCALATION,
+    FOCUS_LABEL_FIRM_STATE,
+    FOCUS_LABEL_MARKET_ENVIRONMENT,
+    FOCUS_LABEL_VALUATION,
+    build_attention_feedback,
+)
 from world.investor_intent import (
     run_attention_conditioned_investor_intent_signal,
 )
@@ -235,6 +244,40 @@ class LivingReferencePeriodSummary:
     # firm) pair per period. Pre-action review posture only —
     # never an order, trade, allocation, or recommendation.
     investor_intent_ids: tuple[str, ...] = field(default_factory=tuple)
+    # v1.12.8 additive: one ActorAttentionStateRecord +
+    # AttentionFeedbackRecord per actor per period (one per
+    # investor + one per bank). The records describe what the
+    # actor will *focus on* in the next period; the
+    # ``previous_attention_state_id`` chains every actor's
+    # series across periods. Synthetic, deterministic,
+    # non-binding labels — never a forecast, never a behavior
+    # probability.
+    investor_attention_state_ids: tuple[str, ...] = field(
+        default_factory=tuple
+    )
+    investor_attention_feedback_ids: tuple[str, ...] = field(
+        default_factory=tuple
+    )
+    bank_attention_state_ids: tuple[str, ...] = field(
+        default_factory=tuple
+    )
+    bank_attention_feedback_ids: tuple[str, ...] = field(
+        default_factory=tuple
+    )
+    # v1.12.8 additive: per-period **memory selection** —
+    # one extra `SelectedObservationSet` per actor that the
+    # orchestrator builds at period N+1 from the actor's
+    # prior-period attention state. Empty in period 0 (no
+    # prior state yet). Carries the prior-period evidence the
+    # actor's focus_labels point at, so the v1.12.4 / v1.12.5
+    # / v1.12.6 helpers see *wider* selected evidence than
+    # they would without feedback.
+    investor_memory_selection_ids: tuple[str, ...] = field(
+        default_factory=tuple
+    )
+    bank_memory_selection_ids: tuple[str, ...] = field(
+        default_factory=tuple
+    )
     record_count_created: int = 0
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
@@ -266,6 +309,12 @@ class LivingReferencePeriodSummary:
             "market_environment_state_ids",
             "firm_financial_state_ids",
             "investor_intent_ids",
+            "investor_attention_state_ids",
+            "investor_attention_feedback_ids",
+            "bank_attention_state_ids",
+            "bank_attention_feedback_ids",
+            "investor_memory_selection_ids",
+            "bank_memory_selection_ids",
         ):
             value = tuple(getattr(self, tuple_field_name))
             for entry in value:
@@ -903,6 +952,117 @@ def _build_actor_menu_and_selection(
     return menu_id, selection_id
 
 
+# v1.12.8 — focus-label → prior-state-source-attribute map. The
+# v1.12.8 memory selection's selected_refs are drawn from the
+# prior attention state's source_*_ids tuples, gated by which
+# focus_labels the prior state carried. Mapping is deterministic
+# and additive; first-seen order preserved.
+_MEMORY_FOCUS_TO_SOURCE_ATTR: tuple[tuple[str, str], ...] = (
+    (FOCUS_LABEL_FIRM_STATE, "source_firm_state_ids"),
+    (FOCUS_LABEL_MARKET_ENVIRONMENT, "source_market_environment_state_ids"),
+    (FOCUS_LABEL_VALUATION, "source_valuation_ids"),
+    (FOCUS_LABEL_DIALOGUE, "source_dialogue_ids"),
+    (FOCUS_LABEL_ENGAGEMENT, "source_dialogue_ids"),
+    (FOCUS_LABEL_ESCALATION, "source_escalation_candidate_ids"),
+)
+
+
+def _memory_selection_id_for(
+    actor_kind: str, actor_id: str, as_of_date: str
+) -> str:
+    return f"selection:memory:{actor_kind}:{actor_id}:{as_of_date}"
+
+
+def _build_memory_selection_if_any(
+    kernel: Any,
+    *,
+    actor_kind: str,
+    actor_id: str,
+    as_of_date: str,
+    phase_id: str | None,
+) -> str | None:
+    """v1.12.8 — build one memory ``SelectedObservationSet`` for
+    the actor at period N, drawn from the actor's prior-period
+    attention state's source_*_ids gated by its focus_labels.
+
+    Returns the new selection's id when a prior state exists,
+    or ``None`` otherwise (e.g., period 0 — no prior feedback).
+    Idempotent on the deterministic memory-selection-id formula.
+    """
+    book = getattr(kernel, "attention_feedback", None)
+    if book is None:
+        return None
+    prior_state = book.get_latest_for_actor(actor_id)
+    if prior_state is None:
+        return None
+    if prior_state.as_of_date >= as_of_date:
+        # Defensive: only feed forward from strictly-prior periods.
+        return None
+
+    selected_refs: list[str] = []
+    seen: set[str] = set()
+    focus_set = set(prior_state.focus_labels)
+    for focus_label, source_attr in _MEMORY_FOCUS_TO_SOURCE_ATTR:
+        if focus_label not in focus_set:
+            continue
+        for ref_id in getattr(prior_state, source_attr, ()):
+            if ref_id in seen:
+                continue
+            seen.add(ref_id)
+            selected_refs.append(ref_id)
+
+    if not selected_refs:
+        # Focus labels carried no concrete source ids (e.g.,
+        # only "memory" or "liquidity"); skip — no memory
+        # selection adds value here.
+        return None
+
+    selection_id = _memory_selection_id_for(actor_kind, actor_id, as_of_date)
+    try:
+        kernel.attention.get_selection(selection_id)
+        return selection_id
+    except Exception:
+        pass
+
+    # Reuse the actor's existing attention profile if any (no
+    # new profile is created for memory selections — the
+    # attention profile is the actor's, the memory selection
+    # just augments which refs the resolver sees).
+    profile_ids = list(prior_state.base_profile_ids) or []
+    if profile_ids:
+        profile_id = profile_ids[0]
+    else:
+        # Fall back to a synthetic placeholder; the v1.8.5
+        # SelectedObservationSet contract requires
+        # attention_profile_id to be a non-empty string. The
+        # v1.12.4 / v1.12.5 / v1.12.6 helpers do not look up
+        # the profile — they only read selected_refs — so the
+        # placeholder is a recordable label, not a behavior.
+        profile_id = f"profile:memory:{actor_kind}:{actor_id}"
+
+    # Memory selections need a menu_id — reuse the actor's
+    # current-period menu so the lineage is explicit.
+    menu_id = _menu_id_for(actor_kind, actor_id, as_of_date)
+
+    selection = SelectedObservationSet(
+        selection_id=selection_id,
+        actor_id=actor_id,
+        attention_profile_id=profile_id,
+        menu_id=menu_id,
+        selected_refs=tuple(selected_refs),
+        selection_reason="attention_feedback_memory",
+        as_of_date=as_of_date,
+        phase_id=phase_id,
+        status="completed",
+        metadata={
+            "v1_12_8_memory_selection": True,
+            "previous_attention_state_id": prior_state.attention_state_id,
+        },
+    )
+    kernel.attention.add_selection(selection)
+    return selection_id
+
+
 # ---------------------------------------------------------------------------
 # Top-level orchestrator
 # ---------------------------------------------------------------------------
@@ -1406,6 +1566,52 @@ def run_living_reference_world(
             bank_selection_ids.append(selection_id)
 
         # ------------------------------------------------------------------
+        # v1.12.8 — memory selection phase.
+        # For each investor and bank, look up the actor's prior
+        # attention state (created at the end of period N-1). If
+        # one exists, build a *memory* SelectedObservationSet
+        # whose selected_refs include the prior-period evidence
+        # the actor's focus_labels point at. The memory selection
+        # is passed alongside the regular per-period selection to
+        # the v1.12.4 / v1.12.5 / v1.12.6 helpers, so the resolved
+        # `ActorContextFrame` for period N is *wider* than it
+        # would be without feedback.
+        #
+        # No memory selection is built in period 0 (no prior
+        # state yet), so the v1.12.8 effect on resolved evidence
+        # only fires from period 1 onwards. This is the headline
+        # cross-period feedback loop the v1.12.8 task spec
+        # requires.
+        # ------------------------------------------------------------------
+        investor_memory_selection_by_investor: dict[str, str] = {}
+        bank_memory_selection_by_bank: dict[str, str] = {}
+        for actor_kind, actor_ids, target_dict in (
+            ("investor", investors, investor_memory_selection_by_investor),
+            ("bank", banks, bank_memory_selection_by_bank),
+        ):
+            for actor_id in actor_ids:
+                memory_id = _build_memory_selection_if_any(
+                    kernel,
+                    actor_kind=actor_kind,
+                    actor_id=actor_id,
+                    as_of_date=iso_date,
+                    phase_id=phase_id,
+                )
+                if memory_id is not None:
+                    target_dict[actor_id] = memory_id
+        # Order-preserving lists for the period summary.
+        investor_memory_selection_ids = [
+            investor_memory_selection_by_investor[a]
+            for a in investors
+            if a in investor_memory_selection_by_investor
+        ]
+        bank_memory_selection_ids = [
+            bank_memory_selection_by_bank[a]
+            for a in banks
+            if a in bank_memory_selection_by_bank
+        ]
+
+        # ------------------------------------------------------------------
         # v1.9.6 — valuation refresh lite phase.
         # For each (investor, firm) pair, the v1.9.5 valuation
         # mechanism produces one opinionated synthetic
@@ -1460,6 +1666,14 @@ def run_living_reference_world(
                     f"{firm_id}:{iso_date}"
                 )
                 firm_state_for_pair = firm_state_id_by_firm.get(firm_id)
+                inv_memory = investor_memory_selection_by_investor.get(
+                    investor_id
+                )
+                valuation_selection_ids = (
+                    (investor_selection_id, inv_memory)
+                    if inv_memory
+                    else (investor_selection_id,)
+                )
                 valuation_result: ValuationRefreshLiteResult = (
                     run_attention_conditioned_valuation_refresh_lite(
                         kernel,
@@ -1467,7 +1681,7 @@ def run_living_reference_world(
                         valuer_id=investor_id,
                         as_of_date=iso_date,
                         selected_observation_set_ids=(
-                            investor_selection_id,
+                            valuation_selection_ids
                         ),
                         explicit_pressure_signal_ids=(
                             pressure_signal_by_firm[firm_id],
@@ -1551,6 +1765,12 @@ def run_living_reference_world(
                     if f":{firm_id}:" in vid
                 )
                 firm_state_for_pair = firm_state_id_by_firm.get(firm_id)
+                bank_memory = bank_memory_selection_by_bank.get(bank_id)
+                review_selection_ids = (
+                    (bank_selection_id, bank_memory)
+                    if bank_memory
+                    else (bank_selection_id,)
+                )
                 review_result: BankCreditReviewLiteResult = (
                     run_attention_conditioned_bank_credit_review_lite(
                         kernel,
@@ -1558,7 +1778,7 @@ def run_living_reference_world(
                         firm_id=firm_id,
                         as_of_date=iso_date,
                         selected_observation_set_ids=(
-                            bank_selection_id,
+                            review_selection_ids
                         ),
                         explicit_pressure_signal_ids=(
                             pressure_signal_by_firm[firm_id],
@@ -1746,6 +1966,16 @@ def run_living_reference_world(
                     if f":{investor_id}:{firm_id}:" in vid
                 )
                 firm_state = firm_state_id_by_firm.get(firm_id)
+                inv_memory = investor_memory_selection_by_investor.get(
+                    investor_id
+                )
+                intent_selection_ids: tuple[str, ...] = ()
+                if inv_selection:
+                    intent_selection_ids = (inv_selection,)
+                if inv_memory:
+                    intent_selection_ids = intent_selection_ids + (
+                        inv_memory,
+                    )
                 intent_result = (
                     run_attention_conditioned_investor_intent_signal(
                         kernel,
@@ -1753,7 +1983,7 @@ def run_living_reference_world(
                         target_company_id=firm_id,
                         as_of_date=iso_date,
                         selected_observation_set_ids=(
-                            (inv_selection,) if inv_selection else ()
+                            intent_selection_ids
                         ),
                         explicit_market_readout_ids=tuple(
                             capital_market_readout_ids
@@ -1889,6 +2119,85 @@ def run_living_reference_world(
             bank_review_run_ids.append(review.run_id)
             bank_review_signal_ids.append(review.signal_id)
 
+        # ------------------------------------------------------------------
+        # v1.12.8 — attention feedback phase.
+        # Build one ActorAttentionStateRecord +
+        # AttentionFeedbackRecord per actor (every investor +
+        # every bank), conditioned on the period's outcomes:
+        # the actor's intents (investor) or credit review
+        # signals (bank), the period's market environment, and
+        # the relevant firm states / valuations / dialogues /
+        # escalation candidates. Each record chains via
+        # ``previous_attention_state_id`` to the actor's prior
+        # attention state (if any). Every actor's series is
+        # therefore a deterministic sequence of attention
+        # states across periods. The records are read at the
+        # *next* period's memory-selection phase to widen the
+        # actor's selected_refs — closing the cross-period
+        # feedback loop.
+        # ------------------------------------------------------------------
+        investor_attention_state_ids: list[str] = []
+        investor_attention_feedback_ids: list[str] = []
+        for investor_id in investors:
+            inv_intents = tuple(
+                iid
+                for iid in investor_intent_ids
+                if f":{investor_id}:" in iid
+            )
+            inv_valuations = tuple(
+                vid
+                for vid in valuation_ids
+                if f":{investor_id}:" in vid
+            )
+            inv_dialogues = tuple(
+                did
+                for did in dialogue_ids
+                if f":{investor_id}:" in did
+            )
+            inv_escalations = tuple(
+                eid
+                for eid in investor_escalation_candidate_ids
+                if f":{investor_id}:" in eid
+            )
+            fb = build_attention_feedback(
+                kernel,
+                actor_id=investor_id,
+                actor_type="investor",
+                as_of_date=iso_date,
+                investor_intent_ids=inv_intents,
+                market_environment_state_ids=tuple(
+                    market_environment_state_ids
+                ),
+                firm_state_ids=tuple(firm_financial_state_ids),
+                valuation_ids=inv_valuations,
+                dialogue_ids=inv_dialogues,
+                escalation_candidate_ids=inv_escalations,
+            )
+            investor_attention_state_ids.append(fb.attention_state_id)
+            investor_attention_feedback_ids.append(fb.feedback_id)
+
+        bank_attention_state_ids: list[str] = []
+        bank_attention_feedback_ids: list[str] = []
+        for bank_id in banks:
+            bank_credit_subset = tuple(
+                sid
+                for sid in bank_credit_review_signal_ids
+                if f":{bank_id}:" in sid
+            )
+            fb = build_attention_feedback(
+                kernel,
+                actor_id=bank_id,
+                actor_type="bank",
+                as_of_date=iso_date,
+                credit_review_signal_ids=bank_credit_subset,
+                market_environment_state_ids=tuple(
+                    market_environment_state_ids
+                ),
+                firm_state_ids=tuple(firm_financial_state_ids),
+            )
+            bank_attention_state_ids.append(fb.attention_state_id)
+            bank_attention_feedback_ids.append(fb.feedback_id)
+
         period_end_idx = len(kernel.ledger.records)
 
         period_summaries.append(
@@ -1933,6 +2242,22 @@ def run_living_reference_world(
                 ),
                 firm_financial_state_ids=tuple(firm_financial_state_ids),
                 investor_intent_ids=tuple(investor_intent_ids),
+                investor_attention_state_ids=tuple(
+                    investor_attention_state_ids
+                ),
+                investor_attention_feedback_ids=tuple(
+                    investor_attention_feedback_ids
+                ),
+                bank_attention_state_ids=tuple(bank_attention_state_ids),
+                bank_attention_feedback_ids=tuple(
+                    bank_attention_feedback_ids
+                ),
+                investor_memory_selection_ids=tuple(
+                    investor_memory_selection_ids
+                ),
+                bank_memory_selection_ids=tuple(
+                    bank_memory_selection_ids
+                ),
                 record_count_created=period_end_idx - period_start_idx,
                 metadata={
                     "period_index": period_idx,

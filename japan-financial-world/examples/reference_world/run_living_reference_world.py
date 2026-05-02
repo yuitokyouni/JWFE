@@ -260,6 +260,8 @@ def _print_trace(result: LivingReferenceWorldResult) -> None:
             f"valuations={len(ps.valuation_ids)} "
             f"credit_reviews={len(ps.bank_credit_review_signal_ids)} "
             f"reviews={len(ps.investor_review_run_ids) + len(ps.bank_review_run_ids)} "
+            f"attn_states={len(ps.investor_attention_state_ids) + len(ps.bank_attention_state_ids)} "
+            f"memory_sels={len(ps.investor_memory_selection_ids) + len(ps.bank_memory_selection_ids)} "
             f"records={ps.record_count_created}"
         )
     print(

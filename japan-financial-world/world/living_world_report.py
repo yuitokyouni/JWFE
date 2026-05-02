@@ -149,7 +149,18 @@ _BOUNDARY_STATEMENT: str = (
     "v1.11.1 readout; no price, no yield, no spread, no index "
     "level, no forecast, no expected return, no recommendation, "
     "no target price, no target weight, no order, no trade, no "
-    "allocation; labels-only context for downstream agents."
+    "allocation; labels-only context for downstream agents. "
+    "v1.12.8 attention feedback: per-actor-per-period "
+    "ActorAttentionStateRecord + AttentionFeedbackRecord chain "
+    "with deterministic synthetic focus_labels and trigger "
+    "labels; per-actor memory SelectedObservationSet from "
+    "period 1+ widening selected evidence; no order, no trade, "
+    "no rebalance, no target weight, no expected return, no "
+    "target price, no recommendation, no investment advice, no "
+    "portfolio allocation, no execution, no behavior probability, "
+    "no real data, no Japan calibration, no LLM-agent execution; "
+    "synthetic, deterministic, non-binding cross-period feedback "
+    "loop only."
 )
 
 
@@ -242,6 +253,15 @@ class LivingWorldPeriodReport:
     investor_intent_direction_counts: tuple[tuple[str, int], ...] = field(
         default_factory=tuple
     )
+    # v1.12.8 additive: per-period attention-feedback counts +
+    # histogram of feedback trigger labels. Used by the
+    # Markdown renderer's "## Attention feedback" section.
+    attention_state_count: int = 0
+    attention_feedback_count: int = 0
+    memory_selection_count: int = 0
+    attention_trigger_counts: tuple[tuple[str, int], ...] = field(
+        default_factory=tuple
+    )
     # v1.11.1 additive: per-period banker-readable labels lifted
     # from the period's CapitalMarketReadoutRecord (if any). When
     # the period has no readout, the labels default to empty
@@ -284,6 +304,9 @@ class LivingWorldPeriodReport:
             "market_environment_state_count",
             "firm_financial_state_count",
             "investor_intent_count",
+            "attention_state_count",
+            "attention_feedback_count",
+            "memory_selection_count",
         ):
             value = getattr(self, name)
             if not isinstance(value, int) or value < 0:
@@ -371,6 +394,29 @@ class LivingWorldPeriodReport:
             tuple(sorted(normalized_intent_counts)),
         )
 
+        # v1.12.8 — attention feedback trigger histogram.
+        normalized_trigger_counts: list[tuple[str, int]] = []
+        for entry in self.attention_trigger_counts:
+            if (
+                not isinstance(entry, tuple)
+                or len(entry) != 2
+                or not isinstance(entry[0], str)
+                or not entry[0]
+                or not isinstance(entry[1], int)
+                or entry[1] < 0
+            ):
+                raise ValueError(
+                    "attention_trigger_counts entries must be "
+                    "(non-empty str, non-negative int); "
+                    f"got {entry!r}"
+                )
+            normalized_trigger_counts.append((entry[0], entry[1]))
+        object.__setattr__(
+            self,
+            "attention_trigger_counts",
+            tuple(sorted(normalized_trigger_counts)),
+        )
+
         object.__setattr__(self, "metadata", dict(self.metadata))
 
     def to_dict(self) -> dict[str, Any]:
@@ -427,6 +473,13 @@ class LivingWorldPeriodReport:
             "investor_intent_direction_counts": [
                 [label, count]
                 for label, count in self.investor_intent_direction_counts
+            ],
+            "attention_state_count": self.attention_state_count,
+            "attention_feedback_count": self.attention_feedback_count,
+            "memory_selection_count": self.memory_selection_count,
+            "attention_trigger_counts": [
+                [label, count]
+                for label, count in self.attention_trigger_counts
             ],
             "rates_tone": self.rates_tone,
             "credit_tone": self.credit_tone,
@@ -969,6 +1022,7 @@ def _build_period_report(
             **_extract_investor_intent_summary(kernel, period),
             **_extract_readout_labels(kernel, period),
             **_extract_market_environment_summary(kernel, period),
+            **_extract_attention_feedback_summary(kernel, period),
             record_type_counts=period_record_type_counts,
             warnings=tuple(period_warnings),
             metadata={
@@ -1015,6 +1069,59 @@ def _extract_investor_intent_summary(
     return {
         "investor_intent_count": resolved,
         "investor_intent_direction_counts": tuple(sorted(counts.items())),
+    }
+
+
+def _extract_attention_feedback_summary(
+    kernel: Any, period: LivingReferencePeriodSummary
+) -> dict[str, Any]:
+    """v1.12.8 — read the period's attention-feedback /
+    attention-state records (if any) and return counts plus a
+    sorted histogram of trigger labels. When the period has no
+    attention records the histogram is empty and the renderer
+    skips the section.
+    """
+    state_ids = (
+        tuple(getattr(period, "investor_attention_state_ids", ()))
+        + tuple(getattr(period, "bank_attention_state_ids", ()))
+    )
+    feedback_ids = (
+        tuple(getattr(period, "investor_attention_feedback_ids", ()))
+        + tuple(getattr(period, "bank_attention_feedback_ids", ()))
+    )
+    memory_count = (
+        len(getattr(period, "investor_memory_selection_ids", ()))
+        + len(getattr(period, "bank_memory_selection_ids", ()))
+    )
+    if not state_ids and not feedback_ids:
+        return {
+            "attention_state_count": 0,
+            "attention_feedback_count": 0,
+            "memory_selection_count": memory_count,
+            "attention_trigger_counts": (),
+        }
+    book = getattr(kernel, "attention_feedback", None)
+    if book is None:
+        return {
+            "attention_state_count": 0,
+            "attention_feedback_count": 0,
+            "memory_selection_count": memory_count,
+            "attention_trigger_counts": (),
+        }
+    counts: dict[str, int] = {}
+    resolved = 0
+    for fid in feedback_ids:
+        try:
+            rec = book.get_feedback(fid)
+        except Exception:
+            continue
+        counts[rec.trigger_label] = counts.get(rec.trigger_label, 0) + 1
+        resolved += 1
+    return {
+        "attention_state_count": len(state_ids),
+        "attention_feedback_count": resolved,
+        "memory_selection_count": memory_count,
+        "attention_trigger_counts": tuple(sorted(counts.items())),
     }
 
 
@@ -1541,6 +1648,60 @@ def render_living_world_markdown(report: LivingWorldTraceReport) -> str:
             "rebalance, **not** a portfolio-allocation decision, "
             "**not** a security recommendation, **not** "
             "investment advice."
+        )
+        lines.append("")
+
+    # v1.12.8 — attention feedback section. One row per period
+    # showing the period's attention-state count, feedback
+    # count, memory-selection count, and the sorted trigger
+    # histogram. The cross-period feedback effect is fully
+    # observable here: period 0 has 0 memory selections, period
+    # 1+ has > 0 (when the actor's prior attention state's
+    # focus_labels point at concrete source ids).
+    has_v128_signal = any(
+        ps.get("attention_feedback_count", 0) > 0
+        for ps in md["period_summaries"]
+    )
+    if has_v128_signal:
+        lines.append("## Attention feedback")
+        lines.append("")
+        lines.append(
+            "| period | as_of_date | states | feedbacks | "
+            "memory selections | trigger histogram |"
+        )
+        lines.append(
+            "| --- | --- | --- | --- | --- | --- |"
+        )
+        for ps in md["period_summaries"]:
+            if ps.get("attention_feedback_count", 0) == 0:
+                continue
+            histogram = ps.get("attention_trigger_counts", [])
+            histogram_str = (
+                ", ".join(
+                    f"{label}={count}"
+                    for label, count in histogram
+                )
+                if histogram
+                else "—"
+            )
+            lines.append(
+                f"| `{ps['period_id']}` | `{ps['as_of_date']}` | "
+                f"{ps.get('attention_state_count', 0)} | "
+                f"{ps.get('attention_feedback_count', 0)} | "
+                f"{ps.get('memory_selection_count', 0)} | "
+                f"{histogram_str} |"
+            )
+        lines.append("")
+        lines.append(
+            "> Attention feedback closes the cross-period loop. "
+            "Period N's outcomes (investor intent, bank credit "
+            "review watch label, market environment, valuation) "
+            "produce a deterministic next-period attention state "
+            "whose `focus_labels` shape the actor's selected "
+            "evidence at period N+1 via a memory "
+            "`SelectedObservationSet`. **Not** a trade, **not** "
+            "a lending decision, **not** a corporate action; "
+            "synthetic, deterministic, non-binding."
         )
         lines.append("")
 

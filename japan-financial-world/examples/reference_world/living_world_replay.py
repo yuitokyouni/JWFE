@@ -119,7 +119,18 @@ LIVING_WORLD_BOUNDARY_STATEMENT: str = (
     "v1.11.1 readout; no price, no yield, no spread, no index "
     "level, no forecast, no expected return, no recommendation, "
     "no target price, no target weight, no order, no trade, no "
-    "allocation; labels-only context for downstream agents."
+    "allocation; labels-only context for downstream agents. "
+    "v1.12.8 attention feedback: per-actor-per-period "
+    "ActorAttentionStateRecord + AttentionFeedbackRecord chain "
+    "with deterministic synthetic focus_labels and trigger "
+    "labels; per-actor memory SelectedObservationSet from "
+    "period 1+ widening selected evidence; no order, no trade, "
+    "no rebalance, no target weight, no expected return, no "
+    "target price, no recommendation, no investment advice, no "
+    "portfolio allocation, no execution, no behavior probability, "
+    "no real data, no Japan calibration, no LLM-agent execution; "
+    "synthetic, deterministic, non-binding cross-period feedback "
+    "loop only."
 )
 
 CANONICAL_FORMAT_VERSION: str = "living_world_canonical.v1"
@@ -246,6 +257,24 @@ def _canonicalize_period(period: LivingReferencePeriodSummary) -> dict[str, Any]
         ),
         "investor_intent_ids": list(
             getattr(period, "investor_intent_ids", ())
+        ),
+        "investor_attention_state_ids": list(
+            getattr(period, "investor_attention_state_ids", ())
+        ),
+        "investor_attention_feedback_ids": list(
+            getattr(period, "investor_attention_feedback_ids", ())
+        ),
+        "bank_attention_state_ids": list(
+            getattr(period, "bank_attention_state_ids", ())
+        ),
+        "bank_attention_feedback_ids": list(
+            getattr(period, "bank_attention_feedback_ids", ())
+        ),
+        "investor_memory_selection_ids": list(
+            getattr(period, "investor_memory_selection_ids", ())
+        ),
+        "bank_memory_selection_ids": list(
+            getattr(period, "bank_memory_selection_ids", ())
         ),
     }
 

@@ -78,6 +78,8 @@ class RecordType(str, Enum):
     FIRM_LATENT_STATE_UPDATED = "firm_latent_state_updated"
     INVESTOR_INTENT_SIGNAL_ADDED = "investor_intent_signal_added"
     MARKET_ENVIRONMENT_STATE_ADDED = "market_environment_state_added"
+    ATTENTION_STATE_CREATED = "attention_state_created"
+    ATTENTION_FEEDBACK_RECORDED = "attention_feedback_recorded"
     STATE_SNAPSHOT_CREATED = "state_snapshot_created"
     WARNING = "warning"
     ERROR = "error"

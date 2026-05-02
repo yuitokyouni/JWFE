@@ -244,11 +244,22 @@ def count_expected_living_world_records(
         investors * firms                      investor intent signal (v1.12.1)
         firms                                  corporate strategic response candidate (v1.10.3)
         2 * (investors + banks)                review_run + review_signal
+        2 * investors                          attention state + feedback per investor (v1.12.8)
+        2 * banks                              attention state + feedback per bank (v1.12.8)
 
     For the default fixture (3 firms, 2 investors, 2 banks,
     3 industries, 5 markets, 1 readout/period, 1 environment
-    state/period, 4 periods) this is 71 records per period × 4
-    periods = 284.
+    state/period, 4 periods) this is 79 records per period × 4
+    periods = 316.
+
+    v1.12.8 also creates a *memory* SelectedObservationSet per
+    actor from period 1 onwards (when the actor has a
+    prior-period attention state with focus_labels that point at
+    concrete source ids). Memory selections are
+    period-dependent (zero in period 0; up to ``investors +
+    banks`` per subsequent period) — they are NOT in this
+    formula because they are a residual the test's upper-bound
+    allowance covers.
     """
     actors = investors + banks
     per_period = (
@@ -267,6 +278,8 @@ def count_expected_living_world_records(
         + investors * firms                    # investor intent signal (v1.12.1)
         + firms                                # response candidate (v1.10.3, corporate)
         + 2 * actors                           # review_run + review_signal
+        + 2 * investors                        # attention state + feedback / investor (v1.12.8)
+        + 2 * banks                            # attention state + feedback / bank (v1.12.8)
     )
     return per_period * periods
 
@@ -320,8 +333,13 @@ def test_default_living_world_total_run_record_count_matches_formula():
     per-run total is 71 × 4 = 284, plus up to 32 records of
     one-off setup overhead (14 v1.9.x infra + 4 v1.10.5
     stewardship themes + headroom; v1.11.0 / v1.11.1 / v1.12.0 /
-    v1.12.1 / v1.12.2 add no new setup records), giving a tight
-    total-run window of [284, 316].
+    v1.12.1 / v1.12.2 add no new setup records). v1.12.8 adds
+    8 records per period (4 attention-state + feedback per
+    investor + 4 per bank) plus a residual 0–8 memory-selection
+    records per post-period (period 0 has none); the per-run
+    minimum from the formula is 316, the tight upper window
+    accommodates the residual + setup overhead and lands at
+    [316, 364].
     """
     k = _seed_kernel()
     r = run_living_reference_world(
@@ -345,13 +363,15 @@ def test_default_living_world_total_run_record_count_matches_formula():
         f"of {expected_run_total} (= per-period formula × "
         f"{len(_PERIOD_DATES)} periods)"
     )
-    # Tight per-run upper bound: no more than 32 setup records
-    # on top of the per-period work over the entire run. v1.9.7
-    # sits at ~14 such records; v1.10.5 adds 4 stewardship-theme
-    # records to setup; 32 leaves headroom for harmless infra
-    # adjustments but is far below any quadratic explosion (which
-    # would push the count to triple-digit growth per period).
-    upper_bound = expected_run_total + 32
+    # Tight per-run upper bound: no more than 48 records on top
+    # of the per-period formula minimum. v1.9.7 sits at ~14
+    # setup records; v1.10.5 adds 4 stewardship-theme records;
+    # v1.12.8 adds up to (investors+banks) × (periods-1) memory
+    # selections (period 0 has none); 48 leaves headroom for
+    # harmless infra adjustments but is far below any quadratic
+    # explosion (which would push the count to triple-digit
+    # growth per period).
+    upper_bound = expected_run_total + 48
     assert r.created_record_count <= upper_bound, (
         f"living world produced {r.created_record_count} records "
         f"across the full run, above tight per-run upper bound "
@@ -542,9 +562,12 @@ def test_count_expected_living_world_records_matches_default_fixture():
         banks=len(_BANK_IDS),
         periods=len(_PERIOD_DATES),
     )
-    # Per docs/performance_boundary.md (v1.12.2):
-    # 4 × 71 = 284 records per run from the per-period formula.
-    assert total == 284
+    # Per docs/performance_boundary.md (v1.12.8):
+    # 4 × 79 = 316 records per run from the per-period formula
+    # (v1.12.7 baseline 71 + v1.12.8's 8 attention-feedback
+    # records per period). Memory selections are
+    # period-dependent and not in the formula.
+    assert total == 316
 
 
 def test_count_expected_living_world_records_scales_linearly_in_periods():

@@ -7897,3 +7897,118 @@ The full anti-claim set is preserved:
 | v2.0 Japan public-data calibration design gate | — | Not started |
 
 The test count moves from `2602 / 2602` (v1.12.6) to `2613 / 2613` (v1.12.7) — `+11` integration tests, all in `tests/test_living_reference_world.py`. The per-period record count and per-run window are unchanged from v1.12.4 / v1.12.5 / v1.12.6. The default-fixture `living_world_digest` moves from `d6b25704...` (v1.12.4 → v1.12.6) to `2c748aa6e37b679d9d52984e7f2c252d434e6a2192f7fa58b71866e59f54b709` (v1.12.7) by design; the new value is pinned in a regression test. With v1.12.7 shipped, attention is load-bearing **end-to-end** in the default living-world demo for investor intent (§85), valuation lite (§89), and bank credit review lite (§89).
+
+## 90. v1.12.8 Next-period attention feedback — the first cross-period feedback loop
+
+§90 is the **first cross-period attention feedback layer** in public FWE. Through v1.12.7 attention was load-bearing *within* a period for three mechanisms (investor intent, valuation lite, bank credit review lite); §90 closes the loop *across* periods. Period N's outcomes — investor intent, bank credit review watch label, market environment regime, valuation confidence — drive a deterministic **next-period attention state** for each actor. At period N+1, the orchestrator looks up that state and builds a *memory* `SelectedObservationSet` whose `selected_refs` carry the prior-period evidence the actor's `focus_labels` point at. The v1.12.4 / v1.12.5 / v1.12.6 helpers consume the memory selection alongside the regular per-period selection, so **period N+1's selected evidence is observably wider than period N's** when the prior period's outcomes triggered any focus shift.
+
+This stays synthetic, deterministic, and non-binding. It does not introduce trading, price formation, lending decisions, investment recommendations, portfolio allocation, target weights, expected returns, real data ingestion, Japan calibration, LLM-agent execution, or behavior probabilities. The only new ledger event types are `attention_state_created` and `attention_feedback_recorded`.
+
+### 90.1 Why this exists
+
+Through v1.12.7 each period was a separate attention cycle. The investor's `SelectedObservationSet` was built from the menu builder + attention profile alone; whatever the investor *concluded* in period N (e.g., "this firm is on `risk_flag_watch`") had no effect on what the investor would attend to in period N+1. The world had no **memory** of what mattered last period.
+
+§90 makes attention adaptive across periods. The deterministic synthetic rule set is small and documented — there are no calibrated probabilities, no behavior models, no LLM dispatch — but the closed feedback loop is real: a different period N outcome produces a different period N+1 selected evidence, which can in turn produce a different intent / valuation / credit-review audit shape at period N+1.
+
+The headline test pins the loop on `tests/test_living_reference_world.py::test_v1_12_8_period_n_plus_1_intent_has_wider_selected_evidence_than_period_n`: under the default fixture, period 0 produces `engagement_watch` intents, the v1.12.8 attention state writes `focus_labels=("dialogue", "engagement", "escalation", "stewardship")`, and at period 1 the orchestrator builds a memory selection containing the prior-period dialogue ids — the period 1 intent record's `evidence_selected_observation_set_ids` therefore reports **2 selections** (period selection + memory selection) vs period 0's **1 selection**.
+
+### 90.2 What v1.12.8 ships
+
+- `world/attention_feedback.py` (new):
+  - `ActorAttentionStateRecord` — immutable per-(actor, period) state with `focus_labels`, `focus_weights`, `max_selected_refs`, eight `source_*_ids` source-evidence tuples, and a `previous_attention_state_id` chain link.
+  - `AttentionFeedbackRecord` — immutable per-(actor, period) feedback record with `feedback_type`, `trigger_label`, and `source_record_ids`.
+  - `AttentionFeedbackBook` — append-only storage emitting exactly one ledger record per `add_*` call (`attention_state_created` and `attention_feedback_recorded`); read-only listings by actor / actor_type / date plus `get_latest_for_actor`.
+  - `build_attention_feedback(...)` — deterministic helper applying the v1.12.8 rule set; idempotent on `attention_state_id` (and on `feedback_id`); chains via `previous_attention_state_id`; tolerant of unresolved cited ids.
+  - Module-level vocabulary constants: `ALL_FOCUS_LABELS` (13 focus labels) plus six `TRIGGER_*` constants. Importable so future audit / integration tests can pin against the closed sets.
+- `world/ledger.py` — two new `RecordType` enum values: `ATTENTION_STATE_CREATED`, `ATTENTION_FEEDBACK_RECORDED`.
+- `world/kernel.py` — wires `WorldKernel.attention_feedback: AttentionFeedbackBook` field; auto-linked to the kernel's ledger and clock.
+- `world/reference_living_world.py` — three orchestrator changes:
+  1. **Memory selection phase** (after attention phase, before mechanism phases): for each investor + bank, look up the actor's prior-period attention state via `AttentionFeedbackBook.get_latest_for_actor(actor_id)` and build a memory `SelectedObservationSet` whose `selected_refs` are drawn from the prior state's `source_*_ids` tuples gated by its `focus_labels` (`focus_label="firm_state"` → `source_firm_state_ids`; `focus_label="dialogue"` → `source_dialogue_ids`; etc.). The new selection has `selection_reason="attention_feedback_memory"` and metadata flag `v1_12_8_memory_selection: True`. Period 0 has no prior state and creates no memory selection.
+  2. **Memory-aware mechanism calls**: the v1.12.4 investor intent helper, the v1.12.5 valuation helper, and the v1.12.6 bank credit review helper are all called with `selected_observation_set_ids = (period_selection,) + (memory_selection,)` when a memory selection exists for the actor, so the resolver sees a *wider* selected-refs union and the produced records reflect the prior-period focus.
+  3. **Attention feedback phase** (end of period, after intent / review phases): for each investor + bank, call `build_attention_feedback(...)` with the period's outcomes. Records the new attention state + feedback row, both chained via `previous_attention_state_id`.
+  - `LivingReferencePeriodSummary` grows additively with six new id tuples: `investor_attention_state_ids`, `investor_attention_feedback_ids`, `bank_attention_state_ids`, `bank_attention_feedback_ids`, `investor_memory_selection_ids`, `bank_memory_selection_ids`.
+- `world/living_world_report.py` — period report grows with `attention_state_count` / `attention_feedback_count` / `memory_selection_count` / `attention_trigger_counts` (sorted histogram for determinism). The Markdown renderer adds a `## Attention feedback` section between `## Investor intent` and `## Attention divergence`. The boundary statement is extended in place to cover the v1.12.8 anti-claims.
+- `examples/reference_world/living_world_replay.py` — canonical view echoes all six new id tuples per period; boundary statement constant tracks the reporter's. **Expected digest change**: the v1.12.8 living-world digest is *not* the same as the v1.12.7 default digest.
+- `examples/reference_world/living_world_manifest.py` — manifest summary echoes four new totals: `investor_attention_state_total`, `bank_attention_state_total`, `attention_feedback_total`, `memory_selection_total`.
+- `examples/reference_world/run_living_reference_world.py` — per-period CLI trace line gains `attn_states=` and `memory_sels=` columns.
+- `tests/test_attention_feedback.py` (new) — 102 unit tests covering field validation, bounded `confidence` with bool rejection, immutability, anti-fields on dataclass + ledger payload, every list / filter method, snapshot determinism, ledger emission, kernel wiring, the full v1.12.8 deterministic rule set across every priority branch, chaining via `previous_attention_state_id`, idempotency, no-mutation against every other source-of-truth book, vocabulary export discipline (no forbidden token in any focus label or trigger label), plus a jurisdiction-neutral identifier scan.
+- `tests/test_living_reference_world.py` — `+11` v1.12.8 orchestrator-level integration tests including the headline cross-period feedback pin.
+
+### 90.3 Rule set (binding, illustrative, deterministic)
+
+The `build_attention_feedback` helper applies these rules in priority order. None is a calibrated probability; none is a market view. Multiple rules can fire simultaneously and contribute additively to `focus_labels`; `trigger_label` is the highest-priority rule that fired.
+
+1. **`risk_intent_observed`** — when any cited investor intent direction is `risk_flag_watch` or `deepen_due_diligence`. Adds `firm_state`, `market_environment`, `market_access` to `focus_labels`.
+2. **`engagement_intent_observed`** — when any cited investor intent direction is `engagement_watch`. Adds `engagement`, `dialogue`, `stewardship`, `escalation`.
+3. **`valuation_confidence_low`** — when any cited intent direction is `decrease_confidence` OR any cited valuation has `confidence < 0.4`. Adds `valuation`, `firm_state`, `market_environment`.
+4. **`liquidity_or_refinancing_credit_review`** — when any cited bank credit review signal carries `watch_label="liquidity_watch"` or `watch_label="refinancing_watch"` (or `market_access_watch`). Adds `firm_state`, `market_environment`, `funding` (and `market_access` for the third sub-case).
+5. **`restrictive_market_observed`** — when any cited market environment record's `overall_market_access_label="selective_or_constrained"`. Adds `liquidity`, `credit`, `refinancing_window`.
+6. **`routine_observed`** — fallback. Adds `memory`.
+
+`focus_weights` is a flat 0.5 per label in v1.12.8. `max_selected_refs` is `8 + len(focus_labels)` (synthetic; the v1.8.x menu builder does not yet enforce it). Tests pin the qualitative ordering, never specific arithmetic.
+
+### 90.4 Memory selection construction (binding)
+
+When the orchestrator at period N+1 builds the memory selection for an actor, it walks the prior state's `focus_labels` against this map and concatenates the corresponding source-evidence tuples (first-seen order, deduped):
+
+| Focus label | Source attribute on prior state |
+| --- | --- |
+| `firm_state` | `source_firm_state_ids` |
+| `market_environment` | `source_market_environment_state_ids` |
+| `valuation` | `source_valuation_ids` |
+| `dialogue` | `source_dialogue_ids` |
+| `engagement` | `source_dialogue_ids` |
+| `escalation` | `source_escalation_candidate_ids` |
+
+Focus labels not in this map (e.g., `liquidity`, `credit`, `refinancing_window`, `funding`, `memory`) carry no concrete source ids in v1.12.8; they shape future v1.13.x integrations but produce no memory-selection bytes today. If the resulting `selected_refs` is empty, the orchestrator skips creating a memory selection (no value added).
+
+### 90.5 Attention discipline (binding)
+
+The new helper:
+
+- builds an `ActorAttentionStateRecord` for `(actor_id, as_of_date)` from only the cited evidence — never a global book scan;
+- chains via `previous_attention_state_id` to whatever `get_latest_for_actor(actor_id)` returns at call time;
+- writes only `attention_state_created` and `attention_feedback_recorded` ledger records; never to any other source-of-truth book;
+- forwards no `strict` flag (the v1.12.8 helper is tolerant by design — unresolved cited ids land in source tuples but do not block emission).
+
+The orchestrator's memory-selection phase:
+
+- only fires from period 1 onwards (defensive `prior_state.as_of_date >= as_of_date` check guards against out-of-order seeding);
+- writes one new `SelectedObservationSet` per actor per period when applicable (one `observation_set_selected` ledger record);
+- never mutates any source-of-truth book beyond the new selection record itself.
+
+### 90.6 Anti-fields and anti-claims (binding)
+
+The records carry **only** ids and lightweight bucket / status / label metadata. They have **no** `order`, `trade`, `rebalance`, `target_weight`, `buy`, `sell`, `recommendation`, `investment_advice`, `expected_return`, `target_price`, `portfolio_allocation`, `execution`, `forecast_value`, `actual_value`, `real_data_value`, or `behavior_probability` field. Tests pin the absence on the dataclass field set and on the ledger payload key set.
+
+The vocabulary closed sets contain no forbidden token: `ALL_FOCUS_LABELS` and the six `TRIGGER_*` constants pass a `_FORBIDDEN_TOKENS` scan against `buy`, `sell`, `rating`, `approved`, `rejected`, `default`, `pd`, `lgd`, `ead`, `advice`, `recommendation`, `underwrite`, `trade`, `order`.
+
+### 90.7 Performance boundary (expected change)
+
+Per-period record count moves from 71 (v1.12.4 → v1.12.7) to:
+
+- **Period 0**: 71 + 8 = 79 records (4 investor attention state + feedback × 2 actors; same for banks).
+- **Period 1+**: 71 + 8 + 2 = 81 records (additional 2 = investor memory selections; under the default constructive fixture the bank memory selection is empty because the bank's prior attention state's focus is just `memory`).
+
+Per-run total: 79 + 3×81 = 322 records minimum (vs v1.12.7's 284), pinned by `count_expected_living_world_records` returning 316 (per-period formula × 4) plus the 0–8 memory-selection residual per post-period. The tight per-run upper window is `[316, 364]`; the existing test relaxes the upper bound to `formula + 48` to absorb the residual + setup overhead.
+
+The default-fixture `living_world_digest` moves from `2c748aa6e37b679d9d52984e7f2c252d434e6a2192f7fa58b71866e59f54b709` (v1.12.7) to `3002a499df6aff5c37628df5f14fbb3186481b276fab36a4fe2f13a89c5feeff` (v1.12.8) by design; the test fixture pins a different but equally deterministic value (`e56122eda4ea871ec895806b05a2da5c6deac1589708ff7ff0a8cd90c7f0a81f`) since the `_seed_kernel` helper differs slightly between the perf-boundary fixture and the integration-test fixture. Both digests are stable across two fresh runs.
+
+### 90.8 Position in the v1.12 sequence
+
+| Milestone | Scope | Status |
+| --- | --- | --- |
+| v1.12.0 → v1.12.2 (firm state / investor intent / market environment) | Code (§80 → §82). | Shipped |
+| v1.12.3 EvidenceResolver / ActorContextFrame | Code (§83). | Shipped |
+| v1.x Valuation Protocol — Comps Purpose Separation | Docs-only (§84). Advanced-actor-only. | Shipped |
+| v1.12.4 Attention-conditioned investor intent | Code (§85). Orchestrator wired. | Shipped |
+| v1.12.5 Attention-conditioned valuation lite | Code (§86). Helper-level + tests. | Shipped |
+| v1.13.0 Generic central bank settlement infrastructure design | Docs-only (§87). | Shipped |
+| v1.12.6 Attention-conditioned bank credit review lite | Code (§88). Helper-level + tests. | Shipped |
+| v1.12.7 Attention-conditioned mechanism integration | Code (§89). Orchestrator wires v1.12.5 / v1.12.6. | Shipped |
+| **v1.12.8 Next-period attention feedback** | Code (§90). First cross-period feedback loop. | **Shipped** |
+| v2.0 Japan public-data calibration design gate | — | Not started |
+
+The test count moves from `2613 / 2613` (v1.12.7) to `2725 / 2725` (v1.12.8) — `+112` tests (`+102` in the new `tests/test_attention_feedback.py`, `+11` orchestrator-level v1.12.8 integration tests in `tests/test_living_reference_world.py`, `−1` from renaming the v1.12.7 digest pin to v1.12.8). Per-period record count moves from 71 to 79 (period 0) / 81 (period 1+); per-run window widens from `[284, 316]` to `[316, 364]`. Default-fixture `living_world_digest` moves from `2c748aa6...` to `3002a499df6aff5c37628df5f14fbb3186481b276fab36a4fe2f13a89c5feeff` by design.
+
+With v1.12.8 shipped, the living reference world has a **closed cross-period feedback loop**: what an actor saw and concluded in period N changes what it attends to in period N+1, and that change is observable in the period N+1 audit trail.

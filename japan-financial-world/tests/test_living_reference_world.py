@@ -841,7 +841,7 @@ def test_living_world_stays_within_record_budget():
         (interactions, routines, profiles registered on the first
         period — currently ~14).
 
-    Lower bound 148 (v1.9.x per-period work × 4); upper bound 320
+    Lower bound 148 (v1.9.x per-period work × 4); upper bound 380
     catches accidental quadratic loops while leaving headroom for
     every milestone through v1.12.1 (which sits at 298 records on
     the default fixture). The tight per-version window lives in
@@ -858,8 +858,8 @@ def test_living_world_stays_within_record_budget():
         + 2 * (len(_INVESTOR_IDS) + len(_BANK_IDS))  # review_run + signal
     )  # = 4 * (6 + 3 + 8 + 6 + 6 + 8) = 148
     assert r.created_record_count >= minimum_expected
-    # Loose upper bound: 320 is well below dense product space.
-    assert r.created_record_count <= 320
+    # Loose upper bound: 380 is well below dense product space.
+    assert r.created_record_count <= 380
 
 
 # ---------------------------------------------------------------------------
@@ -2321,7 +2321,11 @@ def test_v1_12_4_orchestrator_uses_attention_conditioned_helper():
 def test_v1_12_4_orchestrator_intent_carries_selection_id_per_investor():
     """v1.12.4 routing: every intent's
     ``evidence_selected_observation_set_ids`` must reference the
-    matching investor's per-period selection — not anyone else's."""
+    matching investor's per-period selection — not anyone else's.
+    v1.12.8 widening: from period 1 onwards the tuple may also
+    include a *memory* selection id (``selection:memory:...``)
+    drawn from the investor's prior-period attention state. The
+    period selection must always be the first id."""
     k = _seed_kernel()
     r = _run_default(k)
     for ps in r.per_period_summaries:
@@ -2334,8 +2338,13 @@ def test_v1_12_4_orchestrator_intent_carries_selection_id_per_investor():
             expected = sel_by_investor.get(rec.investor_id)
             assert expected is not None
             assert (
-                rec.evidence_selected_observation_set_ids == (expected,)
+                rec.evidence_selected_observation_set_ids[0] == expected
             )
+            # Any extra ids must be v1.12.8 memory selections
+            # for the same investor.
+            for extra in rec.evidence_selected_observation_set_ids[1:]:
+                assert extra.startswith("selection:memory:")
+                assert rec.investor_id in extra
 
 
 def test_v1_12_4_orchestrator_living_world_digest_remains_deterministic():
@@ -2581,10 +2590,18 @@ def test_v1_12_7_canonical_replay_deterministic():
     assert living_world_digest(k1, r1) == living_world_digest(k2, r2)
 
 
-def test_v1_12_7_living_world_digest_pinned():
-    """Pin the new v1.12.7 living_world_digest so any future
-    silent change to the orchestrator path or to the v1.12.5 /
-    v1.12.6 helpers fails loudly."""
+def test_v1_12_8_living_world_digest_pinned():
+    """Pin the v1.12.8 living_world_digest so any future
+    silent change to the orchestrator path, the v1.12.5 /
+    v1.12.6 helpers, the v1.12.4 helper, or the v1.12.8
+    attention-feedback / memory-selection wiring fails loudly.
+
+    The digest moved at v1.12.8 because the orchestrator now
+    creates per-period attention-state + feedback records and
+    a memory ``SelectedObservationSet`` per actor from period
+    1 onwards (when the actor has a prior attention state);
+    those records flow into the canonical view.
+    """
     from examples.reference_world.living_world_replay import (
         living_world_digest,
     )
@@ -2592,10 +2609,10 @@ def test_v1_12_7_living_world_digest_pinned():
     k = _seed_kernel()
     r = _run_default(k)
     expected = (
-        "e5c46a3cffae7d887bd07ace2068f529a788e00540ab4fe2e7a9171eca7788db"
+        "e56122eda4ea871ec895806b05a2da5c6deac1589708ff7ff0a8cd90c7f0a81f"
     )
     assert living_world_digest(k, r) == expected, (
-        "v1.12.7 living_world_digest moved unexpectedly. If the "
+        "v1.12.8 living_world_digest moved unexpectedly. If the "
         "shift is intentional, update the pinned value here AND "
         "in docs/world_model.md and docs/test_inventory.md."
     )
@@ -2672,6 +2689,288 @@ def test_v1_12_7_markdown_report_renders_without_error():
     # Spot-check that the integrated v1.12.4 investor-intent
     # section still renders.
     assert "## Investor intent" in md
+
+
+# ---------------------------------------------------------------------------
+# v1.12.8 — cross-period attention feedback (HEADLINE)
+# ---------------------------------------------------------------------------
+
+
+def test_v1_12_8_orchestrator_emits_attention_state_per_actor_per_period():
+    """Every period must produce one attention state +
+    feedback per investor + per bank."""
+    k = _seed_kernel()
+    r = _run_default(k)
+    n_inv = len(_INVESTOR_IDS)
+    n_bank = len(_BANK_IDS)
+    for ps in r.per_period_summaries:
+        assert len(ps.investor_attention_state_ids) == n_inv
+        assert len(ps.investor_attention_feedback_ids) == n_inv
+        assert len(ps.bank_attention_state_ids) == n_bank
+        assert len(ps.bank_attention_feedback_ids) == n_bank
+
+
+def test_v1_12_8_attention_states_chain_across_periods():
+    """Each actor's attention-state series must chain via
+    ``previous_attention_state_id`` across periods. Period 0
+    has ``previous_attention_state_id is None``; period N>=1
+    references the actor's period N-1 state."""
+    k = _seed_kernel()
+    r = _run_default(k)
+    investor = _INVESTOR_IDS[0]
+    states_for_investor = []
+    for ps in r.per_period_summaries:
+        for asid in ps.investor_attention_state_ids:
+            state = k.attention_feedback.get_attention_state(asid)
+            if state.actor_id == investor:
+                states_for_investor.append(state)
+    # Period 0 has no prior; periods 1..N reference the prior.
+    assert states_for_investor[0].previous_attention_state_id is None
+    for prev, cur in zip(states_for_investor, states_for_investor[1:]):
+        assert cur.previous_attention_state_id == prev.attention_state_id
+
+
+def test_v1_12_8_period_0_has_no_memory_selection():
+    """The cross-period feedback can only fire from period 1
+    onwards because period 0 has no prior attention state."""
+    k = _seed_kernel()
+    r = _run_default(k)
+    ps0 = r.per_period_summaries[0]
+    assert ps0.investor_memory_selection_ids == ()
+    assert ps0.bank_memory_selection_ids == ()
+
+
+def test_v1_12_8_period_1_has_memory_selection_per_investor():
+    """Under the default fixture (engagement_watch intent)
+    every investor's prior attention state carries
+    ``focus_label="dialogue"`` and ``focus_label="engagement"``,
+    which both point at the prior-period dialogue ids. Period
+    1 therefore builds one memory selection per investor."""
+    k = _seed_kernel()
+    r = _run_default(k)
+    ps1 = r.per_period_summaries[1]
+    assert len(ps1.investor_memory_selection_ids) == len(_INVESTOR_IDS)
+    # Every memory selection is a SelectedObservationSet with
+    # selection_reason="attention_feedback_memory" and a
+    # non-empty selected_refs.
+    for sid in ps1.investor_memory_selection_ids:
+        sel = k.attention.get_selection(sid)
+        assert sel.selection_reason == "attention_feedback_memory"
+        assert len(sel.selected_refs) > 0
+        assert sel.metadata.get("v1_12_8_memory_selection") is True
+
+
+def test_v1_12_8_period_n_plus_1_intent_has_wider_selected_evidence_than_period_n():
+    """**The headline cross-period feedback pin.**
+
+    Period N's outcome (engagement_watch intent under the
+    default fixture) writes a new ActorAttentionStateRecord
+    whose focus_labels point at dialogue / engagement /
+    escalation evidence. At period N+1, the orchestrator
+    consults this state, builds a memory
+    SelectedObservationSet from the prior period's dialogue
+    ids, and passes it alongside the regular per-period
+    selection to the v1.12.4 attention-conditioned investor
+    intent helper. The intent record at period N+1 therefore
+    surfaces *more* selected_observation_set_ids than the
+    intent record at period N — proving that period N's
+    outcome changed period N+1's selected evidence.
+    """
+    k = _seed_kernel()
+    r = _run_default(k)
+
+    investor = _INVESTOR_IDS[0]
+    firm = _FIRM_IDS[0]
+
+    ps0 = r.per_period_summaries[0]
+    ps1 = r.per_period_summaries[1]
+
+    intent_p0 = next(
+        iid
+        for iid in ps0.investor_intent_ids
+        if f":{investor}:" in iid and f":{firm}:" in iid
+    )
+    intent_p1 = next(
+        iid
+        for iid in ps1.investor_intent_ids
+        if f":{investor}:" in iid and f":{firm}:" in iid
+    )
+    rec0 = k.investor_intents.get_intent(intent_p0)
+    rec1 = k.investor_intents.get_intent(intent_p1)
+
+    sel_count_p0 = len(rec0.evidence_selected_observation_set_ids)
+    sel_count_p1 = len(rec1.evidence_selected_observation_set_ids)
+
+    # Period 0: only the regular per-period selection.
+    assert sel_count_p0 == 1
+    # Period 1: regular per-period selection + memory selection.
+    assert sel_count_p1 == 2, (
+        f"v1.12.8 cross-period feedback failed: period 1 intent "
+        f"should reference 2 selections (period + memory) but "
+        f"reports {sel_count_p1}: "
+        f"{rec1.evidence_selected_observation_set_ids}"
+    )
+    assert sel_count_p1 > sel_count_p0
+
+    # The second selection must be the memory selection — a
+    # selection whose id starts with ``selection:memory:``.
+    second = rec1.evidence_selected_observation_set_ids[1]
+    assert second.startswith("selection:memory:")
+    # And the memory selection must carry the v1.12.8 marker.
+    sel = k.attention.get_selection(second)
+    assert sel.metadata.get("v1_12_8_memory_selection") is True
+
+
+def test_v1_12_8_period_n_plus_1_intent_has_wider_resolved_dialogue_evidence():
+    """A complementary form of the headline pin. Because the
+    memory selection's selected_refs include prior-period
+    dialogue ids, the v1.12.4 helper resolves them into the
+    intent's ``evidence_dialogue_ids`` slot. Period 1's
+    resolved dialogue evidence is therefore strictly wider
+    than period 0's for the same (investor, firm) pair."""
+    k = _seed_kernel()
+    r = _run_default(k)
+
+    investor = _INVESTOR_IDS[0]
+    firm = _FIRM_IDS[0]
+
+    intent_p0 = next(
+        iid
+        for iid in r.per_period_summaries[0].investor_intent_ids
+        if f":{investor}:" in iid and f":{firm}:" in iid
+    )
+    intent_p1 = next(
+        iid
+        for iid in r.per_period_summaries[1].investor_intent_ids
+        if f":{investor}:" in iid and f":{firm}:" in iid
+    )
+    rec0 = k.investor_intents.get_intent(intent_p0)
+    rec1 = k.investor_intents.get_intent(intent_p1)
+    assert (
+        len(rec1.evidence_dialogue_ids)
+        > len(rec0.evidence_dialogue_ids)
+    ), (
+        "v1.12.8 cross-period feedback failed: period 1 intent "
+        "should resolve more dialogue evidence than period 0 "
+        f"(period 0 = {rec0.evidence_dialogue_ids}; period 1 = "
+        f"{rec1.evidence_dialogue_ids})"
+    )
+
+
+def test_v1_12_8_attention_state_emits_only_attention_event_types():
+    """The integrated v1.12.8 sweep must emit only the new
+    attention_state_created / attention_feedback_recorded
+    record types, plus the existing event types — no new
+    forbidden trading / lending / pricing events."""
+    k = _seed_kernel()
+    r = _run_default(k)
+    forbidden_event_types = {
+        "order_submitted",
+        "price_updated",
+        "contract_created",
+        "contract_status_updated",
+        "contract_covenant_breached",
+        "ownership_position_added",
+        "ownership_transferred",
+        "institution_action_recorded",
+    }
+    seen = {
+        rec.event_type
+        for rec in k.ledger.records[
+            r.ledger_record_count_before : r.ledger_record_count_after
+        ]
+    }
+    assert seen.isdisjoint(forbidden_event_types)
+    # And the two new event types must appear.
+    assert "attention_state_created" in seen
+    assert "attention_feedback_recorded" in seen
+
+
+def test_v1_12_8_no_forbidden_payload_keys_in_attention_records():
+    """No attention-state or feedback ledger payload may carry
+    any forbidden order / trade / rating / advice key."""
+    k = _seed_kernel()
+    r = _run_default(k)
+    forbidden_keys = {
+        "order",
+        "trade",
+        "rebalance",
+        "target_price",
+        "expected_return",
+        "recommendation",
+        "investment_advice",
+        "portfolio_allocation",
+        "execution",
+        "lending_decision",
+        "internal_rating",
+        "probability_of_default",
+        "behavior_probability",
+    }
+    for rec in k.ledger.records[
+        r.ledger_record_count_before : r.ledger_record_count_after
+    ]:
+        if rec.event_type not in {
+            "attention_state_created",
+            "attention_feedback_recorded",
+        }:
+            continue
+        leaked = set(rec.payload.keys()) & forbidden_keys
+        assert not leaked, (
+            f"v1.12.8 record {rec.object_id!r} leaks forbidden "
+            f"payload keys: {sorted(leaked)}"
+        )
+
+
+def test_v1_12_8_canonical_replay_remains_deterministic():
+    """Two fresh runs must still produce byte-identical
+    canonical views and digests after the v1.12.8 wiring."""
+    from examples.reference_world.living_world_replay import (
+        canonicalize_living_world_result,
+        living_world_digest,
+    )
+
+    k1 = _seed_kernel()
+    r1 = _run_default(k1)
+    k2 = _seed_kernel()
+    r2 = _run_default(k2)
+    can1 = canonicalize_living_world_result(k1, r1)
+    can2 = canonicalize_living_world_result(k2, r2)
+    assert can1 == can2
+    assert living_world_digest(k1, r1) == living_world_digest(k2, r2)
+
+
+def test_v1_12_8_constrained_regime_drives_risk_focus():
+    """Under the constrained regime, period 1's investor
+    attention state should carry risk-focused labels (the
+    period 0 intent direction is risk_flag_watch /
+    deepen_due_diligence under that regime). The trigger
+    label must be ``risk_intent_observed`` for at least one
+    investor."""
+    from world.attention_feedback import (
+        FOCUS_LABEL_FIRM_STATE,
+        TRIGGER_RISK_INTENT_OBSERVED,
+    )
+
+    k = _seed_kernel()
+    r = run_living_reference_world(
+        k,
+        firm_ids=_FIRM_IDS,
+        investor_ids=_INVESTOR_IDS,
+        bank_ids=_BANK_IDS,
+        period_dates=_PERIOD_DATES,
+        market_regime="constrained",
+    )
+    triggers: set[str] = set()
+    focus_labels_seen: set[str] = set()
+    for ps in r.per_period_summaries:
+        for fbid in ps.investor_attention_feedback_ids:
+            fb = k.attention_feedback.get_feedback(fbid)
+            triggers.add(fb.trigger_label)
+        for asid in ps.investor_attention_state_ids:
+            state = k.attention_feedback.get_attention_state(asid)
+            focus_labels_seen.update(state.focus_labels)
+    assert TRIGGER_RISK_INTENT_OBSERVED in triggers
+    assert FOCUS_LABEL_FIRM_STATE in focus_labels_seen
 
 
 # ---------------------------------------------------------------------------
