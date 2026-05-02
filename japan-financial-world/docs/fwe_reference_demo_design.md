@@ -530,3 +530,54 @@ new demo tests; no existing test is changed.
 > for the loop-shape discipline, and `RELEASE_CHECKLIST.md`'s
 > "Public prototype gate (v1.9.last)" section for the local
 > verification commands.
+
+## v1.11.2 — demo market regime presets
+
+v1.11.2 adds a `--market-regime` CLI flag to
+`run_living_reference_world.py` so the demo can be run under one
+of four named synthetic presets without changing any other input:
+
+```bash
+python -m examples.reference_world.run_living_reference_world --market-regime constructive
+python -m examples.reference_world.run_living_reference_world --market-regime mixed
+python -m examples.reference_world.run_living_reference_world --market-regime constrained
+python -m examples.reference_world.run_living_reference_world --market-regime tightening
+```
+
+When the flag is set, the orchestrator prints a regime banner
+before the per-period trace:
+
+```
+[regime]  market_regime=<name> (v1.11.2 synthetic preset; no real data, no forecasts)
+```
+
+Each preset deterministically alters only the synthetic
+`(direction, strength, confidence, time_horizon)` tuples on the
+v1.11.0 default 5-market spec set. The v1.11.1 capital-market
+readout's overall_market_access_label classifier reaches a
+different branch per preset:
+
+| Regime | overall label |
+| --- | --- |
+| `constructive` | `open_or_constructive` |
+| `mixed` | `mixed` |
+| `constrained` | `selective_or_constrained` |
+| `tightening` | `selective_or_constrained` |
+
+The `tightening` and `constrained` presets share the
+`selective_or_constrained` overall label but produce visibly
+different per-market tone signatures (rates / credit / equity /
+funding direction differ), so a banker viewer can tell them
+apart in the rendered Markdown's `## Capital market surface`
+table.
+
+**No real data, no calibrated yields, no calibrated spreads, no
+forecasts, no recommendations, no transaction execution.** v1.11.2
+is a demo-configuration layer — see `world_model.md` §79 for the
+binding contract.
+
+Omitting the flag preserves the v1.11.1 default behavior
+bit-for-bit. The default-fixture `living_world_digest`
+(`209ff81682d331a9700e5c3c8dfac9aa9ecfa028757db6b060f75590249833ea`)
+is unchanged when no regime is specified; a test pins this
+backward-compatibility contract.

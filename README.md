@@ -29,9 +29,10 @@ and
 The reference data is fully synthetic; Japan calibration is v2 / v3
 territory.
 
-The current code is at **v1.11.1 capital-market readout**, layered
-on top of v1.11.0 capital-market surface, v1.10.5 living-world
-integration, and the **v1.9.last public prototype freeze**. v1.9 layered
+The current code is at **v1.11.2 demo market regime presets**,
+layered on top of v1.11.1 capital-market readout, v1.11.0
+capital-market surface, v1.10.5 living-world integration, and the
+**v1.9.last public prototype freeze**. v1.9 layered
 three review-only synthetic mechanisms (firm operating-pressure
 assessment, valuation refresh lite, bank credit review lite) onto
 the v1.8 endogenous activity stack and integrated them into a
@@ -247,7 +248,8 @@ in well under a second, and are deterministic across invocations.
 | v1.10.4.1     | Type-correct industry-condition cross-reference slot (additive `trigger_industry_condition_ids` field + `list_by_industry_condition` filter on `CorporateStrategicResponseCandidate` / `StrategicResponseCandidateBook`; +4 tests; backward-compatible — disambiguates `signal_id` vs `condition_id` by field, not by payload introspection; no new primitive, no new book, no new ledger record type) | Shipped |
 | v1.10.5       | Living-world integration (wires v1.10.1 → v1.10.4 (+ v1.10.4.1) into `world/reference_living_world.py` as five new per-period phases — industry demand → dialogue → escalation → corporate response — plus one setup-time phase — stewardship themes; `LivingReferencePeriodSummary` / `LivingReferenceWorldResult` / `LivingWorldTraceReport` / canonical / manifest grow additively; CLI surfaces new counts; +15 integration tests; per-run record window widens from `[148, 180]` to `[220, 252]`; `living_world_digest` value differs from v1.9.last by design; no new mechanism, no new `RecordType`, no new book, no executed action) | Shipped |
 | v1.11.0       | Capital-market surface (`MarketConditionRecord` + `MarketConditionBook` in new `world/market_conditions.py`; ledger `MARKET_CONDITION_ADDED` + kernel wiring; additive `trigger_market_condition_ids` slot + `list_by_market_condition` filter on `CorporateStrategicResponseCandidate` / `StrategicResponseCandidateBook`; living-world demo gains a per-period capital-market phase covering rates / credit spreads / equity valuation / funding window / liquidity & volatility regime; +96 tests; per-run record window widens from `[220, 252]` to `[240, 272]`; `living_world_digest` value differs from v1.10.5 by design; no price formation, no yield-curve calibration, no order matching, no clearing, no security recommendation, no DCM / ECM execution, no portfolio-allocation decisions) | Shipped |
-| **v1.11.1**   | **Capital-market readout** (`CapitalMarketReadoutRecord` + `CapitalMarketReadoutBook` + deterministic `build_capital_market_readout` builder in new `world/market_surface_readout.py`; ledger `CAPITAL_MARKET_READOUT_ADDED` + kernel wiring; living-world demo gains a per-period readout that summarizes that period's market conditions into rates / credit / equity / funding-window / liquidity / volatility tone tags + an `open_or_constructive` / `selective_or_constrained` / `mixed` overall market-access label + a banker-summary label; Markdown report adds a `## Capital market surface` section; +79 tests; per-run record window widens from `[240, 272]` to `[244, 276]`; `living_world_digest` value differs from v1.11.0 by design; readout / report only — no pricing, no spread calibration, no yield calibration, no market forecast, no deal advice, no transaction recommendation) | **Shipped (2122 tests)** |
+| v1.11.1       | Capital-market readout (`CapitalMarketReadoutRecord` + `CapitalMarketReadoutBook` + deterministic `build_capital_market_readout` builder in new `world/market_surface_readout.py`; ledger `CAPITAL_MARKET_READOUT_ADDED` + kernel wiring; living-world demo gains a per-period readout that summarizes that period's market conditions into rates / credit / equity / funding-window / liquidity / volatility tone tags + an `open_or_constructive` / `selective_or_constrained` / `mixed` overall market-access label + a banker-summary label; Markdown report adds a `## Capital market surface` section; +79 tests; per-run record window widens from `[240, 272]` to `[244, 276]`; `living_world_digest` value differs from v1.11.0 by design; readout / report only — no pricing, no spread calibration, no yield calibration, no market forecast, no deal advice, no transaction recommendation) | Shipped |
+| **v1.11.2**   | **Demo market regime presets** (four named synthetic presets — `constructive` / `mixed` / `constrained` / `tightening` — selectable via the `--market-regime` CLI flag and the `market_regime` kwarg on `run_living_reference_world`; +15 tests; default behavior preserved bit-for-bit when the flag is omitted, so the v1.11.1 default-fixture digest is unchanged; per-run record-count window unchanged at `[244, 276]`; demo-config layer only — no real data, no calibrated yields / spreads / index levels, no forecasts, no recommendations, no transaction execution) | **Shipped (2137 tests)** |
 | v1.10.last    | Public engagement layer freeze (docs-only) | Planned |
 | v2.0          | Japan public-data calibration design gate                 | Not started                  |
 | v3.0          | Proprietary Japan calibration / expert-data layer         | Private                      |
@@ -518,7 +520,7 @@ Start here:
 
 **Tests:**
 - [docs/test_inventory.md](japan-financial-world/docs/test_inventory.md)
-  — 2122 tests grouped by component (444 v0 + 188 v1.0–v1.7 + 1490 post-v1.7)
+  — 2137 tests grouped by component (444 v0 + 188 v1.0–v1.7 + 1505 post-v1.7)
 
 **Long-form / original ambition (kept for reference):**
 - [docs/architecture.md](japan-financial-world/docs/architecture.md) —
@@ -556,8 +558,8 @@ From the `japan-financial-world` directory:
 python -m pytest -q
 ```
 
-Expected: `2122 passed` at the latest commit (444 v0 + 188 v1
-frozen reference + 1490 post-v1.7 additions covering the reference
+Expected: `2137 passed` at the latest commit (444 v0 + 188 v1
+frozen reference + 1505 post-v1.7 additions covering the reference
 demo, replay, manifest, catalog-shape, experiment harness, the
 v1.8.x endogenous-activity stack — interactions, routines,
 attention, variable / exposure layers, the menu builder, the

@@ -6142,7 +6142,8 @@ A `StewardshipThemeRecord` and the `StewardshipBook` storing it are jurisdiction
 | v1.10.4.1 Type-correct industry-condition cross-reference slot | Code (§75). Additive. | Shipped |
 | v1.10.5 Living-world integration | Code (§76). | Shipped |
 | v1.11.0 Capital-market surface | Code (§77). | Shipped |
-| **v1.11.1 Capital-market readout** | Code (§78). Additive readout layer. | **Shipped** |
+| v1.11.1 Capital-market readout | Code (§78). Additive readout layer. | Shipped |
+| **v1.11.2 Demo market regime presets** | Code (§79). Additive demo-only preset layer. | **Shipped** |
 | v1.10.last Public engagement layer freeze | Docs-only. | Planned |
 | v2.0 Japan public-data calibration design gate | — | Not started |
 
@@ -6226,7 +6227,8 @@ A `PortfolioCompanyDialogueRecord` and the `DialogueBook` storing it are jurisdi
 | v1.10.4.1 Type-correct industry-condition cross-reference slot | Code (§75). Additive. | Shipped |
 | v1.10.5 Living-world integration | Code (§76). | Shipped |
 | v1.11.0 Capital-market surface | Code (§77). | Shipped |
-| **v1.11.1 Capital-market readout** | Code (§78). Additive readout layer. | **Shipped** |
+| v1.11.1 Capital-market readout | Code (§78). Additive readout layer. | Shipped |
+| **v1.11.2 Demo market regime presets** | Code (§79). Additive demo-only preset layer. | **Shipped** |
 | v1.10.last Public engagement layer freeze | Docs-only. | Planned |
 | v2.0 Japan public-data calibration design gate | — | Not started |
 
@@ -6352,7 +6354,8 @@ The v1.10.3 candidate records and their books are jurisdiction-neutral, signal-o
 | v1.10.4.1 Type-correct industry-condition cross-reference slot | Code (§75). Additive. | Shipped |
 | v1.10.5 Living-world integration | Code (§76). | Shipped |
 | v1.11.0 Capital-market surface | Code (§77). | Shipped |
-| **v1.11.1 Capital-market readout** | Code (§78). Additive readout layer. | **Shipped** |
+| v1.11.1 Capital-market readout | Code (§78). Additive readout layer. | Shipped |
+| **v1.11.2 Demo market regime presets** | Code (§79). Additive demo-only preset layer. | **Shipped** |
 | v1.10.last Public engagement layer freeze | Docs-only. | Planned |
 | v2.0 Japan public-data calibration design gate | — | Not started |
 
@@ -6433,7 +6436,8 @@ An `IndustryDemandConditionRecord` and the `IndustryConditionBook` storing it ar
 | v1.10.4.1 Type-correct industry-condition cross-reference slot | Code (§75). Additive. | Shipped |
 | v1.10.5 Living-world integration | Code (§76). | Shipped |
 | v1.11.0 Capital-market surface | Code (§77). | Shipped |
-| **v1.11.1 Capital-market readout** | Code (§78). Additive readout layer. | **Shipped** |
+| v1.11.1 Capital-market readout | Code (§78). Additive readout layer. | Shipped |
+| **v1.11.2 Demo market regime presets** | Code (§79). Additive demo-only preset layer. | **Shipped** |
 | v1.10.last Public engagement layer freeze | Docs-only. | Planned |
 | v2.0 Japan public-data calibration design gate | — | Not started |
 
@@ -6651,7 +6655,8 @@ v1.10.5 is **integration only**. It does **not**:
 | v1.10.4.1 Type-correct industry-condition cross-reference slot | Code (§75). Additive. | Shipped |
 | v1.10.5 Living-world integration | Code (§76). | Shipped |
 | v1.11.0 Capital-market surface | Code (§77). | Shipped |
-| **v1.11.1 Capital-market readout** | Code (§78). Additive readout layer. | **Shipped** |
+| v1.11.1 Capital-market readout | Code (§78). Additive readout layer. | Shipped |
+| **v1.11.2 Demo market regime presets** | Code (§79). Additive demo-only preset layer. | **Shipped** |
 | v1.10.last Public engagement layer freeze | Docs-only. | Planned |
 | v2.0 Japan public-data calibration design gate | — | Not started |
 
@@ -6789,7 +6794,8 @@ A `MarketConditionRecord` and the `MarketConditionBook` storing it are jurisdict
 | v1.9.last Public Prototype Freeze | Docs-only (§69). | Shipped |
 | v1.10.0 → v1.10.5 (engagement / strategic-response stack) | Code (§70 → §76). | Shipped |
 | v1.11.0 Capital-market surface | Code (§77). | Shipped |
-| **v1.11.1 Capital-market readout** | Code (§78). Additive readout layer. | **Shipped** |
+| v1.11.1 Capital-market readout | Code (§78). Additive readout layer. | Shipped |
+| **v1.11.2 Demo market regime presets** | Code (§79). Additive demo-only preset layer. | **Shipped** |
 | v1.10.last Public engagement layer freeze | Docs-only. | Planned |
 | v2.0 Japan public-data calibration design gate | — | Not started |
 
@@ -6901,9 +6907,86 @@ A `CapitalMarketReadoutRecord` and the `CapitalMarketReadoutBook` storing it are
 | v1.9.last Public Prototype Freeze | Docs-only (§69). | Shipped |
 | v1.10.0 → v1.10.5 (engagement / strategic-response stack) | Code (§70 → §76). | Shipped |
 | v1.11.0 Capital-market surface | Code (§77). | Shipped |
-| **v1.11.1 Capital-market readout** | Code (§78). Additive readout layer. | **Shipped** |
+| v1.11.1 Capital-market readout | Code (§78). Additive readout layer. | Shipped |
+| **v1.11.2 Demo market regime presets** | Code (§79). Additive demo-only preset layer. | **Shipped** |
 | v1.10.last Public engagement layer freeze | Docs-only. | Planned |
 | v1.12 Funding / issuance intent layer (anticipated) | Code. | Planned |
 | v2.0 Japan public-data calibration design gate | — | Not started |
 
 The test count moves from `2043 / 2043` (v1.11.0) to `2122 / 2122` (v1.11.1) — `+79` tests (`+72` in the new `tests/test_market_surface_readout.py`, `+7` v1.11.1 integration tests in `tests/test_living_reference_world.py`). The CLI surface, the default fixture *shape*, the per-period flow, and the reproducibility surface all grow additively; the `living_world_digest` value changes (expected — see §78.6) and the per-run record window widens from `[240, 272]` to `[244, 276]` (documented — see §78.5).
+
+## 79. v1.11.2 Demo market regime presets
+
+§79 adds a small set of synthetic, jurisdiction-neutral *demo presets* on top of v1.11.0's capital-market surface so the living reference world can be run under different market environments without adding any real data, calibrated yields, calibrated spreads, forecasts, recommendations, or transactions. The runtime, the v1.11.0 record contract, the v1.11.1 readout contract, the v1.10 hard boundary (§70.3), and every existing book are unchanged. v1.11.2 is **a demo-configuration layer**, not a new economic model and not a decision engine.
+
+### 79.1 Why this exists
+
+The default fixture lands on the `open_or_constructive` overall label every period — which is fine for a baseline demo but does not let a banker viewer see the engine running under different environments. v1.11.2 ships four named presets that each deterministically alter only the synthetic `(direction, strength, confidence, time_horizon)` tuples on the orchestrator's per-period market-condition specs. The v1.11.1 readout classifier then reaches a different branch per preset, so the rendered Markdown's `## Capital market surface` section visibly differs across regimes.
+
+### 79.2 What v1.11.2 ships
+
+- `world/reference_living_world.py`:
+  - new module-level `_REGIME_PRESETS: Mapping[str, tuple[_MarketConditionSpec, ...]]` defining `constructive` / `mixed` / `constrained` / `tightening`;
+  - new `market_regime: str | None = None` kwarg on `run_living_reference_world` with documented resolution order:
+    1. caller-supplied `market_condition_specs` (full override; regime ignored);
+    2. caller-supplied `market_regime` (selects one preset; unknown name raises `ValueError`);
+    3. fall back to the v1.11.0 default 5-market spec set (preserves backward compatibility — see §79.5).
+- `examples/reference_world/run_living_reference_world.py`:
+  - new `--market-regime constructive|mixed|constrained|tightening` CLI flag with `argparse` `choices`;
+  - regime banner line `[regime]  market_regime=<name> (v1.11.2 synthetic preset; no real data, no forecasts)` printed before the per-period trace when the flag is set.
+- `tests/test_living_reference_world.py` — `+15` v1.11.2 tests: each regime runs and produces the documented overall label, each regime is byte-identically deterministic across two fresh runs, the four regimes produce distinct per-market tone signatures, default behavior unchanged when `market_regime` is `None` (v1.11.1 digest preserved), unknown regime raises `ValueError`, explicit `market_condition_specs` overrides `market_regime`, no regime sweep emits forbidden action / pricing / issuance event types, no regime payload carries forbidden price / forecast / recommendation / deal-advice keys, and a CLI smoke test for `--market-regime constrained` prints the regime banner and the per-period trace.
+
+### 79.3 Regime → readout label map (binding)
+
+| Regime | rates | credit | equity | funding window | liquidity | overall_market_access_label |
+| --- | --- | --- | --- | --- | --- | --- |
+| `constructive` | supportive | stable | supportive | supportive | stable | `open_or_constructive` |
+| `mixed` | stable | stable | mixed | mixed | stable | `mixed` |
+| `constrained` | tightening | restrictive | restrictive | mixed | tightening | `selective_or_constrained` |
+| `tightening` | tightening | widening | mixed | tightening | tightening | `selective_or_constrained` |
+
+The `tightening` regime is documented as also landing on `selective_or_constrained`: rates tightening flows through to credit (widening) and liquidity (tightening), while funding leaves the supportive set, so the v1.11.1 second classifier branch fires (`credit in {restrictive, widening, tightening}` AND `liquidity in {restrictive, tightening, widening}`). The `tightening` and `constrained` regimes therefore *share* an overall label but have visibly different per-market tone signatures (rates / credit / equity / funding direction differ), so a banker viewer can still tell them apart in the Markdown table.
+
+### 79.4 Anti-fields and anti-claims (binding)
+
+v1.11.2 changes only the synthetic `(direction, strength, confidence, time_horizon)` tuples on `MarketConditionRecord` instances. It does **not**:
+
+- introduce any real yield, spread, index, level, market size, forecast, expected return, target price, recommendation, or deal advice;
+- introduce any new record type, new book, new kernel attribute, new mechanism, or new ledger event;
+- alter the v1.11.0 / v1.11.1 anti-fields list, the v1.10 hard boundary, or any existing test invariant;
+- emit any pricing / yield-curve calibration / spread calibration / order-matching / clearing / DCM / ECM / loan-origination / lending-decision / portfolio-allocation / Japan-calibration / real-data record.
+
+Tests pin the no-forbidden-event-type assertion and the no-forbidden-payload-key assertion across all four presets.
+
+### 79.5 Backward compatibility
+
+`market_regime=None` (default) preserves the v1.11.1 default behavior bit-for-bit. The default-fixture `living_world_digest` remains:
+
+```
+209ff81682d331a9700e5c3c8dfac9aa9ecfa028757db6b060f75590249833ea
+```
+
+A test (`test_v1_11_2_default_behavior_unchanged_when_regime_is_none`) explicitly compares the digest with the regime kwarg omitted to the digest with the regime kwarg passed as `None`, asserting equality. Existing callers and the existing CLI invocations (without `--market-regime`) continue to work unchanged.
+
+When a regime is explicitly passed, the `living_world_digest` differs (different underlying tuples). Each regime is byte-identically deterministic across two fresh runs. The per-run record-count window is unchanged from v1.11.1: `[244, 276]` records, and the per-period record count remains 61.
+
+### 79.6 What v1.11.2 does not decide
+
+- The fixture composition for v2.x Japan public-data calibration. v1.11.2 remains 100% synthetic.
+- Whether a future v1.12 funding / issuance intent layer should *consume* the regime label as a context input. v1.11.2 makes the label citable by reading the period's `CapitalMarketReadoutRecord.overall_market_access_label`; it does not introduce any consumer.
+- The exact preset values beyond the v1.11.2 minimum. A future milestone may extend the preset set or alter individual values without breaking the v1.11.2 freeze surface, as long as: each preset stays deterministic and synthetic; the four named regimes continue to produce distinct per-market tone signatures; the regime → overall-label map in §79.3 stays consistent with the v1.11.1 classifier.
+
+### 79.7 Position in the v1.11 sequence
+
+| Milestone | Scope | Status |
+| --- | --- | --- |
+| v1.9.last Public Prototype Freeze | Docs-only (§69). | Shipped |
+| v1.10.0 → v1.10.5 (engagement / strategic-response stack) | Code (§70 → §76). | Shipped |
+| v1.11.0 Capital-market surface | Code (§77). | Shipped |
+| v1.11.1 Capital-market readout | Code (§78). | Shipped |
+| **v1.11.2 Demo market regime presets** | Code (§79). Demo-config layer. | **Shipped** |
+| v1.10.last Public engagement layer freeze | Docs-only. | Planned |
+| v1.12 Funding / issuance intent layer (anticipated) | Code. | Planned |
+| v2.0 Japan public-data calibration design gate | — | Not started |
+
+The test count moves from `2122 / 2122` (v1.11.1) to `2137 / 2137` (v1.11.2) — `+15` v1.11.2 tests in `tests/test_living_reference_world.py`. The CLI surface gains the `--market-regime` flag; the default fixture *shape*, the per-period record count, the per-run record window, and the default-fixture `living_world_digest` are all preserved unchanged.

@@ -1568,3 +1568,321 @@ def test_v1_11_1_markdown_report_includes_capital_market_surface_section():
         or "deal_advice" in md_lower
         or "spread calibration" in md_lower
     )
+
+
+# ===========================================================================
+# v1.11.2 — demo market regime presets
+# ===========================================================================
+
+
+_REGIME_TO_OVERALL: dict[str, str] = {
+    "constructive": "open_or_constructive",
+    "mixed": "mixed",
+    "constrained": "selective_or_constrained",
+    # The "tightening" preset emphasises rates tightening flowing
+    # into credit (widening) and liquidity (tightening) while
+    # funding leaves the supportive set; the v1.11.1 classifier
+    # therefore reaches the second branch and lands on
+    # selective_or_constrained.
+    "tightening": "selective_or_constrained",
+}
+
+
+def _readout_for_first_period(kernel, result):
+    """Resolve the v1.11.1 readout for the first period."""
+    rid = result.per_period_summaries[0].capital_market_readout_ids[0]
+    return kernel.capital_market_readouts.get_readout(rid)
+
+
+@pytest.mark.parametrize(
+    "regime", ["constructive", "mixed", "constrained", "tightening"]
+)
+def test_v1_11_2_regime_runs_and_produces_expected_overall(regime):
+    """Each preset runs end-to-end and produces the documented
+    overall_market_access_label every period."""
+    k = _seed_kernel()
+    r = run_living_reference_world(
+        k,
+        firm_ids=_FIRM_IDS,
+        investor_ids=_INVESTOR_IDS,
+        bank_ids=_BANK_IDS,
+        period_dates=_PERIOD_DATES,
+        market_regime=regime,
+    )
+    expected_overall = _REGIME_TO_OVERALL[regime]
+    for ps in r.per_period_summaries:
+        rec = k.capital_market_readouts.get_readout(
+            ps.capital_market_readout_ids[0]
+        )
+        assert rec.overall_market_access_label == expected_overall
+
+
+@pytest.mark.parametrize(
+    "regime", ["constructive", "mixed", "constrained", "tightening"]
+)
+def test_v1_11_2_regime_is_deterministic_across_two_runs(regime):
+    """Two fresh runs of the same preset must produce
+    byte-identical canonical JSON and the same digest."""
+    from examples.reference_world.living_world_replay import (
+        canonicalize_living_world_result,
+        living_world_digest,
+    )
+
+    k1 = _seed_kernel()
+    r1 = run_living_reference_world(
+        k1,
+        firm_ids=_FIRM_IDS,
+        investor_ids=_INVESTOR_IDS,
+        bank_ids=_BANK_IDS,
+        period_dates=_PERIOD_DATES,
+        market_regime=regime,
+    )
+    k2 = _seed_kernel()
+    r2 = run_living_reference_world(
+        k2,
+        firm_ids=_FIRM_IDS,
+        investor_ids=_INVESTOR_IDS,
+        bank_ids=_BANK_IDS,
+        period_dates=_PERIOD_DATES,
+        market_regime=regime,
+    )
+    assert canonicalize_living_world_result(
+        k1, r1
+    ) == canonicalize_living_world_result(k2, r2)
+    assert living_world_digest(k1, r1) == living_world_digest(k2, r2)
+
+
+def test_v1_11_2_regime_labels_differ_across_presets():
+    """The four regimes must produce visibly different per-market
+    tone tuples on the first period — the whole point of the
+    preset layer."""
+    tone_signatures: set[tuple[str, ...]] = set()
+    for regime in ("constructive", "mixed", "constrained", "tightening"):
+        k = _seed_kernel()
+        r = run_living_reference_world(
+            k,
+            firm_ids=_FIRM_IDS,
+            investor_ids=_INVESTOR_IDS,
+            bank_ids=_BANK_IDS,
+            period_dates=_PERIOD_DATES,
+            market_regime=regime,
+        )
+        rec = _readout_for_first_period(k, r)
+        sig = (
+            rec.rates_tone,
+            rec.credit_tone,
+            rec.equity_tone,
+            rec.funding_window_tone,
+            rec.liquidity_tone,
+        )
+        tone_signatures.add(sig)
+    assert len(tone_signatures) == 4, (
+        "v1.11.2 regimes must produce 4 distinct per-market "
+        f"tone tuples; got {tone_signatures!r}"
+    )
+
+
+def test_v1_11_2_default_behavior_unchanged_when_regime_is_none():
+    """Omitting market_regime must preserve the v1.11.1 default
+    behavior bit-for-bit. The default living_world_digest
+    documented in §78.6 is the v1.11.1 / v1.11.2 backward-compat
+    contract."""
+    from examples.reference_world.living_world_replay import (
+        living_world_digest,
+    )
+
+    k_with_none = _seed_kernel()
+    r_with_none = run_living_reference_world(
+        k_with_none,
+        firm_ids=_FIRM_IDS,
+        investor_ids=_INVESTOR_IDS,
+        bank_ids=_BANK_IDS,
+        period_dates=_PERIOD_DATES,
+        # market_regime omitted → default path
+    )
+    k_default = _seed_kernel()
+    r_default = run_living_reference_world(
+        k_default,
+        firm_ids=_FIRM_IDS,
+        investor_ids=_INVESTOR_IDS,
+        bank_ids=_BANK_IDS,
+        period_dates=_PERIOD_DATES,
+    )
+    assert living_world_digest(
+        k_with_none, r_with_none
+    ) == living_world_digest(k_default, r_default)
+
+
+def test_v1_11_2_unknown_regime_raises_value_error():
+    k = _seed_kernel()
+    with pytest.raises(ValueError):
+        run_living_reference_world(
+            k,
+            firm_ids=_FIRM_IDS,
+            investor_ids=_INVESTOR_IDS,
+            bank_ids=_BANK_IDS,
+            period_dates=_PERIOD_DATES,
+            market_regime="not_a_regime",
+        )
+
+
+def test_v1_11_2_explicit_market_condition_specs_overrides_regime():
+    """If a caller supplies explicit specs and a regime, the
+    explicit specs win. Document the resolution order in
+    §79."""
+    explicit_specs = (
+        (
+            "market:reference_rates_general",
+            "reference_rates",
+            "rate_level",
+            "easing",
+            0.7,
+            0.7,
+            "medium_term",
+        ),
+        (
+            "market:reference_credit_spreads_general",
+            "credit_spreads",
+            "spread_level",
+            "narrowing",
+            0.7,
+            0.7,
+            "medium_term",
+        ),
+        (
+            "market:reference_equity_general",
+            "equity_market",
+            "valuation_environment",
+            "supportive",
+            0.7,
+            0.7,
+            "medium_term",
+        ),
+        (
+            "market:reference_funding_general",
+            "funding_market",
+            "funding_window",
+            "supportive",
+            0.7,
+            0.7,
+            "short_term",
+        ),
+        (
+            "market:reference_liquidity_general",
+            "liquidity_market",
+            "liquidity_regime",
+            "stable",
+            0.7,
+            0.7,
+            "short_term",
+        ),
+    )
+    k = _seed_kernel()
+    r = run_living_reference_world(
+        k,
+        firm_ids=_FIRM_IDS,
+        investor_ids=_INVESTOR_IDS,
+        bank_ids=_BANK_IDS,
+        period_dates=_PERIOD_DATES,
+        market_condition_specs=explicit_specs,
+        # regime that would otherwise produce
+        # selective_or_constrained — must be ignored.
+        market_regime="constrained",
+    )
+    rec = _readout_for_first_period(k, r)
+    # Explicit specs imply open_or_constructive (funding
+    # supportive + credit narrowing). If the regime had won, the
+    # overall would be selective_or_constrained.
+    assert rec.overall_market_access_label == "open_or_constructive"
+
+
+def test_v1_11_2_regime_runs_emit_no_forbidden_event_types():
+    """Across every preset, the integrated sweep must emit no
+    action-class / pricing / issuance event types — the
+    presets only swap labels; they don't introduce execution
+    behavior."""
+    forbidden_event_types = {
+        "order_submitted",
+        "price_updated",
+        "contract_created",
+        "contract_status_updated",
+        "contract_covenant_breached",
+        "ownership_position_added",
+        "ownership_transferred",
+        "institution_action_recorded",
+        "firm_state_added",
+    }
+    for regime in ("constructive", "mixed", "constrained", "tightening"):
+        k = _seed_kernel()
+        r = run_living_reference_world(
+            k,
+            firm_ids=_FIRM_IDS,
+            investor_ids=_INVESTOR_IDS,
+            bank_ids=_BANK_IDS,
+            period_dates=_PERIOD_DATES,
+            market_regime=regime,
+        )
+        seen = {
+            rec.event_type
+            for rec in k.ledger.records[
+                r.ledger_record_count_before : r.ledger_record_count_after
+            ]
+        }
+        assert seen.isdisjoint(forbidden_event_types), (
+            f"v1.11.2 regime {regime!r} sweep emitted forbidden "
+            f"records: {sorted(seen & forbidden_event_types)}"
+        )
+
+
+def test_v1_11_2_regime_runs_carry_no_price_or_advice_payload_keys():
+    """Across every preset, no record's ledger payload may carry
+    any forbidden price / forecast / recommendation / deal-advice
+    key. v1.11.0 / v1.11.1 anti-fields apply unchanged."""
+    forbidden_keys = {
+        "price",
+        "market_price",
+        "yield_value",
+        "spread_bps",
+        "index_level",
+        "forecast_value",
+        "expected_return",
+        "recommendation",
+        "target_price",
+        "real_data_value",
+        "market_size",
+        "deal_advice",
+    }
+    for regime in ("constructive", "mixed", "constrained", "tightening"):
+        k = _seed_kernel()
+        r = run_living_reference_world(
+            k,
+            firm_ids=_FIRM_IDS,
+            investor_ids=_INVESTOR_IDS,
+            bank_ids=_BANK_IDS,
+            period_dates=_PERIOD_DATES,
+            market_regime=regime,
+        )
+        for rec in k.ledger.records[
+            r.ledger_record_count_before : r.ledger_record_count_after
+        ]:
+            leaked = set(rec.payload.keys()) & forbidden_keys
+            assert not leaked, (
+                f"v1.11.2 regime {regime!r} record {rec.object_id!r} "
+                f"leaks forbidden payload keys: {sorted(leaked)}"
+            )
+
+
+def test_v1_11_2_cli_smoke_with_market_regime_flag():
+    """The CLI ``--market-regime`` flag drives the orchestrator
+    through to the readout, prints a regime banner, and produces
+    a per-period trace."""
+    from examples.reference_world import run_living_reference_world as cli
+
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        cli.main(["--market-regime", "constrained"])
+    out = buf.getvalue()
+    assert "[regime]" in out
+    assert "constrained" in out
+    assert "[setup]" in out
+    assert "market_readouts=" in out

@@ -502,6 +502,223 @@ _DEFAULT_MARKET_CONDITION_SPECS: tuple[_MarketConditionSpec, ...] = (
 )
 
 
+# v1.11.2 — synthetic market-regime presets. Each preset is a
+# small, deterministic, jurisdiction-neutral overlay on the default
+# 5-market spec set; values change only the synthetic
+# (direction, strength, confidence, time_horizon) tuple. No real
+# yields, no real spreads, no real index levels, no forecasts, no
+# recommendations. The presets are designed so the v1.11.1
+# capital-market readout's overall_market_access_label classifier
+# reaches a different branch per preset:
+#
+#   constructive → open_or_constructive
+#       (funding supportive AND credit not restrictive)
+#   mixed        → mixed
+#       (neither classifier branch fires)
+#   constrained  → selective_or_constrained
+#       (credit restrictive AND liquidity tightening)
+#   tightening   → selective_or_constrained
+#       (credit widening AND liquidity tightening; rates emphasis)
+#
+# The "tightening" regime is documented as also landing on
+# selective_or_constrained: rates flow through to credit
+# (widening) and liquidity (tightening), while funding leaves the
+# supportive set, so the second classifier branch fires.
+
+_REGIME_PRESETS: Mapping[str, tuple[_MarketConditionSpec, ...]] = {
+    "constructive": (
+        (
+            "market:reference_rates_general",
+            "reference_rates",
+            "rate_level",
+            "supportive",
+            0.6,
+            0.6,
+            "medium_term",
+        ),
+        (
+            "market:reference_credit_spreads_general",
+            "credit_spreads",
+            "spread_level",
+            "stable",
+            0.55,
+            0.6,
+            "medium_term",
+        ),
+        (
+            "market:reference_equity_general",
+            "equity_market",
+            "valuation_environment",
+            "supportive",
+            0.6,
+            0.6,
+            "medium_term",
+        ),
+        (
+            "market:reference_funding_general",
+            "funding_market",
+            "funding_window",
+            "supportive",
+            0.65,
+            0.6,
+            "short_term",
+        ),
+        (
+            "market:reference_liquidity_general",
+            "liquidity_market",
+            "liquidity_regime",
+            "stable",
+            0.55,
+            0.6,
+            "short_term",
+        ),
+    ),
+    "mixed": (
+        (
+            "market:reference_rates_general",
+            "reference_rates",
+            "rate_level",
+            "stable",
+            0.5,
+            0.5,
+            "medium_term",
+        ),
+        (
+            "market:reference_credit_spreads_general",
+            "credit_spreads",
+            "spread_level",
+            "stable",
+            0.5,
+            0.5,
+            "medium_term",
+        ),
+        (
+            "market:reference_equity_general",
+            "equity_market",
+            "valuation_environment",
+            "mixed",
+            0.5,
+            0.5,
+            "medium_term",
+        ),
+        (
+            "market:reference_funding_general",
+            "funding_market",
+            "funding_window",
+            "mixed",
+            0.5,
+            0.5,
+            "short_term",
+        ),
+        (
+            "market:reference_liquidity_general",
+            "liquidity_market",
+            "liquidity_regime",
+            "stable",
+            0.5,
+            0.5,
+            "short_term",
+        ),
+    ),
+    "constrained": (
+        (
+            "market:reference_rates_general",
+            "reference_rates",
+            "rate_level",
+            "tightening",
+            0.45,
+            0.55,
+            "medium_term",
+        ),
+        (
+            "market:reference_credit_spreads_general",
+            "credit_spreads",
+            "spread_level",
+            "restrictive",
+            0.55,
+            0.55,
+            "medium_term",
+        ),
+        (
+            "market:reference_equity_general",
+            "equity_market",
+            "valuation_environment",
+            "restrictive",
+            0.5,
+            0.55,
+            "medium_term",
+        ),
+        (
+            "market:reference_funding_general",
+            "funding_market",
+            "funding_window",
+            "mixed",
+            0.45,
+            0.55,
+            "short_term",
+        ),
+        (
+            "market:reference_liquidity_general",
+            "liquidity_market",
+            "liquidity_regime",
+            "tightening",
+            0.55,
+            0.55,
+            "short_term",
+        ),
+    ),
+    "tightening": (
+        (
+            "market:reference_rates_general",
+            "reference_rates",
+            "rate_level",
+            "tightening",
+            0.6,
+            0.55,
+            "medium_term",
+        ),
+        (
+            "market:reference_credit_spreads_general",
+            "credit_spreads",
+            "spread_level",
+            "widening",
+            0.5,
+            0.55,
+            "medium_term",
+        ),
+        (
+            "market:reference_equity_general",
+            "equity_market",
+            "valuation_environment",
+            "mixed",
+            0.45,
+            0.55,
+            "medium_term",
+        ),
+        (
+            "market:reference_funding_general",
+            "funding_market",
+            "funding_window",
+            "tightening",
+            0.5,
+            0.55,
+            "short_term",
+        ),
+        (
+            "market:reference_liquidity_general",
+            "liquidity_market",
+            "liquidity_regime",
+            "tightening",
+            0.5,
+            0.55,
+            "short_term",
+        ),
+    ),
+}
+
+_REGIME_NAMES: tuple[str, ...] = tuple(sorted(_REGIME_PRESETS.keys()))
+
+
 def _market_condition_id_for(market_id: str, as_of_date: str) -> str:
     return f"market_condition:{market_id}:{as_of_date}"
 
@@ -678,6 +895,7 @@ def run_living_reference_world(
     market_condition_specs: Sequence[
         tuple[str, str, str, str, float, float, str]
     ] | None = None,
+    market_regime: str | None = None,
 ) -> LivingReferenceWorldResult:
     """
     Sweep the v1.8 endogenous chain plus the v1.9.4 / v1.9.5 / v1.9.7
@@ -853,16 +1071,31 @@ def run_living_reference_world(
                 )
             )
 
-    # v1.11.0 — capital-market condition specs. Resolved once for
-    # the run; the per-period market-condition phase just iterates
-    # this tuple and stamps each spec with the period's as-of date.
+    # v1.11.0 / v1.11.2 — capital-market condition specs.
+    # Resolution order (most specific first):
+    #   1. caller-supplied ``market_condition_specs`` — full
+    #      override; the regime is ignored if both are provided.
+    #   2. caller-supplied ``market_regime`` — selects one of the
+    #      v1.11.2 named presets. Unknown names raise ValueError.
+    #   3. fall back to the v1.11.0 default 5-market spec set
+    #      (preserves backward compatibility for existing tests
+    #      and the ``--markdown`` / ``--manifest`` digest).
+    if market_regime is not None and market_regime not in _REGIME_PRESETS:
+        raise ValueError(
+            f"unknown market_regime {market_regime!r}; "
+            f"valid options are {list(_REGIME_NAMES)!r}"
+        )
     resolved_market_specs: tuple[
         tuple[str, str, str, str, float, float, str], ...
-    ] = (
-        tuple(tuple(s) for s in market_condition_specs)  # type: ignore[arg-type]
-        if market_condition_specs is not None
-        else _DEFAULT_MARKET_CONDITION_SPECS
-    )
+    ]
+    if market_condition_specs is not None:
+        resolved_market_specs = tuple(
+            tuple(s) for s in market_condition_specs  # type: ignore[arg-type]
+        )
+    elif market_regime is not None:
+        resolved_market_specs = _REGIME_PRESETS[market_regime]
+    else:
+        resolved_market_specs = _DEFAULT_MARKET_CONDITION_SPECS
     # Deduplicated, insertion-order-preserving market-id list.
     seen_market_ids: list[str] = []
     for spec in resolved_market_specs:

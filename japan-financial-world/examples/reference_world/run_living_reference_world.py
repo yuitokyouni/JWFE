@@ -312,6 +312,21 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "digest."
         ),
     )
+    parser.add_argument(
+        "--market-regime",
+        type=str,
+        default=None,
+        choices=("constructive", "mixed", "constrained", "tightening"),
+        help=(
+            "v1.11.2: select a synthetic market-regime preset for "
+            "the per-period capital-market conditions. Each preset "
+            "deterministically alters only the synthetic "
+            "(direction, strength, confidence, time_horizon) "
+            "tuples; no real data, no calibrated yields, no "
+            "spreads, no forecasts. Default (omit the flag): "
+            "preserve the v1.11.0 / v1.11.1 default specs."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -323,7 +338,13 @@ def main(argv: list[str] | None = None) -> None:
         firm_ids=_FIRM_IDS,
         investor_ids=_INVESTOR_IDS,
         bank_ids=_BANK_IDS,
+        market_regime=args.market_regime,
     )
+    if args.market_regime is not None:
+        print(
+            f"[regime]  market_regime={args.market_regime} "
+            "(v1.11.2 synthetic preset; no real data, no forecasts)"
+        )
     _print_trace(result)
 
     report = None
