@@ -611,7 +611,12 @@ def test_cli_smoke_prints_per_period_trace():
 
     buf = io.StringIO()
     with redirect_stdout(buf):
-        cli.main()
+        # Pass argv=[] explicitly. Without this, argparse would read
+        # sys.argv, which under `pytest -q` contains the "-q" flag
+        # the demo CLI does not recognise. Every CLI smoke test in
+        # this repository must pass an explicit argv list for the
+        # same reason.
+        cli.main([])
     out = buf.getvalue()
     assert "[setup]" in out
     assert "[period 1]" in out
