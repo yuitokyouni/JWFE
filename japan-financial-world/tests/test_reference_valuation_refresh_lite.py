@@ -54,6 +54,11 @@ from world.mechanisms import (
 from world.reference_firm_pressure import (
     run_reference_firm_pressure_mechanism,
 )
+from world.evidence import StrictEvidenceResolutionError
+from world.firm_state import FirmFinancialStateRecord
+from world.market_conditions import MarketConditionRecord
+from world.market_environment import MarketEnvironmentStateRecord
+from world.market_surface_readout import build_capital_market_readout
 from world.reference_valuation_refresh_lite import (
     VALUATION_REFRESH_MECHANISM_VERSION,
     VALUATION_REFRESH_METHOD_LABEL,
@@ -61,6 +66,7 @@ from world.reference_valuation_refresh_lite import (
     VALUATION_REFRESH_MODEL_ID,
     ValuationRefreshLiteAdapter,
     ValuationRefreshLiteResult,
+    run_attention_conditioned_valuation_refresh_lite,
     run_reference_valuation_refresh_lite,
 )
 from world.registry import Registry
@@ -675,4 +681,737 @@ def test_committed_valuation_identifiers_are_synthetic():
                 if f"{sep}{token}{sep}" in f" {lower} ":
                     pytest.fail(
                         f"forbidden token {token!r} appears in id {id_str!r}"
+                    )
+
+
+# ===========================================================================
+# v1.12.5 — attention-conditioned valuation refresh lite helper
+# ===========================================================================
+
+
+_FORBIDDEN_VALUATION_PAYLOAD_KEYS = frozenset(
+    {
+        "target_price",
+        "expected_return",
+        "recommendation",
+        "investment_advice",
+        "buy",
+        "sell",
+        "overweight",
+        "underweight",
+        "rebalance",
+        "target_weight",
+        "portfolio_allocation",
+        "execution",
+        "order",
+        "trade",
+        "forecast_value",
+        "real_data_value",
+    }
+)
+
+
+def _seed_market_environment(
+    kernel: WorldKernel,
+    *,
+    env_id: str = "market_environment:2026-04-30",
+    overall_market_access_label: str = "open_or_constructive",
+    risk_appetite_regime: str = "neutral",
+    as_of_date: str = _AS_OF,
+) -> str:
+    kernel.market_environments.add_state(
+        MarketEnvironmentStateRecord(
+            environment_state_id=env_id,
+            as_of_date=as_of_date,
+            liquidity_regime="normal",
+            volatility_regime="calm",
+            credit_regime="neutral",
+            funding_regime="normal",
+            risk_appetite_regime=risk_appetite_regime,
+            rate_environment="low",
+            refinancing_window="open",
+            equity_valuation_regime="neutral",
+            overall_market_access_label=overall_market_access_label,
+            status="active",
+            visibility="internal_only",
+            confidence=0.5,
+        )
+    )
+    return env_id
+
+
+def _seed_firm_state(
+    kernel: WorldKernel,
+    *,
+    state_id: str = "firm_state:firm:reference_manufacturer_a:2026-04-30",
+    firm_id: str = _FIRM,
+    as_of_date: str = _AS_OF,
+    funding_need_intensity: float = 0.4,
+    market_access_pressure: float = 0.4,
+) -> str:
+    kernel.firm_financial_states.add_state(
+        FirmFinancialStateRecord(
+            state_id=state_id,
+            firm_id=firm_id,
+            as_of_date=as_of_date,
+            status="active",
+            visibility="internal_only",
+            margin_pressure=0.4,
+            liquidity_pressure=0.4,
+            debt_service_pressure=0.4,
+            market_access_pressure=market_access_pressure,
+            funding_need_intensity=funding_need_intensity,
+            response_readiness=0.5,
+            confidence=0.5,
+        )
+    )
+    return state_id
+
+
+def _seed_capital_market_readout(
+    kernel: WorldKernel,
+    *,
+    as_of_date: str = _AS_OF,
+    regime_overall: str = "open_or_constructive",
+) -> tuple[str, tuple[str, ...]]:
+    if regime_overall == "open_or_constructive":
+        directions = {
+            "reference_rates": "supportive",
+            "credit_spreads": "stable",
+            "equity_market": "supportive",
+            "funding_market": "supportive",
+            "liquidity_market": "stable",
+        }
+    elif regime_overall == "selective_or_constrained":
+        directions = {
+            "reference_rates": "tightening",
+            "credit_spreads": "restrictive",
+            "equity_market": "restrictive",
+            "funding_market": "mixed",
+            "liquidity_market": "tightening",
+        }
+    else:
+        raise ValueError(f"unknown overall {regime_overall!r}")
+    spec_meta = (
+        ("market:reference_rates_general", "reference_rates", "rate_level"),
+        (
+            "market:reference_credit_spreads_general",
+            "credit_spreads",
+            "spread_level",
+        ),
+        (
+            "market:reference_equity_general",
+            "equity_market",
+            "valuation_environment",
+        ),
+        (
+            "market:reference_funding_general",
+            "funding_market",
+            "funding_window",
+        ),
+        (
+            "market:reference_liquidity_general",
+            "liquidity_market",
+            "liquidity_regime",
+        ),
+    )
+    cids: list[str] = []
+    for market_id, market_type, condition_type in spec_meta:
+        cid = f"market_condition:{market_id}:{as_of_date}"
+        kernel.market_conditions.add_condition(
+            MarketConditionRecord(
+                condition_id=cid,
+                market_id=market_id,
+                market_type=market_type,
+                as_of_date=as_of_date,
+                condition_type=condition_type,
+                direction=directions[market_type],
+                strength=0.5,
+                time_horizon="medium_term",
+                confidence=0.5,
+                status="active",
+                visibility="internal_only",
+            )
+        )
+        cids.append(cid)
+    readout = build_capital_market_readout(
+        kernel,
+        as_of_date=as_of_date,
+        market_condition_ids=tuple(cids),
+    )
+    return readout.readout_id, tuple(cids)
+
+
+def _seed_selection_with_refs(
+    kernel: WorldKernel,
+    *,
+    selection_id: str,
+    actor_id: str,
+    selected_refs: tuple[str, ...],
+    as_of_date: str = _AS_OF,
+) -> str:
+    """Seed an AttentionProfile + ObservationMenu + selection so the
+    helper test can drive the resolver from a real
+    SelectedObservationSet."""
+    from world.attention import (
+        AttentionProfile,
+        ObservationMenu,
+        SelectedObservationSet,
+    )
+
+    profile_id = f"profile:{actor_id}"
+    try:
+        kernel.attention.get_profile(profile_id)
+    except Exception:
+        kernel.attention.add_profile(
+            AttentionProfile(
+                profile_id=profile_id,
+                actor_id=actor_id,
+                actor_type="investor",
+                update_frequency="QUARTERLY",
+            )
+        )
+    menu_id = f"menu:{actor_id}:{as_of_date}"
+    try:
+        kernel.attention.get_menu(menu_id)
+    except Exception:
+        kernel.attention.add_menu(
+            ObservationMenu(
+                menu_id=menu_id,
+                actor_id=actor_id,
+                as_of_date=as_of_date,
+            )
+        )
+    kernel.attention.add_selection(
+        SelectedObservationSet(
+            selection_id=selection_id,
+            actor_id=actor_id,
+            attention_profile_id=profile_id,
+            menu_id=menu_id,
+            selection_reason="explicit",
+            as_of_date=as_of_date,
+            status="completed",
+            selected_refs=selected_refs,
+        )
+    )
+    return selection_id
+
+
+# ---------------------------------------------------------------------------
+# v1.12.5 — resolver call + frame metadata
+# ---------------------------------------------------------------------------
+
+
+def test_attn_helper_records_context_frame_metadata():
+    k, signal_id, _ = _seed_with_pressure_signal()
+    result = run_attention_conditioned_valuation_refresh_lite(
+        k,
+        firm_id=_FIRM,
+        valuer_id=_VALUER,
+        as_of_date=_AS_OF,
+        explicit_pressure_signal_ids=(signal_id,),
+        baseline_value=_BASELINE,
+    )
+    record = k.valuations.get_valuation(result.valuation_id)
+    assert record.metadata.get("attention_conditioned") is True
+    assert record.metadata.get("context_frame_id") == (
+        f"context_frame:{_VALUER}:{_AS_OF}"
+    )
+    assert record.metadata.get("context_frame_status") in {
+        "resolved",
+        "partially_resolved",
+        "empty",
+    }
+    cf_conf = record.metadata.get("context_frame_confidence")
+    assert isinstance(cf_conf, (int, float)) and not isinstance(cf_conf, bool)
+    assert 0.0 <= float(cf_conf) <= 1.0
+
+
+def test_attn_helper_reads_only_selected_or_explicit_evidence():
+    """Seed a pressure signal that the helper would surface only if
+    it scanned globally; pass nothing; assert the helper produced a
+    baseline-confidence valuation that did NOT consume it."""
+    k, signal_id, _ = _seed_with_pressure_signal()
+    # Caller passes no selected / explicit ids → the resolver
+    # surfaces nothing → adapter takes the degraded path.
+    result = run_attention_conditioned_valuation_refresh_lite(
+        k,
+        firm_id=_FIRM,
+        valuer_id=_VALUER,
+        as_of_date=_AS_OF,
+        baseline_value=_BASELINE,
+    )
+    record = k.valuations.get_valuation(result.valuation_id)
+    # No pressure signal resolved → degraded path → estimated_value
+    # equals the baseline (no haircut).
+    assert record.estimated_value == _BASELINE
+    # The pressure signal that exists in the kernel is NOT in
+    # related_ids — the helper did not scan globally.
+    assert signal_id not in record.related_ids
+
+
+def test_attn_helper_unresolved_explicit_id_lands_in_unresolved_metadata():
+    k, signal_id, _ = _seed_with_pressure_signal()
+    result = run_attention_conditioned_valuation_refresh_lite(
+        k,
+        firm_id=_FIRM,
+        valuer_id=_VALUER,
+        as_of_date=_AS_OF,
+        explicit_pressure_signal_ids=("signal:does_not_exist",),
+        baseline_value=_BASELINE,
+    )
+    record = k.valuations.get_valuation(result.valuation_id)
+    unresolved = record.metadata.get("unresolved_refs")
+    assert unresolved is not None
+    assert any(
+        r["ref_id"] == "signal:does_not_exist" for r in unresolved
+    )
+    # Frame confidence is below 1.0 because at least one cited id
+    # failed to resolve.
+    assert record.metadata.get("context_frame_confidence") < 1.0
+    assert record.metadata.get("context_frame_status") == (
+        "partially_resolved"
+    )
+
+
+def test_attn_helper_strict_mode_raises_on_unknown_refs():
+    k = _seed_kernel()
+    with pytest.raises(StrictEvidenceResolutionError):
+        run_attention_conditioned_valuation_refresh_lite(
+            k,
+            firm_id=_FIRM,
+            valuer_id=_VALUER,
+            as_of_date=_AS_OF,
+            explicit_pressure_signal_ids=("signal:does_not_exist",),
+            baseline_value=_BASELINE,
+            strict=True,
+        )
+    # Strict failure must NOT leave a partial valuation in the book.
+    assert k.valuations.all_valuations() == ()
+
+
+def test_attn_helper_strict_mode_passes_when_all_resolve():
+    k, signal_id, _ = _seed_with_pressure_signal()
+    result = run_attention_conditioned_valuation_refresh_lite(
+        k,
+        firm_id=_FIRM,
+        valuer_id=_VALUER,
+        as_of_date=_AS_OF,
+        explicit_pressure_signal_ids=(signal_id,),
+        baseline_value=_BASELINE,
+        strict=True,
+    )
+    record = k.valuations.get_valuation(result.valuation_id)
+    assert record.metadata.get("context_frame_status") == "resolved"
+
+
+# ---------------------------------------------------------------------------
+# v1.12.5 — headline divergence test (the success criterion)
+# ---------------------------------------------------------------------------
+
+
+def test_attn_divergence_three_valuers_three_evidence_sets_diverge():
+    """Headline v1.12.5 test. Three valuers cite three different
+    evidence sets for the same firm and same period; the helper
+    must produce records that differ on at least one of
+    (estimated_value, confidence). This proves attention is
+    load-bearing for valuation.
+
+    Valuer A cites: pressure signal only (the v1.9.5 baseline path).
+    Valuer B cites: pressure signal + restrictive market env.
+    Valuer C cites: nothing (degraded path).
+    """
+    k, signal_id, _ = _seed_with_pressure_signal()
+    env_id = _seed_market_environment(
+        k,
+        env_id="market_environment:divergence:2026-04-30",
+        overall_market_access_label="selective_or_constrained",
+        risk_appetite_regime="risk_off",
+    )
+
+    result_a = run_attention_conditioned_valuation_refresh_lite(
+        k,
+        firm_id=_FIRM,
+        valuer_id="valuer:reference_analyst_desk_a",
+        as_of_date=_AS_OF,
+        explicit_pressure_signal_ids=(signal_id,),
+        baseline_value=_BASELINE,
+        valuation_id="valuation:divergence:a",
+    )
+    result_b = run_attention_conditioned_valuation_refresh_lite(
+        k,
+        firm_id=_FIRM,
+        valuer_id="valuer:reference_analyst_desk_b",
+        as_of_date=_AS_OF,
+        explicit_pressure_signal_ids=(signal_id,),
+        explicit_market_environment_state_ids=(env_id,),
+        baseline_value=_BASELINE,
+        valuation_id="valuation:divergence:b",
+    )
+    result_c = run_attention_conditioned_valuation_refresh_lite(
+        k,
+        firm_id=_FIRM,
+        valuer_id="valuer:reference_analyst_desk_c",
+        as_of_date=_AS_OF,
+        baseline_value=_BASELINE,
+        valuation_id="valuation:divergence:c",
+    )
+
+    rec_a = k.valuations.get_valuation(result_a.valuation_id)
+    rec_b = k.valuations.get_valuation(result_b.valuation_id)
+    rec_c = k.valuations.get_valuation(result_c.valuation_id)
+
+    # At least two of the three must differ on either
+    # estimated_value or confidence.
+    triples = [
+        (rec_a.estimated_value, rec_a.confidence),
+        (rec_b.estimated_value, rec_b.confidence),
+        (rec_c.estimated_value, rec_c.confidence),
+    ]
+    distinct = set(triples)
+    assert len(distinct) >= 2, (
+        f"three valuers must produce at least two distinct "
+        f"(estimated_value, confidence) triples; got {triples!r}"
+    )
+
+    # Pin the qualitative ordering: B's restrictive market resolved
+    # a downward synthetic delta, so B's estimated_value must be
+    # strictly lower than A's (same baseline, same pressure signal).
+    assert rec_b.estimated_value is not None
+    assert rec_a.estimated_value is not None
+    assert rec_b.estimated_value < rec_a.estimated_value
+    # C took the degraded path → estimated_value equals baseline.
+    assert rec_c.estimated_value == _BASELINE
+
+
+# ---------------------------------------------------------------------------
+# v1.12.5 — selection refs flow through to resolved buckets
+# ---------------------------------------------------------------------------
+
+
+def test_attn_helper_selection_ref_flows_through_to_signal_bucket():
+    """Seed a SelectedObservationSet whose selected_refs include a
+    pressure-signal id; assert the helper's resolved frame routed
+    it into the signal bucket and the record reflects it (the
+    v1.9.5 pressure haircut fires)."""
+    k, signal_id, _ = _seed_with_pressure_signal()
+    sel_id = _seed_selection_with_refs(
+        k,
+        selection_id="selection:via_attention",
+        actor_id=_VALUER,
+        selected_refs=(signal_id,),
+    )
+    result = run_attention_conditioned_valuation_refresh_lite(
+        k,
+        firm_id=_FIRM,
+        valuer_id=_VALUER,
+        as_of_date=_AS_OF,
+        selected_observation_set_ids=(sel_id,),
+        baseline_value=_BASELINE,
+    )
+    record = k.valuations.get_valuation(result.valuation_id)
+    # The pressure signal is in related_ids (resolver routed it
+    # through the signal bucket).
+    assert signal_id in record.related_ids
+    # And the v1.9.5 pressure haircut fired (estimated_value
+    # strictly below the baseline).
+    assert record.estimated_value is not None
+    assert record.estimated_value < _BASELINE
+
+
+# ---------------------------------------------------------------------------
+# v1.12.5 — no source-book mutation
+# ---------------------------------------------------------------------------
+
+
+def _capture_state_attn(k: WorldKernel) -> dict[str, Any]:
+    return {
+        "prices": k.prices.snapshot(),
+        "ownership": k.ownership.snapshot(),
+        "contracts": k.contracts.snapshot(),
+        "constraints": k.constraints.snapshot(),
+        "exposures": k.exposures.snapshot(),
+        "variables": k.variables.snapshot(),
+        "institutions": k.institutions.snapshot(),
+        "external_processes": k.external_processes.snapshot(),
+        "relationships": k.relationships.snapshot(),
+        "routines": k.routines.snapshot(),
+        "attention": k.attention.snapshot(),
+        "interactions": k.interactions.snapshot(),
+        "market_conditions": k.market_conditions.snapshot(),
+        "capital_market_readouts": k.capital_market_readouts.snapshot(),
+        "market_environments": k.market_environments.snapshot(),
+        "firm_financial_states": k.firm_financial_states.snapshot(),
+        "signal_count": len(k.signals.all_signals()),
+    }
+
+
+def test_attn_helper_does_not_mutate_other_books():
+    k, signal_id, _ = _seed_with_pressure_signal()
+    fsid = _seed_firm_state(k)
+    rid, _ = _seed_capital_market_readout(k)
+    env_id = _seed_market_environment(k)
+    before = _capture_state_attn(k)
+    run_attention_conditioned_valuation_refresh_lite(
+        k,
+        firm_id=_FIRM,
+        valuer_id=_VALUER,
+        as_of_date=_AS_OF,
+        explicit_pressure_signal_ids=(signal_id,),
+        explicit_firm_state_ids=(fsid,),
+        explicit_market_readout_ids=(rid,),
+        explicit_market_environment_state_ids=(env_id,),
+        baseline_value=_BASELINE,
+    )
+    after = _capture_state_attn(k)
+    assert before == after
+
+
+# ---------------------------------------------------------------------------
+# v1.12.5 — anti-fields on the ledger payload
+# ---------------------------------------------------------------------------
+
+
+def test_attn_helper_emits_no_forbidden_payload_keys():
+    k, signal_id, _ = _seed_with_pressure_signal()
+    run_attention_conditioned_valuation_refresh_lite(
+        k,
+        firm_id=_FIRM,
+        valuer_id=_VALUER,
+        as_of_date=_AS_OF,
+        explicit_pressure_signal_ids=(signal_id,),
+        baseline_value=_BASELINE,
+    )
+    val_records = k.ledger.filter(event_type="valuation_added")
+    assert val_records
+    for rec in val_records:
+        leaked = (
+            set(rec.payload.keys()) & _FORBIDDEN_VALUATION_PAYLOAD_KEYS
+        )
+        assert not leaked, (
+            f"v1.12.5 helper leaked forbidden payload keys: "
+            f"{sorted(leaked)}"
+        )
+    # The committed valuation's metadata must not carry anti-fields.
+    record = k.valuations.list_by_subject(_FIRM)[0]
+    assert not (
+        set(record.metadata.keys()) & _FORBIDDEN_VALUATION_PAYLOAD_KEYS
+    )
+    # And no anti-field event types in the ledger at all.
+    forbidden_event_types = {
+        "order_submitted",
+        "price_updated",
+        "ownership_position_added",
+        "ownership_transferred",
+        "contract_created",
+        "contract_status_updated",
+        "contract_covenant_breached",
+    }
+    seen_event_types = {r.record_type.value for r in k.ledger.records}
+    assert seen_event_types.isdisjoint(forbidden_event_types)
+
+
+# ---------------------------------------------------------------------------
+# v1.12.5 — determinism + idempotency
+# ---------------------------------------------------------------------------
+
+
+def test_attn_helper_deterministic_for_identical_inputs():
+    """Two fresh kernels with identical inputs produce
+    byte-identical record output."""
+    k_a, sig_a, _ = _seed_with_pressure_signal()
+    out_a = run_attention_conditioned_valuation_refresh_lite(
+        k_a,
+        firm_id=_FIRM,
+        valuer_id=_VALUER,
+        as_of_date=_AS_OF,
+        explicit_pressure_signal_ids=(sig_a,),
+        baseline_value=_BASELINE,
+    )
+    rec_a = k_a.valuations.get_valuation(out_a.valuation_id)
+
+    k_b, sig_b, _ = _seed_with_pressure_signal()
+    out_b = run_attention_conditioned_valuation_refresh_lite(
+        k_b,
+        firm_id=_FIRM,
+        valuer_id=_VALUER,
+        as_of_date=_AS_OF,
+        explicit_pressure_signal_ids=(sig_b,),
+        baseline_value=_BASELINE,
+    )
+    rec_b = k_b.valuations.get_valuation(out_b.valuation_id)
+
+    assert rec_a.to_dict() == rec_b.to_dict()
+
+
+def test_attn_helper_idempotent_on_valuation_id():
+    k, signal_id, _ = _seed_with_pressure_signal()
+    out1 = run_attention_conditioned_valuation_refresh_lite(
+        k,
+        firm_id=_FIRM,
+        valuer_id=_VALUER,
+        as_of_date=_AS_OF,
+        explicit_pressure_signal_ids=(signal_id,),
+        baseline_value=_BASELINE,
+        valuation_id="valuation:idempotent",
+    )
+    out2 = run_attention_conditioned_valuation_refresh_lite(
+        k,
+        firm_id=_FIRM,
+        valuer_id=_VALUER,
+        as_of_date=_AS_OF,
+        explicit_pressure_signal_ids=(signal_id,),
+        baseline_value=_BASELINE,
+        valuation_id="valuation:idempotent",
+    )
+    assert out1.valuation_id == out2.valuation_id
+    # Only one record committed.
+    assert len(k.valuations.list_by_subject(_FIRM)) == 1
+
+
+# ---------------------------------------------------------------------------
+# v1.12.5 — confidence-ordering pin (more cited → higher confidence)
+# ---------------------------------------------------------------------------
+
+
+def test_attn_helper_more_resolved_evidence_yields_higher_confidence():
+    """Pin the qualitative ordering: a valuer who cites more
+    resolved evidence sees a strictly-higher synthetic confidence
+    on the produced valuation than a valuer who cites only the
+    pressure signal (under the same pressure signal and baseline)."""
+    k, signal_id, _ = _seed_with_pressure_signal()
+    fsid = _seed_firm_state(k)
+    rid, _ = _seed_capital_market_readout(k)
+
+    result_thin = run_attention_conditioned_valuation_refresh_lite(
+        k,
+        firm_id=_FIRM,
+        valuer_id="valuer:reference_thin",
+        as_of_date=_AS_OF,
+        explicit_pressure_signal_ids=(signal_id,),
+        baseline_value=_BASELINE,
+        valuation_id="valuation:confidence:thin",
+    )
+    result_rich = run_attention_conditioned_valuation_refresh_lite(
+        k,
+        firm_id=_FIRM,
+        valuer_id="valuer:reference_rich",
+        as_of_date=_AS_OF,
+        explicit_pressure_signal_ids=(signal_id,),
+        explicit_firm_state_ids=(fsid,),
+        explicit_market_readout_ids=(rid,),
+        baseline_value=_BASELINE,
+        valuation_id="valuation:confidence:rich",
+    )
+
+    rec_thin = k.valuations.get_valuation(result_thin.valuation_id)
+    rec_rich = k.valuations.get_valuation(result_rich.valuation_id)
+
+    assert rec_rich.confidence > rec_thin.confidence
+
+
+def test_attn_helper_unresolved_refs_lower_confidence():
+    """A valuer with one unresolved cited id sees a lower
+    confidence than the same valuer with the same pressure signal
+    but no unresolved id."""
+    k, signal_id, _ = _seed_with_pressure_signal()
+    result_clean = run_attention_conditioned_valuation_refresh_lite(
+        k,
+        firm_id=_FIRM,
+        valuer_id="valuer:reference_clean",
+        as_of_date=_AS_OF,
+        explicit_pressure_signal_ids=(signal_id,),
+        baseline_value=_BASELINE,
+        valuation_id="valuation:unresolved:clean",
+    )
+    result_dirty = run_attention_conditioned_valuation_refresh_lite(
+        k,
+        firm_id=_FIRM,
+        valuer_id="valuer:reference_dirty",
+        as_of_date=_AS_OF,
+        explicit_pressure_signal_ids=(signal_id,),
+        explicit_firm_state_ids=(
+            "firm_state:does_not_exist_a",
+            "firm_state:does_not_exist_b",
+        ),
+        baseline_value=_BASELINE,
+        valuation_id="valuation:unresolved:dirty",
+    )
+    rec_clean = k.valuations.get_valuation(result_clean.valuation_id)
+    rec_dirty = k.valuations.get_valuation(result_dirty.valuation_id)
+    assert rec_dirty.confidence < rec_clean.confidence
+
+
+# ---------------------------------------------------------------------------
+# v1.12.5 — defensive errors
+# ---------------------------------------------------------------------------
+
+
+def test_attn_helper_rejects_kernel_none():
+    with pytest.raises(ValueError):
+        run_attention_conditioned_valuation_refresh_lite(
+            None,
+            firm_id=_FIRM,
+            valuer_id=_VALUER,
+            as_of_date=_AS_OF,
+        )
+
+
+def test_attn_helper_rejects_empty_firm_id():
+    k = _seed_kernel()
+    with pytest.raises(ValueError):
+        run_attention_conditioned_valuation_refresh_lite(
+            k,
+            firm_id="",
+            valuer_id=_VALUER,
+            as_of_date=_AS_OF,
+        )
+
+
+def test_attn_helper_rejects_empty_valuer_id():
+    k = _seed_kernel()
+    with pytest.raises(ValueError):
+        run_attention_conditioned_valuation_refresh_lite(
+            k,
+            firm_id=_FIRM,
+            valuer_id="",
+            as_of_date=_AS_OF,
+        )
+
+
+# ---------------------------------------------------------------------------
+# v1.12.5 — jurisdiction-neutral identifier scan
+# ---------------------------------------------------------------------------
+
+
+def test_attn_helper_committed_record_uses_no_jurisdiction_specific_tokens():
+    """Mirror the existing _FORBIDDEN_TOKENS test for the v1.12.5
+    helper output."""
+    k, signal_id, _ = _seed_with_pressure_signal()
+    result = run_attention_conditioned_valuation_refresh_lite(
+        k,
+        firm_id=_FIRM,
+        valuer_id=_VALUER,
+        as_of_date=_AS_OF,
+        explicit_pressure_signal_ids=(signal_id,),
+        baseline_value=_BASELINE,
+    )
+    record = k.valuations.get_valuation(result.valuation_id)
+    candidates = [
+        record.valuation_id,
+        record.subject_id,
+        record.valuer_id,
+        record.valuation_type,
+        record.method,
+        record.purpose,
+        record.metadata.get("context_frame_id", ""),
+    ]
+    for id_str in candidates:
+        lower = str(id_str).lower()
+        for token in _FORBIDDEN_TOKENS:
+            for sep in (" ", ":", "/", "-", "_", "(", ")", ",", ".", "'", '"'):
+                if f"{sep}{token}{sep}" in f" {lower} ":
+                    pytest.fail(
+                        f"forbidden token {token!r} appears in id "
+                        f"{id_str!r}"
                     )

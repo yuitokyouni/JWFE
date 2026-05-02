@@ -29,17 +29,23 @@ and
 The reference data is fully synthetic; Japan calibration is v2 / v3
 territory.
 
-The current code is at **v1.12.4 attention-conditioned investor
-intent** — the first mechanism-level use of attention as a real
-information bottleneck. The orchestrator's per-period
-investor-intent phase now routes evidence through the v1.12.3
-`EvidenceResolver` substrate and classifies on the resolved
-`ActorContextFrame` ids only. The headline divergence test pins
-*three investors → three different non-binding intent labels on
-the same target firm and same period* — layered on top of
-v1.12.3 EvidenceResolver / ActorContextFrame, v1.12.2 market
-environment state, v1.12.1 investor intent signal, v1.12.0 firm
-financial latent state, v1.11.2 demo market regime presets,
+The current code is at **v1.12.5 attention-conditioned valuation
+lite** — the second mechanism-level use of the v1.12.3 attention
+bottleneck. A new `run_attention_conditioned_valuation_refresh_lite(...)`
+helper ships alongside the existing v1.9.5 helper, routing evidence
+through the v1.12.3 `EvidenceResolver` substrate and producing
+synthetic `ValuationRecord`s whose `estimated_value` and
+`confidence` are conditioned on what the *valuer actually
+selected*. The headline divergence test pins *three valuers →
+at least two distinct (estimated_value, confidence) triples on
+the same firm and same period*. Helper-level + tests only —
+the orchestrator continues to call the pre-existing v1.9.5 helper,
+so the per-run record-count window and `living_world_digest` remain
+unchanged from v1.12.4. Layered on top of v1.12.4
+attention-conditioned investor intent, v1.12.3 EvidenceResolver /
+ActorContextFrame, v1.12.2 market environment state, v1.12.1
+investor intent signal, v1.12.0 firm financial latent state,
+v1.11.2 demo market regime presets,
 v1.11.1 capital-market readout, v1.11.0 capital-market surface,
 v1.10.5 living-world integration, and the **v1.9.last public
 prototype freeze**. v1.9 layered
@@ -264,7 +270,8 @@ in well under a second, and are deterministic across invocations.
 | v1.12.1       | Investor intent signal (`InvestorIntentRecord` + `InvestorIntentBook` + `run_reference_investor_intent_signal` in new `world/investor_intent.py`; ledger `INVESTOR_INTENT_SIGNAL_ADDED` + kernel wiring; living-world demo gains a per-period investor-intent phase between v1.10.3 escalation and v1.10.3 corporate response; one intent per (investor, firm, period) with eight evidence id tuples cited from the period's selection / readout / market_condition / firm_state / valuation / dialogue / escalation / theme; deterministic priority-order classifier across `deepen_due_diligence` / `risk_flag_watch` / `decrease_confidence` / `engagement_watch` / `hold_review`; +90 tests; per-run record-count window widens from `[256, 288]` to `[280, 312]`; default-fixture `living_world_digest` changes by design; **non-binding labels only** — no order, no trade, no rebalance, no target weight, no overweight / underweight execution, no expected return, no target price, no security recommendation, no investment advice, no portfolio allocation, no execution; pre-action review posture only) | Shipped |
 | v1.12.2       | Market environment state (`MarketEnvironmentStateRecord` + `MarketEnvironmentBook` + `build_market_environment_state` in new `world/market_environment.py`; ledger `MARKET_ENVIRONMENT_STATE_ADDED` + kernel wiring; living-world demo gains a per-period market-environment phase between the v1.11.1 readout and the v1.12.0 firm-state phase; one environment record per period with nine compact regime labels — `liquidity_regime` / `volatility_regime` / `credit_regime` / `funding_regime` / `risk_appetite_regime` / `rate_environment` / `refinancing_window` / `equity_valuation_regime` / `overall_market_access_label` — derived from v1.11.0 conditions + v1.11.1 readout by a small documented mapping rule set; type-correct additive cross-link slots `evidence_market_environment_state_ids` on `FirmFinancialStateRecord` and `InvestorIntentRecord` plus `trigger_market_environment_state_ids` on `CorporateStrategicResponseCandidate` (never overloaded into `signal_id` / `industry_condition_id` / `market_condition_id` slots); +107 tests; per-run record-count window widens from `[280, 312]` to `[284, 316]`; default-fixture `living_world_digest` changes by design; **labels-only context** — no price, no yield, no spread, no index level, no forecast, no expected return, no recommendation, no target price, no target weight, no order, no trade, no allocation; compact substrate for downstream LLM-agent / attention-conditioned consumers) | Shipped |
 | v1.12.3       | EvidenceResolver / ActorContextFrame (`EvidenceRef` + `ActorContextFrame` + `EvidenceResolver` + `resolve_actor_context` in new `world/evidence.py`; optional `WorldKernel.evidence_resolver` field; read-only evidence resolution layer that turns SelectedObservationSet ids and explicit evidence ids into a structured, actor-specific context frame partitioned across eleven buckets — signals / variable observations / exposures / market_conditions / market_readouts / market_environment_states / industry_conditions / firm_states / valuations / dialogues / escalation_candidates — plus an `unresolved_refs` tail; deterministic prefix dispatch over every v1.9 → v1.12.2 id type with explicit-kwarg override as an escape hatch; tolerant by default with optional `strict=True` mode; +84 tests; per-run record-count window unchanged from v1.12.2 (substrate-only — no new ledger record, no new per-period state); default-fixture `living_world_digest` unchanged from v1.12.2 by design; **substrate only** — no trading, no price formation, no lending decisions, no investment recommendations, no portfolio allocation, no order submission, no real data ingestion, no Japan calibration, no LLM-agent execution, no behavior probabilities, no ledger writes by default, no mutation of any other source-of-truth book; this is the attention bottleneck future v1.12.4 → v1.12.7 attention-conditioned mechanisms will consume) | Shipped (2540 tests) |
-| **v1.12.4**   | **Attention-conditioned investor intent** (new `run_attention_conditioned_investor_intent_signal` in `world/investor_intent.py` calling `world/evidence.resolve_actor_context` to build an `ActorContextFrame` and classifying intent on the resolved frame ids only; orchestrator's per-period investor-intent phase switched to the new helper; pre-existing `run_reference_investor_intent_signal` preserved for backward compatibility; additive `stewardship_theme` bucket on `ActorContextFrame` so theme ids resolve through the same substrate; record metadata grows with `attention_conditioned` / `context_frame_id` / `context_frame_status` / `context_frame_confidence` plus an `unresolved_refs` list when the resolver could not place every cited id; classification preserves the v1.12.1 priority-order labels — `deepen_due_diligence` / `risk_flag_watch` / `decrease_confidence` / `engagement_watch` / `hold_review` — with one additive rule path: a v1.12.2 market-environment record with `overall_market_access_label="selective_or_constrained"` OR `risk_appetite_regime="risk_off"` also fires rule 2; +23 tests including the headline divergence test (three investors → three different intent labels on the same target firm and same period); per-run record-count window unchanged from v1.12.3 (`[284, 316]`); default-fixture `living_world_digest` unchanged from v1.12.3 by design; **first mechanism-level use of attention as a real information bottleneck** — investor intent now reflects what an investor *saw*, not everything in the world; still pre-action review posture only — no order, no trade, no rebalance, no target weight, no overweight / underweight execution, no expected return, no target price, no security recommendation, no investment advice, no portfolio allocation, no execution; this prepares attention-conditioned valuation lite (anticipated v1.12.5) and bank credit review (anticipated v1.12.6)) | **Shipped (2563 tests)** |
+| v1.12.4       | Attention-conditioned investor intent (new `run_attention_conditioned_investor_intent_signal` in `world/investor_intent.py` calling `world/evidence.resolve_actor_context` to build an `ActorContextFrame` and classifying intent on the resolved frame ids only; orchestrator's per-period investor-intent phase switched to the new helper; pre-existing `run_reference_investor_intent_signal` preserved for backward compatibility; additive `stewardship_theme` bucket on `ActorContextFrame` so theme ids resolve through the same substrate; record metadata grows with `attention_conditioned` / `context_frame_id` / `context_frame_status` / `context_frame_confidence` plus an `unresolved_refs` list when the resolver could not place every cited id; classification preserves the v1.12.1 priority-order labels — `deepen_due_diligence` / `risk_flag_watch` / `decrease_confidence` / `engagement_watch` / `hold_review` — with one additive rule path: a v1.12.2 market-environment record with `overall_market_access_label="selective_or_constrained"` OR `risk_appetite_regime="risk_off"` also fires rule 2; +23 tests including the headline divergence test (three investors → three different intent labels on the same target firm and same period); per-run record-count window unchanged from v1.12.3 (`[284, 316]`); default-fixture `living_world_digest` unchanged from v1.12.3 by design; **first mechanism-level use of attention as a real information bottleneck** — investor intent now reflects what an investor *saw*, not everything in the world; still pre-action review posture only — no order, no trade, no rebalance, no target weight, no overweight / underweight execution, no expected return, no target price, no security recommendation, no investment advice, no portfolio allocation, no execution; this prepares attention-conditioned valuation lite (anticipated v1.12.5) and bank credit review (anticipated v1.12.6)) | Shipped (2563 tests) |
+| **v1.12.5**   | **Attention-conditioned valuation lite** (new `run_attention_conditioned_valuation_refresh_lite` in `world/reference_valuation_refresh_lite.py` calling `world/evidence.resolve_actor_context` with `actor_type="valuer"` to build an `ActorContextFrame` and running the v1.9.5 pressure-haircut adapter on only the resolved frame ids; pre-existing `run_reference_valuation_refresh_lite` preserved for backward compatibility; produced `ValuationRecord.metadata` grows with `attention_conditioned` / `context_frame_id` / `context_frame_status` / `context_frame_confidence` / `resolved_buckets_present` / `restrictive_market_resolved` / `risk_off_environment_resolved` plus an `unresolved_refs` list when the resolver could not place every cited id; small documented synthetic delta on top of the v1.9.5 formula — resolved-evidence-breadth confidence bonus (`+0.02 × resolved_buckets`, capped at `+0.10`), unresolved-refs confidence penalty (`-0.05 × unresolved_count`, capped at `-0.20`), restrictive-market value haircut (`× 1 - 0.02` when a resolved readout / environment carries `overall_market_access_label="selective_or_constrained"`), risk-off appetite haircut (`× 1 - 0.01` when a resolved environment carries `risk_appetite_regime="risk_off"`); +17 tests including the headline divergence test (three valuers → at least two distinct `(estimated_value, confidence)` triples on the same firm and same period); per-run record-count window unchanged from v1.12.4 (`[284, 316]`); default-fixture `living_world_digest` unchanged from v1.12.4 by design; **helper-level + tests milestone — orchestrator wiring deferred** — the orchestrator continues to call the pre-existing v1.9.5 helper (wiring the new helper would shift `valuation_added` payload bytes via the resolved-buckets confidence bonus, so it is deferred to a future v1.12.5.x sub-milestone per the v1.12.5 task spec's gate); still a synthetic opinionated valuation claim only — no target price, no expected return, no recommendation, no investment advice, no buy / sell / overweight / underweight, no rebalance, no target weight, no portfolio allocation, no execution, no order, no trade, no forecast value, no real data value, no beta / WACC / D/E / cost-of-capital computation, no impairment decision, no price formation, no order matching, no DCM/ECM execution, no LLM-agent dispatch, no Japan calibration; this prepares attention-conditioned bank credit review (anticipated v1.12.6) and next-period attention feedback (anticipated v1.12.7)) | **Shipped (2580 tests)** |
 | v1.x advanced | Valuation Protocol — Comps Purpose Separation (docs-only advanced design note in [`docs/v1_valuation_protocol_comps_purpose_separation.md`](japan-financial-world/docs/v1_valuation_protocol_comps_purpose_separation.md) and `docs/world_model.md` §84; defines a `ValuationPurpose` vocabulary — `impairment_test` / `market_value_claim` / `internal_review` / `credit_support_review` / `strategic_response_review` — plus a `ComparableSet.purpose` vocabulary — `beta_estimation` / `debt_capacity` / `discount_rate_support` / `valuation_multiple` / `margin_benchmark` — plus comps selection dimensions and a warning-flag vocabulary — `purpose_mismatch` / `double_counting_risk` / `cherry_picking_risk` / `target_capital_structure_misuse` / `unexplained_comps_divergence` / `cash_flow_and_discount_rate_risk_overlap`; **records evidence discipline, never computes a valuation truth** — no beta, no WACC, no D/E, no impairment decision, no fair value conclusion, no investment recommendation, no real data, no Japan calibration, no IFRS/US GAAP/jurisdiction-specific accounting compliance; opt-in for advanced actor types only — the default v1.9 living reference world's investor and bank profiles are unaffected; designed to compose with the v1.12.3 `EvidenceResolver` substrate via plain-id cross-references when a sophisticated actor type adopts it; no test count change, no `living_world_digest` change, no per-run window change) | **Docs-only (advanced design note)** |
 | v1.10.last    | Public engagement layer freeze (docs-only) | Planned |
 | v2.0          | Japan public-data calibration design gate                 | Not started                  |
@@ -536,7 +543,7 @@ Start here:
 
 **Tests:**
 - [docs/test_inventory.md](japan-financial-world/docs/test_inventory.md)
-  — 2563 tests grouped by component (444 v0 + 188 v1.0–v1.7 + 1931 post-v1.7)
+  — 2580 tests grouped by component (444 v0 + 188 v1.0–v1.7 + 1948 post-v1.7)
 
 **Long-form / original ambition (kept for reference):**
 - [docs/architecture.md](japan-financial-world/docs/architecture.md) —
@@ -574,8 +581,8 @@ From the `japan-financial-world` directory:
 python -m pytest -q
 ```
 
-Expected: `2563 passed` at the latest commit (444 v0 + 188 v1
-frozen reference + 1931 post-v1.7 additions covering the reference
+Expected: `2580 passed` at the latest commit (444 v0 + 188 v1
+frozen reference + 1948 post-v1.7 additions covering the reference
 demo, replay, manifest, catalog-shape, experiment harness, the
 v1.8.x endogenous-activity stack — interactions, routines,
 attention, variable / exposure layers, the menu builder, the
@@ -617,7 +624,22 @@ capital-market readout — `CapitalMarketReadoutRecord` /
 plus the per-period readout phase in the living reference
 world — exercised in the new
 `tests/test_market_surface_readout.py` and extended in
-`tests/test_living_reference_world.py`).
+`tests/test_living_reference_world.py`, plus the v1.11.2
+demo market regime presets, the v1.12.0 firm financial
+latent state, the v1.12.1 investor intent signal, the
+v1.12.2 market environment state, the v1.12.3
+EvidenceResolver / ActorContextFrame substrate, the v1.12.4
+attention-conditioned investor intent (first mechanism-level
+use of attention as a real information bottleneck), and the
+v1.12.5 attention-conditioned valuation lite — new
+`run_attention_conditioned_valuation_refresh_lite` helper
+alongside the existing v1.9.5 helper, routing evidence
+through the v1.12.3 substrate and applying a small documented
+synthetic delta on top of the v1.9.5 pressure-haircut formula
+based on what the resolver surfaced for the valuer; helper-
+level + tests only, orchestrator wiring deferred to a future
+v1.12.5.x sub-milestone — exercised in the extended
+`tests/test_reference_valuation_refresh_lite.py`).
 
 To run only v0 tests, exclude the v1 test files; to run only v1 tests:
 

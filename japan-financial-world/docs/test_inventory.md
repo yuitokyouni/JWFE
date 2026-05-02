@@ -1,18 +1,21 @@
 # Test Inventory
 
-Snapshot of the test suite at **v1.12.4** (`Attention-conditioned
-investor intent` — first mechanism-level use of attention as a
-real information bottleneck: the orchestrator's per-period
-investor-intent phase now routes evidence through the v1.12.3
-`EvidenceResolver` substrate, classifying intent on the resolved
-`ActorContextFrame` ids only; the headline divergence test pins
-*three investors → three different non-binding intent labels on
-the same target firm and same period*; per-run record-count
-window and `living_world_digest` both unchanged from v1.12.3 —
-the new metadata lives on the record's `metadata` field, not on
-the ledger payload):
-`2563 / 2563 passing` (444 v0 + 188 v1.0-v1.7 frozen reference +
-1931 post-v1.7 additions covering reference demo, replay, manifest,
+Snapshot of the test suite at **v1.12.5** (`Attention-conditioned
+valuation lite` — extends the v1.12.4 attention-bottleneck pattern
+to the v1.9.5 valuation-refresh-lite mechanism: a new
+`run_attention_conditioned_valuation_refresh_lite(...)` helper
+ships alongside the existing v1.9.5 helper, routes evidence
+through the v1.12.3 `EvidenceResolver` substrate, and produces
+synthetic `ValuationRecord`s whose `estimated_value` and
+`confidence` are conditioned on what the *valuer actually
+selected*; the headline divergence test pins *three valuers →
+at least two distinct (estimated_value, confidence) triples on
+the same target firm and same period*; helper-level + tests only
+— the orchestrator continues to call the pre-existing v1.9.5
+helper, so the per-run record-count window and
+`living_world_digest` remain unchanged from v1.12.4):
+`2580 / 2580 passing` (444 v0 + 188 v1.0-v1.7 frozen reference +
+1948 post-v1.7 additions covering reference demo, replay, manifest,
 catalog-shape, experiment harness, renamed WorldID tests,
 interactions, routines, attention, routine engine, the corporate
 quarterly reporting routine, the world-variable storage layer, the
@@ -99,7 +102,22 @@ ids only, plus the additive `stewardship_theme` bucket on
 helper, exercised by extended tests in
 `tests/test_investor_intent.py` (including the headline
 attention-divergence test) and
-`tests/test_living_reference_world.py`).
+`tests/test_living_reference_world.py`, and the v1.12.5
+attention-conditioned valuation lite —
+`run_attention_conditioned_valuation_refresh_lite` in
+`world/reference_valuation_refresh_lite.py` (new helper alongside
+the existing `run_reference_valuation_refresh_lite`) that calls
+`resolve_actor_context` with `actor_type="valuer"` and runs the
+v1.9.5 pressure-haircut adapter on only the resolved frame ids,
+applying a small documented synthetic delta on top of the v1.9.5
+formula (resolved-buckets confidence bonus, unresolved-refs
+confidence penalty, restrictive-market value haircut, risk-off
+appetite haircut), exercised by extended tests in
+`tests/test_reference_valuation_refresh_lite.py` including the
+headline three-valuers divergence test; v1.12.5 is helper-level
++ tests only — the orchestrator continues to call the
+pre-existing v1.9.5 helper, so the `living_world_digest` and
+per-run record-count window remain unchanged from v1.12.4).
 
 This inventory is grouped by what each component verifies. The numbers in
 parentheses are test counts per file. Run the full suite with:
@@ -483,9 +501,9 @@ no-mutation guarantee.
   and the bank's selected observation sets are routed into the
   v1.9.7 evidence.
 
-## Reference valuation refresh lite (v1.9.5)
+## Reference valuation refresh lite (v1.9.5) + v1.12.5 attention-conditioned helper
 
-- `test_reference_valuation_refresh_lite.py` (28) — adapter
+- `test_reference_valuation_refresh_lite.py` (45) — adapter
   satisfies `MechanismAdapter`;
   `MechanismSpec` carries the right vocabulary
   (`model_id == VALUATION_REFRESH_MODEL_ID`,
@@ -520,6 +538,41 @@ no-mutation guarantee.
   ledger record per call (the `valuation_added` from
   `ValuationBook.add_valuation`); module constants and committed
   identifiers pass a word-boundary forbidden-token check.
+  v1.12.5 (`+17`) — the new
+  `run_attention_conditioned_valuation_refresh_lite(...)` helper
+  records context-frame metadata on `record.metadata`
+  (`attention_conditioned`, `context_frame_id`,
+  `context_frame_status`, `context_frame_confidence`); reads
+  only selected/explicit evidence (a globally-resident un-cited
+  pressure signal is *not* surfaced); unresolved refs land in
+  `metadata["unresolved_refs"]` and lower the frame confidence;
+  strict mode raises `StrictEvidenceResolutionError` and emits no
+  record on unknown refs; strict mode passes when all-resolving;
+  the headline three-valuers / three-evidence-sets divergence
+  test pins at least two distinct
+  `(estimated_value, confidence)` triples on the same firm and
+  same period; selection refs flow through to the resolved signal
+  bucket (a pressure-signal id reachable only via a
+  `SelectedObservationSet` lands in the signal bucket and the
+  v1.9.5 haircut fires); no-mutation guarantee covers every other
+  source-of-truth book in the kernel including
+  `market_conditions`, `capital_market_readouts`,
+  `market_environments`, and `firm_financial_states`; ledger
+  payload and `record.metadata` carry no anti-field keys
+  (`target_price` / `expected_return` / `recommendation` /
+  `investment_advice` / `buy` / `sell` / `overweight` /
+  `underweight` / `rebalance` / `target_weight` /
+  `portfolio_allocation` / `execution` / `order` / `trade` /
+  `forecast_value` / `real_data_value`) and no anti-field event
+  types appear in the ledger; two fresh kernels with identical
+  inputs produce byte-identical record output (determinism);
+  idempotent on `valuation_id`; qualitative ordering pins (more
+  resolved evidence → strictly higher confidence; unresolved refs
+  → strictly lower confidence); defensive errors on
+  `kernel=None`, empty `firm_id`, empty `valuer_id`; the
+  v1.12.5 helper's committed record passes the word-boundary
+  forbidden-token check (extended to also scan
+  `record.metadata.context_frame_id`).
 
 ## Reference firm operating pressure assessment (v1.9.4)
 
@@ -1186,7 +1239,7 @@ no-mutation guarantee.
 | Mechanism interface contract (v1.9.3 + v1.9.3.1) | 1 | 65    |
 | CLI argv-isolation pin                  | 1     | 8     |
 | Reference firm operating pressure (v1.9.4) | 1  | 28    |
-| Reference valuation refresh lite (v1.9.5) | 1  | 28    |
+| Reference valuation refresh lite (v1.9.5) + v1.12.5 attention-conditioned helper | 1  | 45    |
 | Living-world integration (v1.9.6 — added in test_living_reference_world.py) | 0 | 9 |
 | Reference bank credit review lite (v1.9.7) | 1 | 29    |
 | Living-world integration (v1.9.7 — added in test_living_reference_world.py) | 0 | 7 |
@@ -1202,7 +1255,7 @@ no-mutation guarantee.
 | Market environment state (v1.12.2) | 1 | 87 |
 | EvidenceResolver / ActorContextFrame (v1.12.3) | 1 | 84 |
 | Living-world integration tests (v1.9.x core + v1.10.5 + v1.11.0 + v1.11.1 + v1.11.2 + v1.12.0 + v1.12.1 + v1.12.2 + v1.12.4 additive in test_living_reference_world.py — 15 v1.10.5, 8 v1.11.0, 7 v1.11.1, 15 v1.11.2, 9 v1.12.0, 9 v1.12.1, 11 v1.12.2, and 4 v1.12.4 integration tests; v1.12.3 is substrate-only and adds no living-world integration tests) | (counted under existing files) | (+15 v1.10.5 / +8 v1.11.0 / +7 v1.11.1 / +15 v1.11.2 / +9 v1.12.0 / +9 v1.12.1 / +11 v1.12.2 / +4 v1.12.4 in test_living_reference_world.py) |
-| **post-v1.7 subtotal**                  | **39**| **1931** |
+| **post-v1.7 subtotal**                  | **39**| **1948** |
 
 ### v0 + v1 + post-v1.7 totals
 
@@ -1210,8 +1263,8 @@ no-mutation guarantee.
 | -------------------------------- | ----- | ----- |
 | v0                               | 35    | 444   |
 | v1.0–v1.7 frozen reference       | 7     | 188   |
-| post-v1.7 (v1.7-public-rc1+ / v1.8.x / v1.9.0 / v1.9.1-prep / v1.9.1 / v1.9.2 / v1.9.3 / v1.9.3.1 / CLI argv pin / v1.9.4 / v1.9.5 / v1.9.6 / v1.9.7 / v1.9.8 / v1.10.1 / v1.10.2 / v1.10.3 / v1.10.4 / v1.10.4.1 / v1.10.5 / v1.11.0 / v1.11.1 / v1.11.2 / v1.12.0 / v1.12.1 / v1.12.2 / v1.12.3 / v1.12.4) | 39 | 1931 |
-| **Total**                        | **81**| **2563** |
+| post-v1.7 (v1.7-public-rc1+ / v1.8.x / v1.9.0 / v1.9.1-prep / v1.9.1 / v1.9.2 / v1.9.3 / v1.9.3.1 / CLI argv pin / v1.9.4 / v1.9.5 / v1.9.6 / v1.9.7 / v1.9.8 / v1.10.1 / v1.10.2 / v1.10.3 / v1.10.4 / v1.10.4.1 / v1.10.5 / v1.11.0 / v1.11.1 / v1.11.2 / v1.12.0 / v1.12.1 / v1.12.2 / v1.12.3 / v1.12.4 / v1.12.5) | 39 | 1948 |
+| **Total**                        | **81**| **2580** |
 
 ## Auditing for jurisdiction-neutral identifiers
 
