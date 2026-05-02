@@ -180,6 +180,49 @@ At v1.7 freeze:
 - Future v3 work (JFWE Proprietary) **does not land in this
   repository**, ever. v3 lives in a separate private repository.
 
+## v1.10 addendum — engagement / response layer
+
+v1.10 adds an engagement-and-response layer on top of the v1.9
+diagnostic stack. The new public artifacts are:
+
+- `stewardship_theme_signal` — a signal-shaped record naming a
+  generic stewardship theme an investor is prepared to raise across
+  portfolio companies in a given period.
+- `portfolio_company_dialogue_record` — a relational record naming
+  that an engagement contact happened in a given period under a
+  given theme, with a generic outcome class.
+- `investor_escalation_candidate` — a candidate-shaped record naming
+  that an investor *could* escalate, given prior dialogue records.
+- `corporate_strategic_response_candidate` — a candidate-shaped
+  record naming a strategic response a firm *could* take.
+- `industry_demand_condition_signal` — an optional context signal
+  naming a generic industry-level demand condition.
+
+These artifacts follow the same public / restricted rules as every
+other FWE artifact, with one additional explicit rule that v1.10
+calls out:
+
+- **Verbatim or paraphrased dialogue contents are restricted in every
+  jurisdiction.** A `portfolio_company_dialogue_record` carries
+  metadata only — investor identifier, firm identifier, period,
+  theme reference, generic outcome class. It must not carry the
+  actual content of any conversation, even synthetic. Synthetic
+  dialogues used for tests must use the existing FWE Reference
+  identifier conventions and must remain identifiably synthetic.
+- **Calibrated behavior probabilities, threshold tiers, taxonomy
+  attributions to real institutions, and forecast values are
+  restricted regardless of jurisdiction.** v1.10 record shapes use
+  small enumerated controlled vocabularies as illustrative
+  enumerations only, with no calibrated probabilities of selection.
+- **Named-institution engagement / escalation / response histories
+  are restricted regardless of jurisdiction.** The same rule that
+  prohibits named-institution stress results applies, end-to-end,
+  to engagement records.
+
+v1.10's public layer must continue to build, test, and run with the
+restricted layer absent. The forbidden-token word-boundary scan
+gating each commit is unchanged.
+
 ## What this document does not decide
 
 - The specific access-control model for JFWE Proprietary (a v3

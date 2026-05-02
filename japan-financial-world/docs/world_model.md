@@ -5959,4 +5959,109 @@ The repo's existing public-release gate covers v1.9.last (its checks are framing
 | v1.9.7 Reference Bank Credit Review Lite Mechanism | Code (§67). | Shipped |
 | v1.9.8 Performance Boundary / Sparse Traversal Discipline | Docs + tests (§68). | Shipped |
 | **v1.9.last Public Prototype Freeze** | Docs-only (§69). | **Shipped** |
+| **v1.10.0 Universal Engagement / Strategic Response Consolidation** | Docs-only (§70). | **In progress** |
+| v1.10.1 Stewardship theme signal | Code. Concrete `signal`-shaped record + minimal book. | Planned |
+| v1.10.2 Portfolio-company dialogue record | Code. Dialogue book + record shape. | Planned |
+| v1.10.3 Investor escalation candidate + corporate strategic response candidate | Code. Two `MechanismAdapter` implementations. | Planned |
+| v1.10.4 Optional industry demand condition signal | Code. Optional context-signal book. | Optional |
+| v1.10.5 Living-world integration | Code. Wires v1.10.1–v1.10.3 into the multi-period sweep. | Planned |
+| v1.10.last Public engagement layer freeze | Docs-only. | Planned |
+| v2.0 Japan public-data calibration design gate | — | Not started |
+
+## 70. v1.10.0 Universal Engagement / Strategic Response Consolidation
+
+### 70.1 Purpose
+
+§70 is a **design / consolidation** milestone, not a behavior milestone. The runtime, the kernel, and every mechanism are unchanged. v1.10.0 names the *engagement and response* layer of FWE — the relational surface where investor stewardship themes, portfolio-company dialogues, investor escalation candidates, and corporate strategic response candidates are recorded — and locks that layer's scope as **signal-only and jurisdiction-neutral** before any v1.10.x code is written.
+
+The motivation is structural. v1.9 closed the diagnostic loop: corporate quarterly reports → firm operating-pressure assessment → heterogeneous attention → valuation refresh lite → bank credit review lite → review routines, all on an append-only ledger. That loop is observation-and-assessment-only. It does not yet name the relational surface where investors raise themes with firms, where firms respond, where dialogues are recorded, where an investor escalates, and where a firm sketches a strategic response. v1.10 names that surface and gives it a vocabulary so the v1.10.x milestones can implement it without re-litigating direction.
+
+The full design lives in `docs/v1_10_universal_engagement_and_response_design.md`. This section is the §-anchored summary in `world_model.md`.
+
+### 70.2 Selected concepts
+
+v1.10 selects four concrete primitives plus one optional context signal:
+
+1. **`stewardship_theme_signal`** — names a theme an investor (or other steward) is prepared to raise across portfolio companies. A signal-shaped record on the investor / information layer, parallel to existing v1.8.x signal emissions. Hooks: `InteractionBook` (§45), `RoutineBook` (§46), v1.8.x `SignalBook`.
+2. **`portfolio_company_dialogue_record`** — names that an engagement contact happened in a given period under a given theme, with a generic outcome class. A relational record sibling to `RelationshipCapitalBook` (§40). Carries metadata only; verbatim or paraphrased contents are restricted artifacts and never appear in public FWE.
+3. **`investor_escalation_candidate`** — names that, given a sequence of dialogue records, an investor *could* escalate. A `candidate`-shaped record sibling to v1.9.5 / v1.9.7 diagnostic outputs. Implemented at v1.10.3 as a `MechanismAdapter` satisfying the v1.9.3 / v1.9.3.1 contract.
+4. **`corporate_strategic_response_candidate`** — names a strategic response a firm *could* take in response to themes / dialogues / escalations. Symmetric `MechanismAdapter` shape to the escalation candidate.
+5. **`industry_demand_condition_signal` (optional)** — names a generic industry-level demand condition (e.g., `weakening` / `stable` / `strengthening`) as a context signal. Sibling to existing v1.8.x macro-style signals.
+
+Every selected concept is a **signal** or a **candidate** — never an action, never a contract change, never a price move, never a trade, never a vote, never a corporate action.
+
+### 70.3 Hard boundary — what v1.10 must never do
+
+v1.10 (every milestone, including v1.10.last) must not:
+
+- introduce country-specific institution names;
+- introduce source / report names from any private design probe;
+- introduce jurisdiction-specific thresholds, regimes, or tiers;
+- introduce domestic dataset names or paid-data references;
+- introduce behavior probabilities derived from non-public reports;
+- introduce bank-specific or sector-specific strategy assumptions;
+- introduce forecast values as parameters;
+- import paid / NDA / proprietary content;
+- record confidential dialogue contents (verbatim or paraphrased);
+- implement trading, price formation, lending decisions, corporate-action execution, voting execution, or AGM / EGM filings;
+- emit investment-recommendation language (direct or indirect) in code, docs, schemas, or demo output;
+- consume real-world calibration data of any provenance.
+
+The `world/experiment.py::_FORBIDDEN_TOKENS` forbidden-token scan continues to gate every v1.10 commit. v1.9.last's anti-claim list (no forecast, no investment advice, no price formation, no trading, no lending decisions, no Japan calibration, no real data, no scenarios, no production-scale traversal, no native rewrite, no web UI) continues to hold without modification through every v1.10 milestone.
+
+### 70.4 Meta-abstraction deferral rule
+
+Two meta-abstractions surfaced as candidates: `actor_business_model_transition_pressure` (a generalization of pressure on any actor's business model) and `actor_strategic_response_candidate` (a generalization of a candidate strategic response from any actor). Both are explicitly **deferred**. The rule is: do not implement a meta-abstraction in public FWE until at least two concrete specializations of that abstraction have been implemented and have stabilized in public FWE. v1.10's concrete primitives are listed above. After v1.10.last lands and at least two concrete *response candidate* specializations are stable in public FWE, the meta-abstraction gate can be reopened. Until then, v1.10 implements the concrete primitives only.
+
+### 70.5 What v1.10.0 lands
+
+v1.10.0 itself ships **no behavior, no test additions, no new ledger record types, no new books, and no new mechanisms**. v1.10.0 lands:
+
+- `docs/v1_10_universal_engagement_and_response_design.md` — the full design document covering the five selected concepts, the hard boundary, the meta-abstraction deferral rule, the milestone sequence, and the v1.10.0 success criteria.
+- `docs/world_model.md` §70 (this section).
+- `docs/public_private_boundary.md` — a brief v1.10 addendum reaffirming that engagement-layer artifacts (theme signals, dialogue records, escalation / response candidates, industry demand-condition signals) follow the same public / restricted rules, with verbatim / paraphrased dialogue contents always restricted.
+- `docs/test_inventory.md` — headline updated to v1.10.0 (docs-only; test count unchanged at `1626 / 1626`).
+- `README.md` — roadmap section adds v1.10.x rows.
+
+The test count is unchanged at `1626 / 1626`. The CLI surface, the default fixture, the per-period flow, the reproducibility surface, the performance boundary, the test surface, and the scope language of v1.9.last are all preserved unchanged.
+
+### 70.6 v1.10 milestone sequence
+
+| Milestone | Scope | Status |
+| --- | --- | --- |
+| **v1.10.0 Universal Engagement / Strategic Response Consolidation** | Docs-only. This section + `docs/v1_10_universal_engagement_and_response_design.md` + boundary updates. | **In progress** |
+| v1.10.1 `stewardship_theme_signal` | Code. First concrete record + minimal book + investor review-routine emission path. | Planned |
+| v1.10.2 `portfolio_company_dialogue_record` | Code. Dialogue book + record shape + review-routine emission path that reads v1.10.1's theme signals. | Planned |
+| v1.10.3 `investor_escalation_candidate` + `corporate_strategic_response_candidate` | Code. Two `MechanismAdapter` implementations satisfying the v1.9.3 / v1.9.3.1 contract. | Planned |
+| v1.10.4 `industry_demand_condition_signal` | Code. Optional later context-signal extension. | Optional |
+| v1.10.5 Living-world integration | Code. Wires v1.10.1–v1.10.3 (and optionally v1.10.4) into the multi-period sweep behind a v1.10-scoped fixture, separate from the v1.9.last default fixture. | Planned |
+| **v1.10.last Public engagement layer freeze** | Docs-only. Anti-claim list, scope-language agreement, forbidden-token scan clean, no investment-advice framings, CI green on the tag commit. | Planned |
+
+### 70.7 v1.10.0 success criteria
+
+§70 is complete when **all** hold:
+
+1. `docs/v1_10_universal_engagement_and_response_design.md` exists and covers the five selected concepts using the same template (purpose, generic inputs, generic outputs, candidate FWE object type, existing FWE hook, no-behavior boundary, out of scope, future v2 mapping slot), the hard boundary, the meta-abstraction deferral rule, the milestone sequence, the v1.10.0 success criteria, and the anti-scope.
+2. `docs/world_model.md` carries this §70.
+3. `docs/public_private_boundary.md` carries the v1.10 addendum.
+4. `docs/test_inventory.md` headline reflects v1.10.0 (docs-only; no test count change).
+5. `README.md` roadmap section adds v1.10.x rows at "In progress" / "Planned" status.
+6. The full test suite continues to pass at `1626 / 1626`.
+7. `compileall world spaces tests examples` is clean and `ruff check .` from the repo root is clean.
+8. The forbidden-token word-boundary scan is clean.
+9. No country-specific institution names, source / report names, jurisdiction-specific thresholds, domestic dataset names, behavior probabilities, bank-specific strategy assumptions, forecast values, paid / NDA / proprietary content, or confidential dialogue contents appear in the v1.10.0 docs.
+10. No investment-recommendation language (direct or indirect) appears in the v1.10.0 docs.
+
+### 70.8 Anti-scope
+
+§70 deliberately does **not** add: any new economic behavior, any new mechanism, any new `MechanismAdapter`, any new ledger record type, any new book, any new test; price formation, trading, lending decisions, loan origination, covenant enforcement, contract or constraint mutation, voting execution, AGM / EGM filings, corporate-action execution, real-data ingestion, paid-data ingestion, expert-input ingestion, Japan calibration, named real-institution content, calibrated behavior probabilities, forecast values, investment-recommendation framings, scenario branching, stress logic, native (C++ / Julia / Rust / GPU) rewrites, profiling harnesses, web UI. v1.10.0 is documentation only.
+
+### 70.9 Position in the v1.10 sequence
+
+| Milestone | Scope | Status |
+| --- | --- | --- |
+| v1.9.last Public Prototype Freeze | Docs-only (§69). | Shipped |
+| **v1.10.0 Universal Engagement / Strategic Response Consolidation** | Docs-only (§70). | **In progress** |
+| v1.10.1 → v1.10.5 | Code. | Planned |
+| v1.10.last Public engagement layer freeze | Docs-only. | Planned |
 | v2.0 Japan public-data calibration design gate | — | Not started |

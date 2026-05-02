@@ -229,6 +229,13 @@ in well under a second, and are deterministic across invocations.
 | v1.9.7        | Reference Bank Credit Review Lite Mechanism (`credit_review_mechanism` adapter; integrated into the multi-period sweep) | Shipped |
 | v1.9.8        | Performance Boundary / Sparse Traversal Discipline (docs + tests pinning loop shapes; no new behaviour) | Shipped |
 | **v1.9.last** | **Public Prototype Freeze** (synthetic-only, CLI-first, deterministic, explainability-first; living reference world as the headline artifact) | **Shipped** |
+| **v1.10.0**   | **Universal Engagement / Strategic Response Consolidation** (docs-only design naming the engagement / response layer; signal-only, jurisdiction-neutral; no code, no test count change) | **In progress** |
+| v1.10.1       | Stewardship theme signal (concrete `signal`-shaped record + minimal book) | Planned |
+| v1.10.2       | Portfolio-company dialogue record (dialogue book + record shape; metadata-only, no verbatim contents) | Planned |
+| v1.10.3       | Investor escalation candidate + corporate strategic response candidate (two `MechanismAdapter` implementations satisfying the v1.9.3 / v1.9.3.1 contract) | Planned |
+| v1.10.4       | Optional industry demand condition signal (context signal book) | Optional |
+| v1.10.5       | Living-world integration (wires v1.10.1–v1.10.3 into the multi-period sweep behind a v1.10-scoped fixture, separate from the v1.9.last default fixture) | Planned |
+| v1.10.last    | Public engagement layer freeze (docs-only) | Planned |
 | v2.0          | Japan public-data calibration design gate                 | Not started                  |
 | v3.0          | Proprietary Japan calibration / expert-data layer         | Private                      |
 
