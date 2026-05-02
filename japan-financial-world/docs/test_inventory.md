@@ -1,8 +1,9 @@
 # Test Inventory
 
-Snapshot of the test suite at **v1.9.0** (`Living Reference World
-Demo`): `1368 / 1368 passing` (444 v0 + 188 v1.0-v1.7 frozen
-reference + 736 post-v1.7 additions covering reference demo,
+Snapshot of the test suite at **v1.9.1-prep** (`Living World
+Report Contract Audit` — docs + contract test only, no production
+code change): `1380 / 1380 passing` (444 v0 + 188 v1.0-v1.7 frozen
+reference + 748 post-v1.7 additions covering reference demo,
 replay, manifest, catalog-shape, experiment harness, renamed
 WorldID tests, interactions, routines, attention, routine engine,
 the corporate quarterly reporting routine, the world-variable
@@ -10,7 +11,8 @@ storage layer, the exposure / dependency storage layer, the
 observation-menu builder join service, the
 heterogeneous-attention investor / bank demo, the investor /
 bank review routines, the endogenous chain harness, the ledger
-trace report, and the multi-period living reference world demo).
+trace report, the multi-period living reference world demo, and
+the v1.9.1-prep report contract).
 
 This inventory is grouped by what each component verifies. The numbers in
 parentheses are test counts per file. Run the full suite with:
@@ -277,6 +279,30 @@ no-mutation guarantee.
   determinism; snapshot determinism; ledger emission of
   `RecordType.INTERACTION_ADDED`; kernel wiring; no-mutation
   guarantee against every other v0 / v1 source-of-truth book.
+
+## Living world report contract (v1.9.1-prep)
+
+- `test_living_reference_world_report_contract.py` (12) —
+  regression-gate test set that pins the v1.9.0 result schema
+  invariants the future v1.9.1 reporter will rely on.
+  `LivingReferenceWorldResult` and
+  `LivingReferencePeriodSummary` are dataclasses; both expose the
+  full required-field set documented in
+  `docs/v1_9_living_world_report_contract.md`;
+  `created_record_ids` matches the kernel ledger slice
+  byte-identically; the v1.9.0 **infra prelude** (idempotent
+  registrations before period 1) is an honest separate window —
+  per-period `record_count_created` totals plus
+  `infra_record_count` equal the chain delta; per-period
+  metadata carries chronological `ledger_record_count_before /
+  _after` indices that chain end-to-end from period 1 onward;
+  investor and bank selection refs are tuples of non-empty
+  strings reachable from `kernel.attention.get_selection`;
+  pairwise set-difference (shared / investor_only / bank_only)
+  resolves to non-empty data on the canonical seed; report-
+  critical fields are deterministic across two fresh kernels
+  seeded identically; the read paths the v1.9.1 reporter will
+  use do not mutate any kernel book or the ledger length.
 
 ## Living reference world (v1.9.0)
 
@@ -718,7 +744,7 @@ no-mutation guarantee.
 | Reference loop (v1.6)            | 1     | 5     |
 | **v1 subtotal**                  | **7** | **188** |
 
-### v1.7-public-rc1+ / v1.8.x / v1.9.0 additions
+### v1.7-public-rc1+ / v1.8.x / v1.9.0 / v1.9.1-prep additions
 
 | Component                               | Files | Tests |
 | --------------------------------------- | ----- | ----- |
@@ -741,7 +767,8 @@ no-mutation guarantee.
 | Endogenous chain harness (v1.8.14)      | 1     | 29    |
 | Ledger trace report (v1.8.15)           | 1     | 23    |
 | Living reference world (v1.9.0)         | 1     | 27    |
-| **post-v1.7 subtotal**                  | **19**| **736** |
+| Living world report contract (v1.9.1-prep) | 1 | 12    |
+| **post-v1.7 subtotal**                  | **20**| **748** |
 
 ### v0 + v1 + post-v1.7 totals
 
@@ -749,8 +776,8 @@ no-mutation guarantee.
 | -------------------------------- | ----- | ----- |
 | v0                               | 35    | 444   |
 | v1.0–v1.7 frozen reference       | 7     | 188   |
-| post-v1.7 (v1.7-public-rc1+ / v1.8.x / v1.9.0) | 19 | 736 |
-| **Total**                        | **61**| **1368** |
+| post-v1.7 (v1.7-public-rc1+ / v1.8.x / v1.9.0 / v1.9.1-prep) | 20 | 748 |
+| **Total**                        | **62**| **1380** |
 
 ## Auditing for jurisdiction-neutral identifiers
 

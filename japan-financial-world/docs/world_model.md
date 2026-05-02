@@ -4884,9 +4884,78 @@ Every existing v1.8 anti-scope rule continues to apply. The only writes the harn
 | Milestone | Scope | Status |
 | --- | --- | --- |
 | v1.8.16 Freeze / Readiness | Docs (§58). | Shipped |
-| **v1.9.0 Living Reference World Demo** | Code (§59). | **Shipped** |
-| v1.9.x | Report polishing, sparse / performance boundary, public-prototype readiness. | Next |
+| v1.9.0 Living Reference World Demo | Code (§59). | Shipped |
+| **v1.9.1-prep Report Contract Audit** | Docs + contract test (§60). No code change. | **Shipped** |
+| v1.9.1 Living World Trace Report | Code: `LivingWorldTraceReport` + Markdown renderer. | Next |
+| v1.9.x | Report polishing, sparse / performance boundary, public-prototype readiness. | After v1.9.1 |
 | v1.9.last | First lightweight public prototype (CLI-first, deterministic, explainability-first). | Planned |
+
+## 60. v1.9.1-prep Report Contract Audit
+
+§60 (v1.9.1-prep) is a **contract-audit milestone** — docs and one regression-gate test only. No production code change. v1.9.1-prep records the verdict that v1.9.0's `LivingReferenceWorldResult` and `LivingReferencePeriodSummary` schemas already carry every field the v1.9.1 reporter (the future `LivingWorldTraceReport`) will need, and pins that verdict with a small regression-gate test so future v1.9.x changes can't quietly break the reporter's input shape.
+
+### 60.1 What lands in v1.9.1-prep
+
+- `docs/v1_9_living_world_report_contract.md` — new contract doc:
+  - schema cross-check tables for both v1.9.0 dataclasses;
+  - input policy (`build_living_world_report(kernel, result)` reads result as the structural index, re-walks the ledger slice for verification, never mutates anything);
+  - output contract (`LivingWorldTraceReport` immutable dataclass + `to_dict()` + `render_living_world_markdown(report)`);
+  - Markdown section layout (title → setup → per-period table → attention divergence → ledger event-type counts → warnings → boundary statement);
+  - determinism rules;
+  - warning vocabulary suggestions (slice / chain mismatch, missing expected event types, empty per-period selections);
+  - the mandatory hard-boundary statement: *"No price formation, no trading, no lending decisions, no valuation behavior, no Japan calibration, no real data."*
+  - the **infra-prelude finding** — see below.
+- `tests/test_living_reference_world_report_contract.py` — 12 tests pinning: every required field exists on both dataclasses, `created_record_ids` matches the ledger slice byte-identically, per-period `record_count_created` plus `infra_record_count` equals the total chain delta, per-period metadata carries chronological ledger indices, investor / bank selection refs are reachable for the set-difference computation, the canonical seed produces non-empty shared / investor_only / bank_only sets, report-critical fields are deterministic across fresh kernels, and reading every report-critical field does not mutate any kernel book.
+- `docs/v1_9_living_reference_world_plan.md` — updated with a "v1.9.1-prep — what shipped" section pointing at the contract doc.
+- `docs/world_model.md` §60 (this section).
+- `docs/test_inventory.md` — bumped to v1.9.1-prep / 1380.
+
+### 60.2 The infra-prelude finding
+
+The audit found one non-obvious property worth pinning: v1.9.0's `run_living_reference_world` does idempotent infrastructure registration (interactions + per-firm corporate routines + per-actor attention profiles + review interactions + review routines) **before** entering the period loop. Those writes land in `kernel.ledger.records` *between* `result.ledger_record_count_before` and `per_period_summaries[0].metadata["ledger_record_count_before"]`. Concretely:
+
+```
+infra_record_count = (
+    per_period_summaries[0].metadata["ledger_record_count_before"]
+    - result.ledger_record_count_before
+)
+sum(p.record_count_created for p in per_period_summaries)
+    + infra_record_count
+    == result.created_record_count
+```
+
+This is **expected and honest**: per-period counts cover only what each period itself wrote; the prelude is a one-time setup window. The v1.9.1 reporter must surface the prelude separately in its Setup summary (so the per-period totals add up correctly). The contract test pins the algebra so any future v1.9.x change that breaks it (e.g., moving infra into period 1) fails loudly.
+
+### 60.3 Anti-scope
+
+§60 is contract-audit only. v1.9.1-prep does **not**:
+
+- ship the `LivingWorldTraceReport` dataclass, `to_dict`, or Markdown renderer (that is v1.9.1).
+- modify v1.9.0's `world/reference_living_world.py` in any way (byte-identical before / after).
+- add new economic behavior, new routines, new books, or new ledger record types.
+- change the v1.8 / v1.9.0 anti-scope rails.
+
+### 60.4 v1.9.1-prep success criteria
+
+§60 is complete when **all** hold:
+
+1. `docs/v1_9_living_world_report_contract.md` exists with the schema tables, input policy, output contract, Markdown layout, determinism rules, warning vocabulary, mandatory boundary statement, and the infra-prelude finding.
+2. `tests/test_living_reference_world_report_contract.py` runs and all 12 tests pass.
+3. The full test suite passes (1380 tests = 1368 prior + 12 contract).
+4. `compileall world spaces tests examples` is clean and `ruff check .` from the repo root is clean.
+5. `world/reference_living_world.py` is byte-identical before and after this milestone.
+6. The contract doc cross-references the v1.9 plan and `world_model.md` §59 / §60.
+
+### 60.5 Position in the v1.9 sequence
+
+| Milestone | Scope | Status |
+| --- | --- | --- |
+| v1.9.0 Living Reference World Demo | Code (§59). | Shipped |
+| **v1.9.1-prep Report Contract Audit** | Docs + contract test (§60). | **Shipped** |
+| v1.9.1 Living World Trace Report | Code: `LivingWorldTraceReport` + Markdown renderer over the v1.9.0 result. | Next |
+| v1.9.x | Report polishing, sparse / performance boundary, public-prototype readiness. | After v1.9.1 |
+| v1.9.last | First lightweight public prototype (CLI-first, deterministic, explainability-first). | Planned |
+
 
 
 

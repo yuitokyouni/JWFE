@@ -36,6 +36,29 @@ The full suite passes 1368 tests (1341 prior + 27 living-world).
 Markdown report wiring is intentionally not yet in v1.9.0 — that
 is a v1.9.x polishing step.
 
+## v1.9.1-prep — what shipped
+
+A docs / contract-only sub-release that audits whether v1.9.0's
+result + period summary schemas can carry a future
+**Living World Trace Report**. Outcome: **no code change
+required**. The audit doc and a regression-gate contract test
+ship; v1.9.0's `world/reference_living_world.py` is byte-identical
+before / after. Documents:
+
+- [`v1_9_living_world_report_contract.md`](v1_9_living_world_report_contract.md)
+  — schema cross-check, input policy, output contract,
+  Markdown section layout, determinism rules, warning
+  vocabulary, mandatory boundary statement, and the **infra
+  prelude** finding (the v1.9.0 helper does idempotent
+  registration before the period loop, so per-period
+  `record_count_created` plus `infra_record_count` equals the
+  total chain delta).
+- `tests/test_living_reference_world_report_contract.py` (12
+  tests) pins the report-critical invariants the v1.9.1 reporter
+  will rely on, including the infra-prelude algebra.
+
+The full suite passes 1380 tests (1368 prior + 12 contract).
+
 ## v1.9 goal
 
 Build a small **synthetic, multi-period, jurisdiction-neutral
