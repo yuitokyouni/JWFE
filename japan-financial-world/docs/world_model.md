@@ -5247,12 +5247,137 @@ These principles apply to v1.9.4+ mechanisms and are pinned in the contract test
 | v1.9.1 Living World Trace Report | Code (§61). | Shipped |
 | v1.9.2 Living World Replay / Manifest / Digest | Code (§62). | Shipped |
 | v1.9.3 Model Mechanism Inventory + Behavioral Gap Audit + Mechanism Interface | Docs + interface contract (§63). | Shipped |
-| **v1.9.3.1 Mechanism Interface Hardening** | Code (§63.9). Deep-freeze + rename + ordering clarification. | **Shipped** |
-| v1.9.4 Firm Financial Update / Margin Pressure | First concrete `MechanismAdapter`. | Next |
-| v1.9.5 Valuation Refresh Lite | `valuation_mechanism` adapter. | After v1.9.4 |
+| v1.9.3.1 Mechanism Interface Hardening | Code (§63.9). Deep-freeze + rename + ordering clarification. | Shipped |
+| **v1.9.4 Reference Firm Operating Pressure Assessment Mechanism** | Code (§64). First concrete `MechanismAdapter`. | **Shipped** |
+| v1.9.5 Valuation Refresh Lite | `valuation_mechanism` adapter. | Next |
 | v1.9.6 Bank Credit Review Lite | `credit_review_mechanism` adapter. | After v1.9.5 |
 | v1.9.7 Performance Boundary | Sparse-iteration hardening. | After v1.9.6 |
 | v1.9.last | First lightweight public prototype. | After v1.9.7 |
+
+## 64. v1.9.4 Reference Firm Operating Pressure Assessment Mechanism
+
+§64 (v1.9.4) ships the project's **first concrete mechanism** on top of the v1.9.3 / v1.9.3.1 interface contract. It is **not** a "firm financial update" — that framing was rejected during pre-v1.9.4 review on the grounds that a firm does not update its financial statements simply because it receives operating or financing pressure. The corrected framing:
+
+> v1.9.4 ships the **Reference Firm Operating Pressure Assessment Mechanism**: it assesses synthetic operating / financing pressure from resolved variable observations and exposure records, then proposes one diagnostic ``firm_operating_pressure_assessment`` signal. **It does not update any financial statement line item**, balance-sheet view, valuation, price, or any other piece of state. The output is a *signal* an observer may attend to, not a *claim* about firm value.
+
+§64 is the first place where the v1.8 endogenous chain produces an output with concrete economic *content* (pressure dimensions in `[0, 1]`) rather than purely-structural counts. The content is **synthetic**, deterministic, and read-only against the kernel.
+
+### 64.1 What lands in v1.9.4
+
+- `world/reference_firm_pressure.py` — new module:
+  - Six controlled-vocabulary constants:
+    - `FIRM_PRESSURE_MODEL_ID = "mechanism:firm_financial_mechanism:reference_firm_pressure_v0"`
+    - `FIRM_PRESSURE_MODEL_FAMILY = "firm_financial_mechanism"` (per the v1.9.3 family vocabulary)
+    - `FIRM_PRESSURE_MECHANISM_VERSION = "0.1"`
+    - `FIRM_PRESSURE_SIGNAL_TYPE = "firm_operating_pressure_assessment"`
+    - `FIRM_PRESSURE_SOURCE_ID = "source:firm_operating_pressure_self_assessment"`
+    - `_PRESSURE_DIMENSIONS` — the five pressure-axis definitions and the (`exposure_types`, `variable_groups`) mappings each draws from.
+  - `FirmPressureMechanismAdapter` — frozen dataclass implementing `MechanismAdapter`. `apply(request)` reads `request.evidence` only and returns a `MechanismOutputBundle` with one proposed signal. The adapter takes **no kernel parameter**, reads no book, and never mutates the request.
+  - `FirmPressureMechanismResult` — caller-side aggregate of (request, output, run_record, signal_id, pressure_summary).
+  - `run_reference_firm_pressure_mechanism(kernel, *, firm_id, as_of_date=None, evidence_refs=None, variable_observation_ids=None, exposure_ids=None, corporate_signal_ids=None, request_id=None, metadata=None)` — caller-side helper. Resolves observations from `WorldVariableBook` (hydrating each with `variable_group` from the spec lookup), exposures from `ExposureBook`, and optional corporate signals from `SignalBook`; builds the `MechanismRunRequest`; calls the adapter; commits the one proposed signal through `kernel.signals.add_signal`; constructs the `MechanismRunRecord` for audit.
+- `tests/test_reference_firm_pressure.py` — 28 tests pinning every contract requirement (see §64.5 below).
+
+### 64.2 Hard boundary
+
+The mechanism only proposes a **pressure assessment signal**. It explicitly does **not**:
+
+- update `FirmState` or any other firm-state book;
+- update `BalanceSheetView` or any balance-sheet line item;
+- update cash, leverage, revenue, margin, or any financial statement line item;
+- imply accounting realisation;
+- imply shareholder pressure (that is a separate stakeholder-pressure mechanism family for a later milestone);
+- trigger any corporate action;
+- make any economic decision;
+- update prices, valuations, ownership, contracts, constraints, variables, or exposures.
+
+Tests pin all of these as byte-equality checks across a representative sample of v0/v1/v1.8 books before/after the helper's call.
+
+### 64.3 Pressure dimensions
+
+Five synthetic pressure dimensions, each a deterministic float in `[0, 1]`, plus one summary:
+
+| Dimension | Reads exposures with `exposure_type` ∈ | Reads observations with `variable_group` ∈ |
+| --- | --- | --- |
+| `input_cost_pressure` | `{"input_cost"}` | `{"material", "input_costs", "raw_materials"}` |
+| `energy_power_pressure` | `{"input_cost"}` | `{"energy_power", "energy"}` |
+| `debt_service_pressure` | `{"funding_cost", "discount_rate"}` | `{"rates", "credit"}` |
+| `fx_translation_pressure` | `{"translation"}` | `{"fx"}` |
+| `logistics_pressure` | `{"input_cost", "supply_chain"}` | `{"logistics", "freight", "shipping"}` |
+| `overall_pressure` | (computed) | mean of the five dimensions above |
+
+Algorithm per dimension (deterministic):
+
+1. Collect `variable_id`s of observations whose `variable_group` is in the dimension's relevant groups.
+2. Sum the magnitudes of exposures whose `exposure_type` is in the dimension's relevant types AND whose `variable_id` is in the set from step 1.
+3. Clamp the sum to `[0, 1]`.
+
+A dimension contributes only when both observation-side and exposure-side evidence intersect — which is when the firm is actually exposed *and* the pressure source is actually observable. v1.8.1's anti-scenario rule applies: empty evidence on a dimension produces 0, not silence.
+
+### 64.4 Mechanism interface contract
+
+The adapter implements `MechanismAdapter`:
+
+- `apply(request: MechanismRunRequest) -> MechanismOutputBundle` reads `request.evidence`, returns proposals.
+- The adapter is a frozen dataclass; two adapters with the same spec produce byte-identical outputs on byte-identical requests.
+- The adapter does **not** accept a kernel parameter (a defensive test pins this — passing a kernel raises `TypeError`).
+- The adapter does **not** read any book or the ledger. The contract test `test_adapter_can_run_without_a_kernel` proves the property by constructing a request with caller-supplied evidence and no kernel.
+- The adapter does **not** mutate the request (the v1.9.3.1 deep-freeze property carries; we re-pin it for the concrete adapter).
+- The adapter does **not** commit any proposal. Commitment is the caller's job — `run_reference_firm_pressure_mechanism` does it.
+
+The proposed signal mapping carries:
+
+- `signal_id` (deterministic: `signal:firm_operating_pressure_assessment:{firm_id}:{as_of_date}`)
+- `signal_type = FIRM_PRESSURE_SIGNAL_TYPE`
+- `subject_id` = the firm being assessed
+- `source_id = FIRM_PRESSURE_SOURCE_ID`
+- `published_date` / `effective_date` = `as_of_date`
+- `visibility = "public"`
+- `payload` = the five pressure dimensions + `overall_pressure` + `evidence_counts` + `calibration_status="synthetic"` + `status`
+- `related_ids` = the optional corporate-signal ids the caller passed in
+- `metadata` = `model_id`, `model_family`, `version`, `calibration_status`, plus the literal boundary statement *"pressure_assessment_signal_only; no financial-statement update; no decision; no auto-trigger"*
+
+### 64.5 v1.9.4 success criteria
+
+§64 is complete when **all** hold:
+
+1. `world/reference_firm_pressure.py` exports the six controlled-vocabulary constants, `FirmPressureMechanismAdapter`, `FirmPressureMechanismResult`, and `run_reference_firm_pressure_mechanism`.
+2. `FirmPressureMechanismAdapter` satisfies the v1.9.3 / v1.9.3.1 `MechanismAdapter` Protocol.
+3. The adapter runs without a kernel; the contract test confirms it.
+4. The adapter does not accept a kernel argument (`TypeError` otherwise).
+5. Missing evidence produces `status="degraded"` rather than crashing.
+6. All five pressure dimensions are in `[0, 1]`; `overall_pressure` is the mean of the five.
+7. The proposed signal mapping carries every required field; the payload includes all five dimensions, `overall_pressure`, `evidence_counts`, and `calibration_status="synthetic"`.
+8. The caller helper commits exactly one signal; `evidence_refs` lineage is preserved verbatim on the resulting `MechanismRunRecord`.
+9. No mutation against `valuations` / `prices` / `ownership` / `contracts` / `constraints` / `exposures` / `variables` / `institutions` / `external_processes` / `relationships` / `routines` / `attention` / `interactions`.
+10. The full test suite passes (1543 tests = 1515 prior + 28 firm-pressure).
+11. `compileall world spaces tests examples` is clean and `ruff check .` from the repo root is clean.
+
+### 64.6 Anti-scope
+
+§64 deliberately does **not** add:
+
+- firm financial statement updates;
+- balance sheet mutation;
+- valuation refresh (that is v1.9.5);
+- credit decision (v1.9.6);
+- investor / shareholder pressure (separate `stakeholder_pressure_mechanism` family, later);
+- price formation, trading, lending decisions, covenant enforcement, default;
+- corporate actions, policy reactions;
+- Japan calibration, real data ingestion, scenario engines;
+- automatic scheduler firing.
+
+### 64.7 Position in the v1.9 sequence
+
+| Milestone | Scope | Status |
+| --- | --- | --- |
+| v1.9.3 Model Mechanism Inventory + Behavioral Gap Audit + Mechanism Interface | Docs + interface contract (§63). | Shipped |
+| v1.9.3.1 Mechanism Interface Hardening | Code (§63.9). | Shipped |
+| **v1.9.4 Reference Firm Operating Pressure Assessment Mechanism** | Code (§64). First concrete `MechanismAdapter`. | **Shipped** |
+| v1.9.5 Valuation Refresh Lite | `valuation_mechanism` adapter. | Next |
+| v1.9.6 Bank Credit Review Lite | `credit_review_mechanism` adapter. | After v1.9.5 |
+| v1.9.7 Performance Boundary | Sparse-iteration hardening. | After v1.9.6 |
+| v1.9.last | First lightweight public prototype. | After v1.9.7 |
+
 
 ### 63.9 v1.9.3.1 Mechanism Interface Hardening
 

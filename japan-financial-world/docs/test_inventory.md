@@ -1,21 +1,23 @@
 # Test Inventory
 
-Snapshot of the test suite at **v1.9.3.1** (`Mechanism Interface
-Hardening` — deep-freeze + rename + ordering clarification):
-`1507 / 1507 passing` (444 v0 + 188 v1.0-v1.7 frozen reference +
-875 post-v1.7 additions covering reference demo, replay,
-manifest, catalog-shape, experiment harness, renamed WorldID
-tests, interactions, routines, attention, routine engine, the
+Snapshot of the test suite at **v1.9.4** (`Reference Firm
+Operating Pressure Assessment Mechanism` — first concrete
+mechanism on the hardened v1.9.3.1 interface): `1543 / 1543
+passing` (444 v0 + 188 v1.0-v1.7 frozen reference + 911
+post-v1.7 additions covering reference demo, replay, manifest,
+catalog-shape, experiment harness, renamed WorldID tests,
+interactions, routines, attention, routine engine, the
 corporate quarterly reporting routine, the world-variable
 storage layer, the exposure / dependency storage layer, the
 observation-menu builder join service, the
 heterogeneous-attention investor / bank demo, the investor /
 bank review routines, the endogenous chain harness, the ledger
-trace report, the multi-period living reference world demo, the
-v1.9.1-prep report contract, the v1.9.1 living world trace
+trace report, the multi-period living reference world demo,
+the v1.9.1-prep report contract, the v1.9.1 living world trace
 report, the v1.9.2 living-world replay-determinism + manifest
-helpers, the v1.9.3 mechanism interface contract, and the
-v1.9.3.1 hardening).
+helpers, the v1.9.3 mechanism interface contract, the v1.9.3.1
+hardening, the CLI argv-isolation pin, and the v1.9.4 firm
+operating pressure assessment mechanism).
 
 This inventory is grouped by what each component verifies. The numbers in
 parentheses are test counts per file. Run the full suite with:
@@ -282,6 +284,48 @@ no-mutation guarantee.
   determinism; snapshot determinism; ledger emission of
   `RecordType.INTERACTION_ADDED`; kernel wiring; no-mutation
   guarantee against every other v0 / v1 source-of-truth book.
+
+## Reference firm operating pressure assessment (v1.9.4)
+
+- `test_reference_firm_pressure.py` (28) — adapter satisfies
+  the v1.9.3 / v1.9.3.1 `MechanismAdapter` Protocol;
+  `MechanismSpec` carries the right vocabulary
+  (`model_id == FIRM_PRESSURE_MODEL_ID`,
+  `model_family == "firm_financial_mechanism"`,
+  `version == "0.1"`, `calibration_status == "synthetic"`,
+  `stochasticity == "deterministic"`); adapter does not accept
+  a kernel argument (passing one raises `TypeError`); adapter
+  can run without a kernel (proves it reads `request.evidence`
+  only); missing evidence yields `status="degraded"` rather
+  than crashing; observation-only and exposure-only requests
+  also yield degraded; all five pressure dimensions
+  (input_cost / energy_power / debt_service / fx_translation /
+  logistics) and `overall_pressure` are in `[0, 1]`;
+  `overall_pressure` is the deterministic mean of the five;
+  multi-exposure sums clamp to 1.0; two byte-identical seed
+  kernels produce byte-identical outputs; the v1.9.3.1
+  deep-freeze guarantee carries (apply doesn't mutate the
+  request); proposed signal mapping carries every required
+  field (signal_id / signal_type / subject_id / source_id /
+  published_date / effective_date / visibility / payload /
+  related_ids / metadata); payload includes all five pressure
+  dimensions, `overall_pressure`, `evidence_counts`,
+  `calibration_status="synthetic"`; metadata's `boundary`
+  string is the verbatim *"pressure_assessment_signal_only;
+  no financial-statement update; no decision; no auto-trigger"*;
+  caller helper commits exactly one signal; resolved evidence
+  hydrates `variable_group` from `WorldVariableBook`;
+  `MechanismRunRecord.input_refs` preserves caller-supplied
+  `evidence_refs` verbatim (default and explicit override);
+  `as_of_date` defaults to `kernel.clock.current_date`;
+  defensive errors on `kernel=None` and empty `firm_id`; full
+  no-mutation guarantee against `valuations`, `prices`,
+  `ownership`, `contracts`, `constraints`, `exposures`,
+  `variables`, `institutions`, `external_processes`,
+  `relationships`, `routines`, `attention`, `interactions`;
+  the only new ledger record per call is the `signal_added`
+  from `SignalBook.add_signal`; module constants and signal
+  identifiers pass a word-boundary forbidden-token check.
 
 ## Mechanism interface contract (v1.9.3 + v1.9.3.1 hardening)
 
@@ -876,7 +920,7 @@ no-mutation guarantee.
 | Reference loop (v1.6)            | 1     | 5     |
 | **v1 subtotal**                  | **7** | **188** |
 
-### v1.7-public-rc1+ / v1.8.x / v1.9.0 / v1.9.1-prep / v1.9.1 / v1.9.2 / v1.9.3 / v1.9.3.1 additions
+### v1.7-public-rc1+ / v1.8.x / v1.9.0 / v1.9.1-prep / v1.9.1 / v1.9.2 / v1.9.3 / v1.9.3.1 / CLI argv pin / v1.9.4 additions
 
 | Component                               | Files | Tests |
 | --------------------------------------- | ----- | ----- |
@@ -904,7 +948,9 @@ no-mutation guarantee.
 | Living world replay (v1.9.2)            | 1     | 16    |
 | Living world manifest (v1.9.2)          | 1     | 19    |
 | Mechanism interface contract (v1.9.3 + v1.9.3.1) | 1 | 65    |
-| **post-v1.7 subtotal**                  | **24**| **875** |
+| CLI argv-isolation pin                  | 1     | 8     |
+| Reference firm operating pressure (v1.9.4) | 1  | 28    |
+| **post-v1.7 subtotal**                  | **26**| **911** |
 
 ### v0 + v1 + post-v1.7 totals
 
@@ -912,8 +958,8 @@ no-mutation guarantee.
 | -------------------------------- | ----- | ----- |
 | v0                               | 35    | 444   |
 | v1.0–v1.7 frozen reference       | 7     | 188   |
-| post-v1.7 (v1.7-public-rc1+ / v1.8.x / v1.9.0 / v1.9.1-prep / v1.9.1 / v1.9.2 / v1.9.3 / v1.9.3.1) | 24 | 875 |
-| **Total**                        | **66**| **1507** |
+| post-v1.7 (v1.7-public-rc1+ / v1.8.x / v1.9.0 / v1.9.1-prep / v1.9.1 / v1.9.2 / v1.9.3 / v1.9.3.1 / CLI argv pin / v1.9.4) | 26 | 911 |
+| **Total**                        | **68**| **1543** |
 
 ## Auditing for jurisdiction-neutral identifiers
 

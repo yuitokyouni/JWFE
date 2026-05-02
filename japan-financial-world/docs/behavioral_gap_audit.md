@@ -159,12 +159,37 @@ v1.9.2. The path therefore renumbers:
 | v1.9.1-prep | Report contract audit. | Shipped (§60) |
 | v1.9.1 | Living World Trace Report. | Shipped (§61) |
 | v1.9.2 | Living World Replay / Manifest / Digest. | Shipped (§62) |
-| **v1.9.3** | **Model Mechanism Inventory + Behavioral Gap Audit + Mechanism Interface.** | **This milestone (§63).** |
-| v1.9.4 | Synthetic Firm Financial Update / Margin Pressure (Option A or D). | Next |
-| v1.9.5 | Valuation Refresh Lite (Option B). | After v1.9.4 |
+| v1.9.3 | Model Mechanism Inventory + Behavioral Gap Audit + Mechanism Interface. | Shipped (§63). |
+| v1.9.3.1 | Mechanism Interface Hardening (deep-freeze + rename + ordering clarification). | Shipped (§63.9). |
+| **v1.9.4** | **Reference Firm Operating Pressure Assessment Mechanism (corrected framing — see note below).** | **Shipped (§64).** |
+| v1.9.5 | Valuation Refresh Lite (Option B). | Next |
 | v1.9.6 | Bank Credit Review Lite (Option C). | After v1.9.5 |
 | v1.9.7 | Performance Boundary (sparse-iteration / complexity-budget hardening). | After v1.9.6 |
 | v1.9.last | First lightweight public prototype. | After v1.9.7 |
+
+### v1.9.4 framing correction (recorded for the audit log)
+
+The original draft of this audit named v1.9.4 as
+"Firm Financial Update / Margin Pressure (Option A or D)." That
+framing was rejected during pre-v1.9.4 review on the grounds that
+**a firm does not update its financial statements simply because it
+receives operating or financing pressure.** Pressure is a
+diagnostic signal an observer may attend to; it is not a financial
+statement claim or balance-sheet mutation.
+
+v1.9.4 therefore shipped under the corrected name **"Reference Firm
+Operating Pressure Assessment Mechanism"** with the explicit hard
+boundary that the mechanism only proposes a pressure-assessment
+signal — it does **not** update `FirmState`, `BalanceSheetView`,
+financial statement line items, cash, leverage, revenue, margin, or
+imply accounting realisation, shareholder pressure, or any
+corporate action. See [`world_model.md`](world_model.md) §64 for
+the shipped contract and the `pressure_assessment_signal_only`
+boundary statement embedded in the signal's metadata.
+
+The Option A / D framing in the section above is preserved for
+audit-trail reasons (this is what was originally planned), but the
+shipped milestone uses the corrected name.
 
 If a v1.9.x change ever requires going outside this list, the
 two anti-scope rails still apply:

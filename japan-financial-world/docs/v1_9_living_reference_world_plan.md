@@ -214,6 +214,63 @@ anti-behavior test.
 
 The full suite passes 1507 tests (1481 prior + 26 hardening).
 
+## v1.9.4 — what shipped
+
+The **first concrete mechanism** built on the v1.9.3.1 hardened
+interface contract. The framing was corrected during pre-v1.9.4
+review: the milestone is **not** "Firm Financial Update" — a firm
+does not update its financial statements simply because it
+receives operating or financing pressure. The shipped name is
+**Reference Firm Operating Pressure Assessment Mechanism**.
+
+- `world/reference_firm_pressure.py` exports
+  `FIRM_PRESSURE_MODEL_ID`,
+  `FIRM_PRESSURE_MODEL_FAMILY = "firm_financial_mechanism"`,
+  `FIRM_PRESSURE_SIGNAL_TYPE = "firm_operating_pressure_assessment"`,
+  `FIRM_PRESSURE_MECHANISM_VERSION = "0.1"`,
+  `FirmPressureMechanismAdapter` (frozen dataclass implementing
+  the v1.9.3 / v1.9.3.1 `MechanismAdapter` Protocol), and
+  `run_reference_firm_pressure_mechanism(kernel, *, firm_id,
+  as_of_date=None, evidence_refs=None,
+  variable_observation_ids=None, exposure_ids=None,
+  corporate_signal_ids=None, ...)` as the caller-side helper.
+- The adapter computes five synthetic pressure dimensions in
+  `[0, 1]` (input-cost / energy-power / debt-service /
+  fx-translation / logistics) plus the mean `overall_pressure`,
+  and proposes one signal. The adapter is read-only against the
+  kernel (it doesn't accept a kernel argument; it reads
+  `request.evidence` only) and never mutates the request (the
+  v1.9.3.1 deep-freeze property carries; tests re-pin it).
+- The caller helper resolves observations from
+  `WorldVariableBook` (hydrating each with `variable_group`),
+  exposures from `ExposureBook`, and optional corporate signals
+  from `SignalBook`; commits the one proposed signal through
+  `kernel.signals.add_signal`; returns the
+  `FirmPressureMechanismResult` (request + output + run_record
+  + signal_id + pressure_summary) for audit.
+
+**Hard boundary** (embedded verbatim in the signal's metadata):
+*"pressure_assessment_signal_only; no financial-statement
+update; no decision; no auto-trigger"*.
+
+`tests/test_reference_firm_pressure.py` (28 tests) pins the
+contract: adapter satisfies `MechanismAdapter`; spec is valid;
+adapter doesn't accept a kernel; can run without a kernel;
+missing evidence → degraded (not crash); pressure scores in
+`[0, 1]`; `overall_pressure` = mean of five; clamping at 1.0;
+deterministic across two fresh kernels seeded identically;
+request not mutated; signal mapping has every required field;
+caller helper commits exactly one signal; `evidence_refs`
+preserved verbatim on the `MechanismRunRecord`; full no-mutation
+guarantee against valuations / prices / ownership / contracts /
+constraints / variables / exposures / institutions /
+external_processes / relationships / routines / attention /
+interactions; only one new ledger record per call (the
+`signal_added` from `SignalBook.add_signal`); synthetic-only
+identifiers (word-boundary forbidden-token check).
+
+The full suite passes 1543 tests (1515 prior + 28 firm-pressure).
+
 ## v1.9 goal
 
 Build a small **synthetic, multi-period, jurisdiction-neutral

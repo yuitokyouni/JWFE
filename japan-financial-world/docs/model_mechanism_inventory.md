@@ -90,7 +90,8 @@ v1.x economic-behavior model could plug in **as a mechanism**
 | `ExposureBook` (v1.8.10) | structural model | Declares per-actor dependencies on world variables. | Compute impact. | No | No | Yes | No | Yes | Firm / valuation / credit mechanisms read exposures. |
 | `ObservationMenuBuilder` (v1.8.11) | observation / attention model | Joins `AttentionBook` × `SignalBook` × `WorldVariableBook` × `ExposureBook` to materialise one menu per actor. | Select. | No | No | Yes | No | Yes | Provides the canonical input bundle for selection-driven mechanisms. |
 | `select_observations_for_profile` (v1.8.12) | deterministic demo rule | Filters menu refs against `AttentionProfile.watched_*` fields. | Rank / weight / interpret. | No | No (recordable filter, not a decision). | Yes | No | Yes | A future ranking mechanism may pre-process the menu before this filter runs. |
-| `corporate_quarterly_reporting` (v1.8.7) | routine / process model | Self-loop routine that publishes one synthetic `corporate_quarterly_report` signal per call. | Compute earnings, revenue, leverage. | No | The signal payload is illustrative. | Yes | No | Yes | **Firm Financial Update** (v1.9.4) attaches a `firm_financial_mechanism` that produces the payload from a synthetic state-update model. |
+| `corporate_quarterly_reporting` (v1.8.7) | routine / process model | Self-loop routine that publishes one synthetic `corporate_quarterly_report` signal per call. | Compute earnings, revenue, leverage. | No | The signal payload is illustrative. | Yes | No | Yes | A future v1.9.x mechanism may produce the payload from a synthetic state-update model. **Note:** v1.9.4 ships a *separate* `Reference Firm Operating Pressure Assessment Mechanism` (`firm_financial_mechanism` family) that emits a `firm_operating_pressure_assessment` signal — it does **not** update the corporate-reporting payload, and it does **not** update any financial statement line item. See `world_model.md` §64. |
+| `FirmPressureMechanismAdapter` (v1.9.4) | economic behavior model (reference, synthetic) | First concrete `MechanismAdapter`. Reads resolved variable observations + exposures from `MechanismRunRequest.evidence`, computes five synthetic operating / financing pressure dimensions in `[0, 1]` (input-cost / energy-power / debt-service / fx-translation / logistics) plus the mean overall, and proposes one `firm_operating_pressure_assessment` signal. | Update any financial statement, balance-sheet view, valuation, price, or any other piece of state. The mechanism's hard boundary, embedded verbatim in the signal's metadata: *"pressure_assessment_signal_only; no financial-statement update; no decision; no auto-trigger"*. | No | The pressure dimensions are diagnostic; they are not decisions. | Yes | `calibration_status="synthetic"` | Yes | Valuation Refresh Lite (v1.9.5) consumes the pressure assessment as input via the v1.9.3.1 evidence contract. |
 | `investor_review` / `bank_review` (v1.8.13) | routine / process model | Self-loop routines that consume `SelectedObservationSet`s and emit a synthetic review-note signal. | Make buy / sell / lend decisions. | No | The note carries count summaries only. | Yes | No | Yes | Investor-intent (v1.9.x) and credit-review (v1.9.6) mechanisms attach here. |
 | `run_reference_endogenous_chain` (v1.8.14) | routine / process model | Orchestrates the corporate report → menus → selections → reviews chain in one call. | Add new behavior. | No | No | Yes | No | Yes | Mechanism runs replace component helper calls one-by-one as v1.9.x lands. |
 | `LedgerTraceReport` (v1.8.15) | deterministic demo rule | Read-only Markdown / dict projection over a chain's ledger slice. | Interpret records. | No | No | Yes | No | Yes | Mechanism run records appear in the same slice and are reportable through the same shape. |
@@ -101,9 +102,10 @@ v1.x economic-behavior model could plug in **as a mechanism**
 ## Verdict
 
 > **The current system is an auditable routine-driven
-> information-flow substrate. It is not yet a price-formation
-> model, credit model, valuation model, macro model, or
-> firm-financial dynamics model.**
+> information-flow substrate, with one shipped reference
+> mechanism. It is still not a price-formation model, credit
+> model, valuation model, macro model, or firm-financial
+> dynamics model.**
 
 What the system *does* do, well:
 
@@ -113,16 +115,25 @@ What the system *does* do, well:
 - preserve every record in a deterministic, replay-checked
   ledger;
 - render the result as a Markdown / JSON report that a
-  reader can verify in 60 seconds.
+  reader can verify in 60 seconds;
+- **assess synthetic operating / financing pressure** on a
+  firm via the v1.9.4
+  `Reference Firm Operating Pressure Assessment Mechanism`,
+  emitting a diagnostic signal (read-only against the kernel;
+  no financial-statement mutation).
 
-What it does **not** do — and the gap audit
-([`behavioral_gap_audit.md`](behavioral_gap_audit.md)) names the
-ranking — is *interpret* any of those records as economic
-claims. There is no margin number that came from a balance-sheet
+What it still does **not** do — and the gap audit
+([`behavioral_gap_audit.md`](behavioral_gap_audit.md)) names
+the ranking — is *interpret* most records as economic claims.
+There is no margin number that came from a balance-sheet
 update mechanism, no valuation that came from a discount-rate
 mechanism, no credit pressure that came from a covenant-stress
-mechanism, no price that came from a market mechanism. Those are
-the targets for v1.9.4 onward.
+mechanism, no price that came from a market mechanism. The
+v1.9.4 pressure assessment is the *first* such mechanism, and
+it is deliberately scoped to a diagnostic signal (not a
+decision and not a financial-state update). v1.9.5 (valuation
+refresh lite) and v1.9.6 (bank credit review lite) are the
+next mechanisms in the recommended path.
 
 ## Mechanism interface (from `world/mechanisms.py`)
 
