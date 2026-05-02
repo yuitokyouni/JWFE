@@ -8012,3 +8012,121 @@ The default-fixture `living_world_digest` moves from `2c748aa6e37b679d9d52984e7f
 The test count moves from `2613 / 2613` (v1.12.7) to `2725 / 2725` (v1.12.8) — `+112` tests (`+102` in the new `tests/test_attention_feedback.py`, `+11` orchestrator-level v1.12.8 integration tests in `tests/test_living_reference_world.py`, `−1` from renaming the v1.12.7 digest pin to v1.12.8). Per-period record count moves from 71 to 79 (period 0) / 81 (period 1+); per-run window widens from `[284, 316]` to `[316, 364]`. Default-fixture `living_world_digest` moves from `2c748aa6...` to `3002a499df6aff5c37628df5f14fbb3186481b276fab36a4fe2f13a89c5feeff` by design.
 
 With v1.12.8 shipped, the living reference world has a **closed cross-period feedback loop**: what an actor saw and concluded in period N changes what it attends to in period N+1, and that change is observable in the period N+1 audit trail.
+
+## 91. v1.12.9 Attention budget / decay / saturation — making attention scarce
+
+§91 makes the v1.12.8 cross-period feedback loop **scarce, budgeted, decaying, and saturating**, so attention does not degenerate into unbounded evidence accumulation. v1.12.8 closed the loop; v1.12.9 disciplines it.
+
+The discipline is small, deterministic, and synthetic. Attention is a constrained resource: every actor's `ActorAttentionStateRecord` carries a finite `max_selected_refs` (capped at `_MAX_SELECTED_REFS_CAP = 12`), a `per_dimension_budget` (default 3) that limits how many evidence ids any one focus label can contribute, a `decay_horizon` (default 2) that controls how long an inherited focus label persists without reinforcement, and a `saturation_policy` (default `"drop_oldest"`) that decides which focus labels drop when the new state's focus set saturates above `_MAX_FOCUS_LABELS = 8`.
+
+The decay rule is explicit: a focus label inherited from the prior state at weight 1.0 halves to 0.5 in the next period if not reinforced; halves to 0.0 in the period after that and is dropped; or is dropped immediately when its `stale_count` exceeds `decay_horizon`. Reinforcement (the same focus label re-appearing in the current period's outcomes) resets the weight to 1.0 and the `stale_count` to 0. The new helper `apply_attention_budget(...)` walks focus labels in priority order (weight desc, then alpha asc) and bounds the candidate selected refs by `per_dimension_budget` per focus and `max_selected_refs` total — deterministic ordering, deterministic dedup, no random behavior.
+
+The headline test in `tests/test_attention_feedback.py::test_crowding_new_focus_replaces_decayed_focus_in_memory` pins the loop directly: a 3-period synthetic scenario where period 0 is `engagement_watch`, periods 1-2 are `risk_flag_watch` produces a state whose focus *swaps* — at period 1 the state mixes risk + decayed engagement; by period 2 engagement has dropped entirely and the state is fully risk-shaped. New focus has crowded out old focus.
+
+This stays synthetic, deterministic, and non-binding. v1.12.9 introduces no new ledger event types, no new behaviour models, no calibrated probabilities. Every prior anti-claim is preserved bit-for-bit: no trading, no price formation, no lending decisions, no investment recommendations, no portfolio allocation, no real data ingestion, no Japan calibration, no LLM-agent execution, no behavior probabilities.
+
+### 91.1 Why this exists
+
+v1.12.8 made attention dynamic across periods, but the dynamic was *monotonic accumulation*: every period's memory selection added refs without removing any. Under sustained outcomes the actor's effective evidence surface only grows. That is biologically and computationally implausible. A real attentional system has limits — finite working memory, finite review bandwidth, finite per-day diligence headcount — and v1.12.9 imposes a synthetic version of those limits at the substrate level.
+
+The v1.12.9 budget is deliberately **synthetic and small** (12 refs total, 3 per focus, 2-period decay horizon). The numbers are not calibrated; tests pin the *qualitative* behaviour — bounded growth, decaying inheritance, crowding under saturation — never specific arithmetic.
+
+The motivation is also **forward-looking**: v1.12.9 prepares any future LLM-agent integration (v1.13.x and beyond) by giving the agent compact, constrained context rather than unlimited memory. An LLM-agent reviewer reading a v1.12.9 `ActorAttentionStateRecord` sees at most 8 focus labels with explicit weights and stale counts; an LLM-agent valuer reading the memory `SelectedObservationSet` sees at most 12 prior-period evidence ids. That is a usable prompt-window envelope.
+
+### 91.2 What v1.12.9 ships
+
+- `world/attention_feedback.py` — three additive `ActorAttentionStateRecord` fields (`per_dimension_budget`, `decay_horizon`, `saturation_policy`); both records' `__post_init__` validates them (non-negative integer / non-empty string / bool rejected). Module-level constants `_DEFAULT_PER_DIMENSION_BUDGET=3`, `_DEFAULT_DECAY_HORIZON=2`, `_DEFAULT_SATURATION_POLICY="drop_oldest"`, `_MAX_SELECTED_REFS_CAP=12`, `_MAX_FOCUS_LABELS=8`, `_RESET_FOCUS_WEIGHT=1.0`, `_DECAY_FOCUS_STEP=0.5`. Ledger payload + `to_dict` carry the new fields.
+- `world/attention_feedback.py` — new `apply_attention_budget(*, focus_labels, focus_weights, candidate_refs_by_focus, max_selected_refs, per_dimension_budget) -> tuple[str, ...]` pure helper with full kwarg validation. Importable for downstream consumers.
+- `world/attention_feedback.py` — `build_attention_feedback` rule set extended with **decay / inheritance / saturation logic**: prior state's focus labels carry forward at decayed weight when not reinforced; reinforced labels reset to weight 1.0 and stale_count 0; labels past `decay_horizon` are dropped; focus set saturated above `_MAX_FOCUS_LABELS` triggers `"drop_oldest"` policy (drop labels by stale_count desc, weight asc, alpha asc). The new state's metadata carries a `focus_stale_counts: dict[str, int]` map for the next period to read.
+- `world/reference_living_world.py` — `_build_memory_selection_if_any` calls `apply_attention_budget` against the prior state's `focus_labels` / `focus_weights` / per-focus candidate map, producing a budget-bounded selected_refs tuple.
+- `tests/test_attention_feedback.py` — `+20` v1.12.9 tests:
+  - `apply_attention_budget` field validation (negative caps, bool, zero), per-dimension cap, max-total cap, weight ordering, alpha tie-break, dedup-first-seen, missing-focus tolerance, junk-ref skipping, determinism;
+  - decay across one period (weight halves, stale_count = 1);
+  - drop after decay horizon (3 periods of constant non-engagement → engagement labels drop);
+  - reinforcement (re-appearance resets stale_count = 0 and weight = 1.0);
+  - max_selected_refs capped at 12 regardless of focus count;
+  - state record carries v1.12.9 budget fields with right defaults;
+  - field validation rejects negative / bool / empty values;
+  - decay_horizon=0 drops inherited labels immediately (configurable knob test);
+  - state metadata carries `focus_stale_counts`;
+  - **headline crowding pin**: 3-period synthetic where new risk focus crowds out old engagement focus at periods 1, 2.
+- `tests/test_living_reference_world.py` — `+7` v1.12.9 orchestrator-level integration tests:
+  - every state carries v1.12.9 budget fields;
+  - memory selection size respects the prior state's `max_selected_refs`;
+  - memory selection size does not grow monotonically across periods;
+  - state metadata carries `focus_stale_counts`;
+  - no forbidden payload keys on attention-state / feedback ledger payloads;
+  - constrained-regime reinforcement test (every period reinforces risk → stale_count stays at 0, weights stay at 1.0);
+  - the new pinned `living_world_digest` (renamed from `test_v1_12_8_living_world_digest_pinned`).
+
+### 91.3 Decay rule (binding)
+
+For each label in the prior state's `focus_labels`:
+
+1. If the label is also in the **fresh focus set** (the current period's outcomes triggered it again) → carry forward at weight `_RESET_FOCUS_WEIGHT = 1.0` with `stale_count = 0`. Reinforced.
+2. Else (label only in prior, not reinforced this period):
+   - new weight = `max(0.0, prior_weight - _DECAY_FOCUS_STEP)` where `_DECAY_FOCUS_STEP = 0.5`;
+   - new `stale_count` = `prior_stale_count + 1`;
+   - if `new_stale_count > decay_horizon` (default 2) → **drop**;
+   - if `decayed weight ≤ 0.0` → **drop**;
+   - else → carry forward at decayed weight + incremented stale_count.
+
+Fresh-only labels (in the current period but not in the prior) → weight 1.0, stale_count 0.
+
+Saturation: if the resulting focus set has more than `_MAX_FOCUS_LABELS = 8` labels, drop the highest-`stale_count` first; ties broken by weight ascending, then alphabetic ascending.
+
+### 91.4 Budget rule (binding)
+
+The orchestrator's memory-selection phase calls `apply_attention_budget` with:
+
+- `focus_labels = prior_state.focus_labels`
+- `focus_weights = prior_state.focus_weights`
+- `candidate_refs_by_focus = {focus: prior_state.source_*_ids if focus is in the focus → source-attr map else absent}`
+- `max_selected_refs = prior_state.max_selected_refs`
+- `per_dimension_budget = prior_state.per_dimension_budget`
+
+The helper walks focus labels in `(-weight, label)` order, takes up to `per_dimension_budget` ids from each focus's candidate sequence, and stops when the bounded list reaches `max_selected_refs`. Two memory selections built from byte-identical prior states are byte-identical.
+
+### 91.5 Anti-fields and anti-claims (binding)
+
+The new `ActorAttentionStateRecord` fields (`per_dimension_budget`, `decay_horizon`, `saturation_policy`) and the new `metadata["focus_stale_counts"]` carry only ids and lightweight integer / label / scalar metadata. They have no `order`, `trade`, `rebalance`, `target_weight`, `buy`, `sell`, `recommendation`, `investment_advice`, `expected_return`, `target_price`, `portfolio_allocation`, `execution`, `forecast_value`, `actual_value`, `real_data_value`, or `behavior_probability` field. Tests pin the absence on the dataclass field set and on the ledger payload key set.
+
+The decay rule is **not a probabilistic forgetting model**. Every step is integer or rational; no random number is drawn. Two fresh runs over the same fixture produce byte-identical attention states.
+
+### 91.6 Performance boundary (unchanged)
+
+Per-period record count: **unchanged** from v1.12.8 (79 in period 0; 81 in periods 1-3). Per-run record window: **unchanged** (`[316, 364]`). The v1.12.9 changes are *internal* to attention-state field shapes and memory-selection contents — they neither add nor remove ledger records.
+
+### 91.7 Living-world digest (expected change)
+
+The default-fixture `living_world_digest` moves from `3002a499df6aff5c37628df5f14fbb3186481b276fab36a4fe2f13a89c5feeff` (v1.12.8) to `e508b4bf10df217f7b561b41aea845f841b12215d5bf815587375c52cffcdcb5` (v1.12.9) by design — the new payload keys (`per_dimension_budget` / `decay_horizon` / `saturation_policy` / `focus_stale_counts`) and the budget-bounded memory-selection refs flow into the canonical view's `attention_state_created` and `observation_set_selected` payloads. The integration-test fixture pins `e328f955922117f7d9697ea9a68877c418b818eedbab888f2d82c4b9ac4070b0` (it differs from the perf-fixture digest because `_seed_kernel` is implemented separately in each test file, and the seeded data differs).
+
+### 91.8 What v1.12.9 does not decide
+
+- **Does not** introduce trading, price formation, lending decisions, investment recommendations, portfolio allocation, target weights, expected returns, target prices, or any execution-class behaviour.
+- **Does not** introduce probabilistic forgetting / random decay. The rule is integer-counted and weight-deterministic.
+- **Does not** introduce real data ingestion or Japan-specific calibration.
+- **Does not** introduce LLM-agent execution. The attention state with budget + decay is the *substrate* a future LLM-agent step can read; v1.12.9 is not itself an LLM call.
+- **Does not** alter the `apply_attention_budget` signature into a behavioural-policy model. The helper is a pure deterministic function over (focus_labels, weights, candidates, caps).
+- **Does not** force orchestrator users to adopt the budget at non-default values. `build_attention_feedback` accepts `per_dimension_budget`, `decay_horizon`, and `saturation_policy` as kwargs with defaults; future advanced-actor variants may pass tighter or looser settings.
+- **Does not** introduce a new ledger event type.
+
+### 91.9 Position in the v1.12 sequence
+
+| Milestone | Scope | Status |
+| --- | --- | --- |
+| v1.12.0 → v1.12.2 (firm state / investor intent / market environment) | Code (§80 → §82). | Shipped |
+| v1.12.3 EvidenceResolver / ActorContextFrame | Code (§83). | Shipped |
+| v1.x Valuation Protocol — Comps Purpose Separation | Docs-only (§84). Advanced-actor-only. | Shipped |
+| v1.12.4 Attention-conditioned investor intent | Code (§85). Orchestrator wired. | Shipped |
+| v1.12.5 Attention-conditioned valuation lite | Code (§86). | Shipped |
+| v1.13.0 Generic central bank settlement infrastructure design | Docs-only (§87). | Shipped |
+| v1.12.6 Attention-conditioned bank credit review lite | Code (§88). | Shipped |
+| v1.12.7 Attention-conditioned mechanism integration | Code (§89). | Shipped |
+| v1.12.8 Next-period attention feedback | Code (§90). First cross-period feedback loop. | Shipped |
+| **v1.12.9 Attention budget / decay / saturation** | Code (§91). Scarce, budgeted, decaying attention. | **Shipped** |
+| v2.0 Japan public-data calibration design gate | — | Not started |
+
+The test count moves from `2725 / 2725` (v1.12.8) to `2751 / 2751` (v1.12.9) — `+26` tests (`+20` in `tests/test_attention_feedback.py` covering `apply_attention_budget` + decay + crowding + state field validation, `+7` in `tests/test_living_reference_world.py` covering orchestrator-level budget invariants and the constrained-regime reinforcement test, `−1` from renaming the digest pin). Per-period record count and per-run window are unchanged from v1.12.8 (the v1.12.9 changes are internal). Default-fixture `living_world_digest` moves to `e508b4bf10df217f7b561b41aea845f841b12215d5bf815587375c52cffcdcb5` by design.
+
+With v1.12.9 shipped, attention is no longer a monotonically widening surface. It is **scarce, budgeted, decaying, and saturating** — a constrained adaptive process whose shape changes in deterministic response to outcomes, never just by accumulation.

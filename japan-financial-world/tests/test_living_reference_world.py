@@ -2590,17 +2590,19 @@ def test_v1_12_7_canonical_replay_deterministic():
     assert living_world_digest(k1, r1) == living_world_digest(k2, r2)
 
 
-def test_v1_12_8_living_world_digest_pinned():
-    """Pin the v1.12.8 living_world_digest so any future
-    silent change to the orchestrator path, the v1.12.5 /
-    v1.12.6 helpers, the v1.12.4 helper, or the v1.12.8
-    attention-feedback / memory-selection wiring fails loudly.
+def test_v1_12_9_living_world_digest_pinned():
+    """Pin the v1.12.9 living_world_digest so any future
+    silent change to the attention-budget rule set,
+    `apply_attention_budget`, the decay/crowding logic in
+    `build_attention_feedback`, or the orchestrator's
+    memory-selection wiring fails loudly.
 
-    The digest moved at v1.12.8 because the orchestrator now
-    creates per-period attention-state + feedback records and
-    a memory ``SelectedObservationSet`` per actor from period
-    1 onwards (when the actor has a prior attention state);
-    those records flow into the canonical view.
+    The digest moves at v1.12.9 because the new state record
+    carries `per_dimension_budget` / `decay_horizon` /
+    `saturation_policy` fields and a new
+    `metadata["focus_stale_counts"]` carry-forward map; the
+    memory `SelectedObservationSet` is now budget-bounded
+    rather than fully accumulating.
     """
     from examples.reference_world.living_world_replay import (
         living_world_digest,
@@ -2609,10 +2611,10 @@ def test_v1_12_8_living_world_digest_pinned():
     k = _seed_kernel()
     r = _run_default(k)
     expected = (
-        "e56122eda4ea871ec895806b05a2da5c6deac1589708ff7ff0a8cd90c7f0a81f"
+        "e328f955922117f7d9697ea9a68877c418b818eedbab888f2d82c4b9ac4070b0"
     )
     assert living_world_digest(k, r) == expected, (
-        "v1.12.8 living_world_digest moved unexpectedly. If the "
+        "v1.12.9 living_world_digest moved unexpectedly. If the "
         "shift is intentional, update the pinned value here AND "
         "in docs/world_model.md and docs/test_inventory.md."
     )
@@ -2971,6 +2973,162 @@ def test_v1_12_8_constrained_regime_drives_risk_focus():
             focus_labels_seen.update(state.focus_labels)
     assert TRIGGER_RISK_INTENT_OBSERVED in triggers
     assert FOCUS_LABEL_FIRM_STATE in focus_labels_seen
+
+
+# ---------------------------------------------------------------------------
+# v1.12.9 — attention budget / decay / saturation
+# ---------------------------------------------------------------------------
+
+
+def test_v1_12_9_state_carries_budget_fields():
+    """Every orchestrator-produced attention state must carry
+    the v1.12.9 budget fields."""
+    k = _seed_kernel()
+    r = _run_default(k)
+    for ps in r.per_period_summaries:
+        for asid in (
+            tuple(ps.investor_attention_state_ids)
+            + tuple(ps.bank_attention_state_ids)
+        ):
+            state = k.attention_feedback.get_attention_state(asid)
+            assert state.per_dimension_budget == 3
+            assert state.decay_horizon == 2
+            assert state.saturation_policy == "drop_oldest"
+            # Every state's max_selected_refs is capped at the
+            # v1.12.9 constant.
+            assert 0 < state.max_selected_refs <= 12
+
+
+def test_v1_12_9_memory_selection_size_respects_max_selected_refs():
+    """No memory selection's ``selected_refs`` may exceed the
+    actor's prior-state ``max_selected_refs``. This is the
+    v1.12.9 attention-scarcity invariant: feedback is bounded,
+    not monotonically accumulating."""
+    k = _seed_kernel()
+    r = _run_default(k)
+    for ps in r.per_period_summaries:
+        for sid in (
+            tuple(ps.investor_memory_selection_ids)
+            + tuple(ps.bank_memory_selection_ids)
+        ):
+            sel = k.attention.get_selection(sid)
+            actor_id = sel.actor_id
+            prior_state = k.attention_feedback.get_latest_for_actor(
+                actor_id
+            )
+            # The "latest for actor" at end-of-period N is the
+            # state created at end of period N (since memory
+            # selection at period N+1 is built from period N's
+            # state). For the bound check we use the orchestrator's
+            # cap at the time of memory build — _BASE_MAX + len ≤ 12.
+            assert prior_state is not None
+            assert (
+                len(sel.selected_refs) <= prior_state.max_selected_refs
+            )
+
+
+def test_v1_12_9_memory_selection_size_does_not_grow_monotonically():
+    """Across periods, memory selection size must stay bounded.
+    Under the v1.12.9 budget the per-period investor memory
+    selection's ref count must not exceed the cap regardless of
+    how many periods have elapsed."""
+    k = _seed_kernel()
+    r = _run_default(k)
+    investor = _INVESTOR_IDS[0]
+    sizes: list[int] = []
+    for ps in r.per_period_summaries:
+        for sid in ps.investor_memory_selection_ids:
+            sel = k.attention.get_selection(sid)
+            if sel.actor_id == investor:
+                sizes.append(len(sel.selected_refs))
+    if not sizes:
+        pytest.skip("no investor memory selections produced (period 0 only)")
+    # The maximum ref count across periods must respect the
+    # v1.12.9 cap (_MAX_SELECTED_REFS_CAP = 12).
+    assert max(sizes) <= 12
+
+
+def test_v1_12_9_state_metadata_carries_focus_stale_counts():
+    k = _seed_kernel()
+    r = _run_default(k)
+    investor = _INVESTOR_IDS[0]
+    for ps in r.per_period_summaries:
+        for asid in ps.investor_attention_state_ids:
+            state = k.attention_feedback.get_attention_state(asid)
+            if state.actor_id != investor:
+                continue
+            counts = state.metadata.get("focus_stale_counts")
+            assert isinstance(counts, dict)
+            for label in state.focus_labels:
+                assert label in counts
+
+
+def test_v1_12_9_no_forbidden_payload_keys_in_v1_12_9_records():
+    """v1.12.9 must not introduce any forbidden trading /
+    lending / pricing / advice key on the attention-state
+    or feedback ledger payload."""
+    k = _seed_kernel()
+    r = _run_default(k)
+    forbidden_keys = {
+        "order",
+        "trade",
+        "rebalance",
+        "target_price",
+        "expected_return",
+        "recommendation",
+        "investment_advice",
+        "portfolio_allocation",
+        "execution",
+        "lending_decision",
+        "internal_rating",
+        "probability_of_default",
+        "behavior_probability",
+    }
+    for rec in k.ledger.records[
+        r.ledger_record_count_before : r.ledger_record_count_after
+    ]:
+        if rec.event_type not in {
+            "attention_state_created",
+            "attention_feedback_recorded",
+        }:
+            continue
+        leaked = set(rec.payload.keys()) & forbidden_keys
+        assert not leaked
+
+
+def test_v1_12_9_constrained_regime_drives_risk_focus_with_decay():
+    """Under the constrained regime period 0's outcomes are
+    already risk-shaped, so the constrained regime exercises
+    the v1.12.9 reinforcement path: every period reinforces the
+    same risk focus, stale_count stays at 0 for risk labels,
+    and the state's focus does not accidentally widen via
+    decay-based inheritance."""
+    k = _seed_kernel()
+    r = run_living_reference_world(
+        k,
+        firm_ids=_FIRM_IDS,
+        investor_ids=_INVESTOR_IDS,
+        bank_ids=_BANK_IDS,
+        period_dates=_PERIOD_DATES,
+        market_regime="constrained",
+    )
+    investor = _INVESTOR_IDS[0]
+    # Pick the last period's state for the first investor.
+    last_period = r.per_period_summaries[-1]
+    last_state_id = next(
+        asid
+        for asid in last_period.investor_attention_state_ids
+        if k.attention_feedback.get_attention_state(asid).actor_id == investor
+    )
+    last_state = k.attention_feedback.get_attention_state(last_state_id)
+    counts = last_state.metadata.get("focus_stale_counts", {})
+    # Every active focus label has stale_count 0 — the
+    # constrained regime keeps reinforcing the same labels.
+    for label in last_state.focus_labels:
+        assert counts.get(label) == 0
+    # And every active label has weight 1.0 — none decayed.
+    for label in last_state.focus_labels:
+        assert last_state.focus_weights.get(label) == 1.0
 
 
 # ---------------------------------------------------------------------------

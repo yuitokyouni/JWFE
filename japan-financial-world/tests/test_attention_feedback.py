@@ -50,6 +50,7 @@ from world.attention_feedback import (
     DuplicateAttentionStateError,
     UnknownAttentionFeedbackError,
     UnknownAttentionStateError,
+    apply_attention_budget,
     build_attention_feedback,
 )
 from world.clock import Clock
@@ -1144,6 +1145,592 @@ def test_all_focus_labels_carry_no_forbidden_word():
     }
     for label in ALL_FOCUS_LABELS:
         assert not (set(label.lower().split("_")) & forbidden), label
+
+
+# ---------------------------------------------------------------------------
+# v1.12.9 — apply_attention_budget
+# ---------------------------------------------------------------------------
+
+
+def test_apply_attention_budget_kernel_args_are_validated():
+    with pytest.raises(ValueError):
+        apply_attention_budget(
+            focus_labels=("a",),
+            focus_weights={},
+            candidate_refs_by_focus={},
+            max_selected_refs=-1,
+            per_dimension_budget=3,
+        )
+    with pytest.raises(ValueError):
+        apply_attention_budget(
+            focus_labels=("a",),
+            focus_weights={},
+            candidate_refs_by_focus={},
+            max_selected_refs=3,
+            per_dimension_budget=-1,
+        )
+    with pytest.raises(ValueError):
+        apply_attention_budget(
+            focus_labels=("a",),
+            focus_weights={},
+            candidate_refs_by_focus={},
+            max_selected_refs=True,
+            per_dimension_budget=3,
+        )
+    with pytest.raises(ValueError):
+        apply_attention_budget(
+            focus_labels=("a",),
+            focus_weights={},
+            candidate_refs_by_focus={},
+            max_selected_refs=3,
+            per_dimension_budget=False,
+        )
+
+
+def test_apply_attention_budget_zero_caps_return_empty():
+    assert (
+        apply_attention_budget(
+            focus_labels=("a",),
+            focus_weights={"a": 1.0},
+            candidate_refs_by_focus={"a": ["x", "y"]},
+            max_selected_refs=0,
+            per_dimension_budget=3,
+        )
+        == ()
+    )
+    assert (
+        apply_attention_budget(
+            focus_labels=("a",),
+            focus_weights={"a": 1.0},
+            candidate_refs_by_focus={"a": ["x", "y"]},
+            max_selected_refs=3,
+            per_dimension_budget=0,
+        )
+        == ()
+    )
+
+
+def test_apply_attention_budget_respects_per_dimension_cap():
+    out = apply_attention_budget(
+        focus_labels=("firm_state",),
+        focus_weights={"firm_state": 1.0},
+        candidate_refs_by_focus={
+            "firm_state": ["fs1", "fs2", "fs3", "fs4", "fs5"]
+        },
+        max_selected_refs=10,
+        per_dimension_budget=2,
+    )
+    assert out == ("fs1", "fs2")
+
+
+def test_apply_attention_budget_respects_max_selected_refs():
+    out = apply_attention_budget(
+        focus_labels=("firm_state", "dialogue"),
+        focus_weights={"firm_state": 1.0, "dialogue": 0.5},
+        candidate_refs_by_focus={
+            "firm_state": ["fs1", "fs2", "fs3"],
+            "dialogue": ["dlg1", "dlg2", "dlg3"],
+        },
+        max_selected_refs=4,
+        per_dimension_budget=3,
+    )
+    # firm_state goes first (weight 1.0); takes 3; then dialogue
+    # adds one to hit max=4.
+    assert out == ("fs1", "fs2", "fs3", "dlg1")
+
+
+def test_apply_attention_budget_orders_by_weight_then_alpha():
+    out = apply_attention_budget(
+        focus_labels=("zeta", "alpha", "beta"),
+        focus_weights={"alpha": 0.5, "beta": 0.5, "zeta": 0.5},
+        candidate_refs_by_focus={
+            "alpha": ["a1"],
+            "beta": ["b1"],
+            "zeta": ["z1"],
+        },
+        max_selected_refs=10,
+        per_dimension_budget=1,
+    )
+    # Same weight → alphabetic.
+    assert out == ("a1", "b1", "z1")
+
+
+def test_apply_attention_budget_dedups_first_seen():
+    out = apply_attention_budget(
+        focus_labels=("a", "b"),
+        focus_weights={"a": 1.0, "b": 0.5},
+        candidate_refs_by_focus={
+            "a": ["shared", "x"],
+            "b": ["shared", "y"],
+        },
+        max_selected_refs=10,
+        per_dimension_budget=3,
+    )
+    # ``shared`` appears under "a" first; "b" picks "y" only.
+    assert out == ("shared", "x", "y")
+
+
+def test_apply_attention_budget_missing_focus_yields_empty_for_that_focus():
+    out = apply_attention_budget(
+        focus_labels=("a", "b"),
+        focus_weights={"a": 1.0, "b": 0.5},
+        candidate_refs_by_focus={"b": ["bx"]},  # "a" missing
+        max_selected_refs=10,
+        per_dimension_budget=3,
+    )
+    assert out == ("bx",)
+
+
+def test_apply_attention_budget_skips_empty_string_refs():
+    out = apply_attention_budget(
+        focus_labels=("a",),
+        focus_weights={"a": 1.0},
+        candidate_refs_by_focus={"a": ["", "x", None, "y"]},  # type: ignore[list-item]
+        max_selected_refs=10,
+        per_dimension_budget=3,
+    )
+    assert out == ("x", "y")
+
+
+def test_apply_attention_budget_deterministic_for_identical_inputs():
+    args = dict(
+        focus_labels=("firm_state", "dialogue", "engagement"),
+        focus_weights={
+            "firm_state": 1.0,
+            "dialogue": 0.5,
+            "engagement": 0.5,
+        },
+        candidate_refs_by_focus={
+            "firm_state": ["fs1", "fs2"],
+            "dialogue": ["dlg1", "dlg2"],
+            "engagement": ["dlg1", "eng2"],
+        },
+        max_selected_refs=4,
+        per_dimension_budget=2,
+    )
+    a = apply_attention_budget(**args)
+    b = apply_attention_budget(**args)
+    assert a == b
+
+
+# ---------------------------------------------------------------------------
+# v1.12.9 — decay / crowding / saturation in build_attention_feedback
+# ---------------------------------------------------------------------------
+
+
+def _seed_intent_for(
+    kernel: WorldKernel,
+    *,
+    direction: str,
+    intent_id: str,
+    investor_id: str = _ACTOR,
+    target_company_id: str = _FIRM,
+    as_of_date: str = _AS_OF,
+) -> str:
+    """Helper that mirrors `_seed_intent` but lets the caller
+    pass a custom intent_id (the v1.12.9 multi-period decay
+    test seeds one intent per period)."""
+    return _seed_intent(
+        kernel,
+        direction=direction,
+        intent_id=intent_id,
+        investor_id=investor_id,
+        target_company_id=target_company_id,
+        as_of_date=as_of_date,
+    )
+
+
+def test_decay_engagement_focus_persists_one_period_after_switch():
+    """Period 0 engagement → period 1 risk: engagement focus
+    inherits at decayed weight 0.5; stale_count = 1."""
+    k = _kernel()
+    iid0 = _seed_intent_for(
+        k,
+        direction="engagement_watch",
+        intent_id="intent:p0",
+        as_of_date="2026-03-31",
+    )
+    out_p0 = build_attention_feedback(
+        k,
+        actor_id=_ACTOR,
+        actor_type=_ACTOR_TYPE,
+        as_of_date="2026-03-31",
+        investor_intent_ids=(iid0,),
+    )
+    assert FOCUS_LABEL_DIALOGUE in out_p0.attention_state.focus_labels
+    assert (
+        out_p0.attention_state.focus_weights[FOCUS_LABEL_DIALOGUE] == 1.0
+    )
+
+    iid1 = _seed_intent_for(
+        k,
+        direction="risk_flag_watch",
+        intent_id="intent:p1",
+        as_of_date="2026-06-30",
+    )
+    out_p1 = build_attention_feedback(
+        k,
+        actor_id=_ACTOR,
+        actor_type=_ACTOR_TYPE,
+        as_of_date="2026-06-30",
+        investor_intent_ids=(iid1,),
+    )
+    # Risk focus appears at full weight.
+    assert (
+        out_p1.attention_state.focus_weights.get(FOCUS_LABEL_FIRM_STATE)
+        == 1.0
+    )
+    # Engagement focus inherits at decayed weight 0.5.
+    assert (
+        out_p1.attention_state.focus_weights.get(FOCUS_LABEL_DIALOGUE)
+        == 0.5
+    )
+    counts = out_p1.attention_state.metadata.get("focus_stale_counts", {})
+    assert counts.get(FOCUS_LABEL_DIALOGUE) == 1
+    assert counts.get(FOCUS_LABEL_FIRM_STATE) == 0
+
+
+def test_decay_engagement_focus_drops_after_horizon():
+    """Period 0 engagement → periods 1, 2, 3 risk: by period
+    3 the engagement focus has decayed below threshold and is
+    dropped from the new state."""
+    k = _kernel()
+    _seed_intent_for(
+        k,
+        direction="engagement_watch",
+        intent_id="intent:p0",
+        as_of_date="2026-03-31",
+    )
+    build_attention_feedback(
+        k,
+        actor_id=_ACTOR,
+        actor_type=_ACTOR_TYPE,
+        as_of_date="2026-03-31",
+        investor_intent_ids=("intent:p0",),
+    )
+    for i, dt in enumerate(("2026-06-30", "2026-09-30", "2026-12-31"), start=1):
+        iid = _seed_intent_for(
+            k,
+            direction="risk_flag_watch",
+            intent_id=f"intent:p{i}",
+            as_of_date=dt,
+        )
+        build_attention_feedback(
+            k,
+            actor_id=_ACTOR,
+            actor_type=_ACTOR_TYPE,
+            as_of_date=dt,
+            investor_intent_ids=(iid,),
+        )
+    final = k.attention_feedback.get_latest_for_actor(_ACTOR)
+    assert final is not None
+    assert FOCUS_LABEL_DIALOGUE not in final.focus_labels
+    assert FOCUS_LABEL_ENGAGEMENT not in final.focus_labels
+    assert FOCUS_LABEL_FIRM_STATE in final.focus_labels
+
+
+def test_reinforced_focus_resets_stale_count_to_zero():
+    """When the same focus reappears in a later period, its
+    stale_count resets to 0 and weight resets to 1.0."""
+    k = _kernel()
+    iid0 = _seed_intent_for(
+        k,
+        direction="engagement_watch",
+        intent_id="intent:p0",
+        as_of_date="2026-03-31",
+    )
+    build_attention_feedback(
+        k,
+        actor_id=_ACTOR,
+        actor_type=_ACTOR_TYPE,
+        as_of_date="2026-03-31",
+        investor_intent_ids=(iid0,),
+    )
+    iid1 = _seed_intent_for(
+        k,
+        direction="risk_flag_watch",
+        intent_id="intent:p1",
+        as_of_date="2026-06-30",
+    )
+    build_attention_feedback(
+        k,
+        actor_id=_ACTOR,
+        actor_type=_ACTOR_TYPE,
+        as_of_date="2026-06-30",
+        investor_intent_ids=(iid1,),
+    )
+    # Period 2 — re-engagement.
+    iid2 = _seed_intent_for(
+        k,
+        direction="engagement_watch",
+        intent_id="intent:p2",
+        as_of_date="2026-09-30",
+    )
+    out_p2 = build_attention_feedback(
+        k,
+        actor_id=_ACTOR,
+        actor_type=_ACTOR_TYPE,
+        as_of_date="2026-09-30",
+        investor_intent_ids=(iid2,),
+    )
+    counts = out_p2.attention_state.metadata.get("focus_stale_counts", {})
+    assert counts.get(FOCUS_LABEL_DIALOGUE) == 0
+    assert (
+        out_p2.attention_state.focus_weights.get(FOCUS_LABEL_DIALOGUE)
+        == 1.0
+    )
+
+
+def test_max_selected_refs_capped_at_v1_12_9_constant():
+    """v1.12.9 caps `max_selected_refs` at 12 regardless of how
+    many focus labels accumulate via inheritance."""
+    k = _kernel()
+    iid0 = _seed_intent_for(
+        k,
+        direction="engagement_watch",
+        intent_id="intent:p0",
+        as_of_date="2026-03-31",
+    )
+    out_p0 = build_attention_feedback(
+        k,
+        actor_id=_ACTOR,
+        actor_type=_ACTOR_TYPE,
+        as_of_date="2026-03-31",
+        investor_intent_ids=(iid0,),
+    )
+    assert out_p0.attention_state.max_selected_refs == 12
+    iid1 = _seed_intent_for(
+        k,
+        direction="risk_flag_watch",
+        intent_id="intent:p1",
+        as_of_date="2026-06-30",
+    )
+    out_p1 = build_attention_feedback(
+        k,
+        actor_id=_ACTOR,
+        actor_type=_ACTOR_TYPE,
+        as_of_date="2026-06-30",
+        investor_intent_ids=(iid1,),
+    )
+    assert out_p1.attention_state.max_selected_refs == 12
+
+
+def test_state_carries_v1_12_9_budget_fields():
+    k = _kernel()
+    out = build_attention_feedback(
+        k,
+        actor_id=_ACTOR,
+        actor_type=_ACTOR_TYPE,
+        as_of_date=_AS_OF,
+    )
+    assert out.attention_state.per_dimension_budget == 3
+    assert out.attention_state.decay_horizon == 2
+    assert out.attention_state.saturation_policy == "drop_oldest"
+
+
+def test_state_record_rejects_negative_budget_fields():
+    with pytest.raises(ValueError):
+        ActorAttentionStateRecord(
+            attention_state_id="x",
+            actor_id="a",
+            actor_type="b",
+            as_of_date="2026-03-31",
+            status="active",
+            confidence=0.5,
+            max_selected_refs=8,
+            per_dimension_budget=-1,
+        )
+    with pytest.raises(ValueError):
+        ActorAttentionStateRecord(
+            attention_state_id="x",
+            actor_id="a",
+            actor_type="b",
+            as_of_date="2026-03-31",
+            status="active",
+            confidence=0.5,
+            max_selected_refs=8,
+            decay_horizon=-1,
+        )
+
+
+def test_state_record_rejects_empty_saturation_policy():
+    with pytest.raises(ValueError):
+        ActorAttentionStateRecord(
+            attention_state_id="x",
+            actor_id="a",
+            actor_type="b",
+            as_of_date="2026-03-31",
+            status="active",
+            confidence=0.5,
+            max_selected_refs=8,
+            saturation_policy="",
+        )
+
+
+def test_state_record_rejects_bool_budget_fields():
+    with pytest.raises(ValueError):
+        ActorAttentionStateRecord(
+            attention_state_id="x",
+            actor_id="a",
+            actor_type="b",
+            as_of_date="2026-03-31",
+            status="active",
+            confidence=0.5,
+            max_selected_refs=8,
+            per_dimension_budget=True,
+        )
+    with pytest.raises(ValueError):
+        ActorAttentionStateRecord(
+            attention_state_id="x",
+            actor_id="a",
+            actor_type="b",
+            as_of_date="2026-03-31",
+            status="active",
+            confidence=0.5,
+            max_selected_refs=8,
+            decay_horizon=False,
+        )
+
+
+def test_decay_does_not_carry_through_when_decay_horizon_is_zero():
+    """With decay_horizon=0, an inherited stale label is dropped
+    immediately the next period it isn't reinforced."""
+    k = _kernel()
+    iid0 = _seed_intent_for(
+        k,
+        direction="engagement_watch",
+        intent_id="intent:p0",
+        as_of_date="2026-03-31",
+    )
+    build_attention_feedback(
+        k,
+        actor_id=_ACTOR,
+        actor_type=_ACTOR_TYPE,
+        as_of_date="2026-03-31",
+        investor_intent_ids=(iid0,),
+        decay_horizon=0,
+    )
+    iid1 = _seed_intent_for(
+        k,
+        direction="risk_flag_watch",
+        intent_id="intent:p1",
+        as_of_date="2026-06-30",
+    )
+    out_p1 = build_attention_feedback(
+        k,
+        actor_id=_ACTOR,
+        actor_type=_ACTOR_TYPE,
+        as_of_date="2026-06-30",
+        investor_intent_ids=(iid1,),
+        decay_horizon=0,
+    )
+    # Engagement labels drop immediately — no inheritance under
+    # decay_horizon=0.
+    assert FOCUS_LABEL_DIALOGUE not in out_p1.attention_state.focus_labels
+    assert FOCUS_LABEL_ENGAGEMENT not in out_p1.attention_state.focus_labels
+
+
+def test_state_records_v1_12_9_focus_stale_counts_in_metadata():
+    k = _kernel()
+    iid0 = _seed_intent_for(
+        k,
+        direction="engagement_watch",
+        intent_id="intent:p0",
+        as_of_date="2026-03-31",
+    )
+    out = build_attention_feedback(
+        k,
+        actor_id=_ACTOR,
+        actor_type=_ACTOR_TYPE,
+        as_of_date="2026-03-31",
+        investor_intent_ids=(iid0,),
+    )
+    counts = out.attention_state.metadata.get("focus_stale_counts")
+    assert isinstance(counts, dict)
+    # Every focus label has stale_count 0 on a fresh state.
+    for label in out.attention_state.focus_labels:
+        assert counts.get(label) == 0
+
+
+# ---------------------------------------------------------------------------
+# v1.12.9 — crowding (headline)
+# ---------------------------------------------------------------------------
+
+
+def test_crowding_new_focus_replaces_decayed_focus_in_memory():
+    """**The headline crowding pin.** Period 0's engagement
+    focus produces engagement-shaped memory candidates. After
+    a regime switch to risk in period 1, the decay rule:
+
+    1. Inherits engagement focus at weight 0.5;
+    2. Adds risk focus at weight 1.0;
+    3. By period 2 (still risk), engagement decays to 0.0
+       and is dropped — the state's focus is fully risk-shaped.
+
+    The composition therefore *swaps*: at period 1 the state
+    has a mix of risk + decayed engagement; by period 2 only
+    risk remains. New focus has crowded out old focus.
+    """
+    k = _kernel()
+    _seed_intent_for(
+        k,
+        direction="engagement_watch",
+        intent_id="intent:p0",
+        as_of_date="2026-03-31",
+    )
+    p0 = build_attention_feedback(
+        k,
+        actor_id=_ACTOR,
+        actor_type=_ACTOR_TYPE,
+        as_of_date="2026-03-31",
+        investor_intent_ids=("intent:p0",),
+    )
+    _seed_intent_for(
+        k,
+        direction="risk_flag_watch",
+        intent_id="intent:p1",
+        as_of_date="2026-06-30",
+    )
+    p1 = build_attention_feedback(
+        k,
+        actor_id=_ACTOR,
+        actor_type=_ACTOR_TYPE,
+        as_of_date="2026-06-30",
+        investor_intent_ids=("intent:p1",),
+    )
+    _seed_intent_for(
+        k,
+        direction="risk_flag_watch",
+        intent_id="intent:p2",
+        as_of_date="2026-09-30",
+    )
+    p2 = build_attention_feedback(
+        k,
+        actor_id=_ACTOR,
+        actor_type=_ACTOR_TYPE,
+        as_of_date="2026-09-30",
+        investor_intent_ids=("intent:p2",),
+    )
+
+    p0_labels = set(p0.attention_state.focus_labels)
+    p1_labels = set(p1.attention_state.focus_labels)
+    p2_labels = set(p2.attention_state.focus_labels)
+
+    # Period 0 was pure engagement.
+    assert FOCUS_LABEL_DIALOGUE in p0_labels
+    assert FOCUS_LABEL_FIRM_STATE not in p0_labels
+    # Period 1 carries BOTH (engagement decayed + new risk).
+    assert FOCUS_LABEL_DIALOGUE in p1_labels
+    assert FOCUS_LABEL_FIRM_STATE in p1_labels
+    # Period 2 has dropped engagement entirely (decay past
+    # horizon) and is fully risk-shaped.
+    assert FOCUS_LABEL_DIALOGUE not in p2_labels
+    assert FOCUS_LABEL_FIRM_STATE in p2_labels
+
+    # And the composition strictly changes between periods —
+    # focus is not monotonically widening.
+    assert p1_labels != p0_labels
+    assert p2_labels != p1_labels
 
 
 # ---------------------------------------------------------------------------

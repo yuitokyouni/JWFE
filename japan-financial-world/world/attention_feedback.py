@@ -214,6 +214,12 @@ class ActorAttentionStateRecord:
     status: str
     confidence: float
     max_selected_refs: int
+    # v1.12.9 attention-budget fields. None of these is a
+    # calibrated parameter; tests pin the qualitative
+    # behavior, never specific arithmetic.
+    per_dimension_budget: int = 3
+    decay_horizon: int = 2
+    saturation_policy: str = "drop_oldest"
     base_profile_ids: tuple[str, ...] = field(default_factory=tuple)
     focus_labels: tuple[str, ...] = field(default_factory=tuple)
     focus_weights: Mapping[str, float] = field(default_factory=dict)
@@ -282,6 +288,36 @@ class ActorAttentionStateRecord:
         if self.max_selected_refs < 0:
             raise ValueError("max_selected_refs must be non-negative")
 
+        # v1.12.9 budget-field validation. All three fields are
+        # synthetic — non-negative integer / integer / non-empty
+        # string — and bool is rejected as a degenerate int per
+        # the v1.12.x style.
+        if (
+            isinstance(self.per_dimension_budget, bool)
+            or not isinstance(self.per_dimension_budget, int)
+        ):
+            raise ValueError(
+                "per_dimension_budget must be a non-negative int"
+            )
+        if self.per_dimension_budget < 0:
+            raise ValueError(
+                "per_dimension_budget must be non-negative"
+            )
+        if (
+            isinstance(self.decay_horizon, bool)
+            or not isinstance(self.decay_horizon, int)
+        ):
+            raise ValueError("decay_horizon must be a non-negative int")
+        if self.decay_horizon < 0:
+            raise ValueError("decay_horizon must be non-negative")
+        if (
+            not isinstance(self.saturation_policy, str)
+            or not self.saturation_policy
+        ):
+            raise ValueError(
+                "saturation_policy must be a non-empty string"
+            )
+
         object.__setattr__(
             self, "as_of_date", _coerce_iso_date(self.as_of_date)
         )
@@ -332,6 +368,9 @@ class ActorAttentionStateRecord:
             "status": self.status,
             "confidence": self.confidence,
             "max_selected_refs": self.max_selected_refs,
+            "per_dimension_budget": self.per_dimension_budget,
+            "decay_horizon": self.decay_horizon,
+            "saturation_policy": self.saturation_policy,
             "base_profile_ids": list(self.base_profile_ids),
             "focus_labels": list(self.focus_labels),
             "focus_weights": dict(self.focus_weights),
@@ -515,6 +554,9 @@ class AttentionFeedbackBook:
                     "status": state.status,
                     "confidence": state.confidence,
                     "max_selected_refs": state.max_selected_refs,
+                    "per_dimension_budget": state.per_dimension_budget,
+                    "decay_horizon": state.decay_horizon,
+                    "saturation_policy": state.saturation_policy,
                     "base_profile_ids": list(state.base_profile_ids),
                     "focus_labels": list(state.focus_labels),
                     "focus_weights": dict(state.focus_weights),
@@ -716,6 +758,23 @@ _DEFAULT_FOCUS_WEIGHT: float = 0.5
 _BASE_MAX_SELECTED_REFS: int = 8
 _RESTRICTIVE_OVERALL_LABEL: str = "selective_or_constrained"
 
+# v1.12.9 attention budget defaults. Small, documented,
+# illustrative; tests pin the qualitative behavior, not specific
+# arithmetic. None is a calibrated parameter.
+_DEFAULT_PER_DIMENSION_BUDGET: int = 3
+_DEFAULT_DECAY_HORIZON: int = 2
+_DEFAULT_SATURATION_POLICY: str = "drop_oldest"
+_MAX_SELECTED_REFS_CAP: int = 12
+_MAX_FOCUS_LABELS: int = 8
+# Decay weight applied to a label inherited from the prior state
+# but not reinforced in the current period. Reinforcement resets
+# weight to 1.0; one period without reinforcement halves it; a
+# second period without reinforcement halves it again. Once the
+# label's stale_count exceeds ``decay_horizon``, the label is
+# dropped entirely from the new state.
+_RESET_FOCUS_WEIGHT: float = 1.0
+_DECAY_FOCUS_STEP: float = 0.5
+
 
 # v1.12.8 intent-direction → focus-label mapping. The mapping is
 # additive; multiple intents can produce overlapping focus sets.
@@ -882,6 +941,103 @@ def _classify_focus_labels(
     return tuple(sorted(focus_set)), trigger_label
 
 
+# ---------------------------------------------------------------------------
+# v1.12.9 — apply_attention_budget
+# ---------------------------------------------------------------------------
+
+
+def apply_attention_budget(
+    *,
+    focus_labels: Sequence[str],
+    focus_weights: Mapping[str, float],
+    candidate_refs_by_focus: Mapping[str, Sequence[str]],
+    max_selected_refs: int,
+    per_dimension_budget: int,
+) -> tuple[str, ...]:
+    """v1.12.9 — apply a finite attention budget to a candidate
+    set of evidence refs.
+
+    Inputs
+    ------
+    - ``focus_labels`` — the actor's focus labels in the current
+      attention state.
+    - ``focus_weights`` — weight per focus label in ``[0.0, 1.0]``.
+      Higher-weight labels are budgeted first.
+    - ``candidate_refs_by_focus`` — mapping from focus label to a
+      sequence of candidate evidence ids the orchestrator would
+      include for that label. Order within a sequence is
+      preserved; first-seen wins on dedup.
+    - ``max_selected_refs`` — total cap (non-negative integer).
+      ``0`` returns an empty tuple. Once the bounded list reaches
+      this length, no further refs are added.
+    - ``per_dimension_budget`` — per-focus cap (non-negative
+      integer). ``0`` returns an empty tuple. Each focus label
+      contributes at most ``per_dimension_budget`` refs.
+
+    Behavior
+    --------
+    Walks the focus labels in deterministic priority order
+    (weight descending, then alphabetic on the label string for
+    ties). For each label, picks up to ``per_dimension_budget``
+    candidate refs from the mapping. Stops when the bounded list
+    reaches ``max_selected_refs``. Two calls with byte-identical
+    inputs return byte-identical output (no random ordering, no
+    set iteration).
+
+    Read-only over the inputs; never mutates any mapping or
+    sequence the caller passed in.
+    """
+    if (
+        isinstance(max_selected_refs, bool)
+        or not isinstance(max_selected_refs, int)
+    ):
+        raise ValueError("max_selected_refs must be a non-negative int")
+    if max_selected_refs < 0:
+        raise ValueError("max_selected_refs must be non-negative")
+    if (
+        isinstance(per_dimension_budget, bool)
+        or not isinstance(per_dimension_budget, int)
+    ):
+        raise ValueError("per_dimension_budget must be a non-negative int")
+    if per_dimension_budget < 0:
+        raise ValueError("per_dimension_budget must be non-negative")
+
+    if max_selected_refs == 0 or per_dimension_budget == 0:
+        return ()
+
+    # Deterministic ordering: weight desc, then label asc on the
+    # alphabetic key. Labels missing from focus_weights are
+    # treated as weight 0.0 (still walked, but last).
+    ordered = sorted(
+        focus_labels,
+        key=lambda lbl: (-float(focus_weights.get(lbl, 0.0)), lbl),
+    )
+
+    out: list[str] = []
+    seen: set[str] = set()
+    for label in ordered:
+        candidates = candidate_refs_by_focus.get(label, ())
+        per_focus = 0
+        for ref in candidates:
+            if not isinstance(ref, str) or not ref:
+                # Defensive: skip junk; never raise on caller's
+                # malformed candidate sequences. Tests pin valid
+                # inputs.
+                continue
+            if ref in seen:
+                continue
+            if per_focus >= per_dimension_budget:
+                break
+            if len(out) >= max_selected_refs:
+                return tuple(out)
+            seen.add(ref)
+            out.append(ref)
+            per_focus += 1
+        if len(out) >= max_selected_refs:
+            return tuple(out)
+    return tuple(out)
+
+
 def build_attention_feedback(
     kernel: Any,
     *,
@@ -896,6 +1052,9 @@ def build_attention_feedback(
     valuation_ids: Sequence[str] = (),
     dialogue_ids: Sequence[str] = (),
     escalation_candidate_ids: Sequence[str] = (),
+    per_dimension_budget: int = _DEFAULT_PER_DIMENSION_BUDGET,
+    decay_horizon: int = _DEFAULT_DECAY_HORIZON,
+    saturation_policy: str = _DEFAULT_SATURATION_POLICY,
     attention_state_id: str | None = None,
     feedback_id: str | None = None,
     feedback_type: str = "period_observed_to_next_period",
@@ -1002,23 +1161,12 @@ def build_attention_feedback(
             low_valuation_confidence = True
             break
 
-    focus_labels, trigger_label = _classify_focus_labels(
+    fresh_focus_labels, trigger_label = _classify_focus_labels(
         intent_directions=frozenset(intent_directions),
         watch_labels=frozenset(watch_labels),
         restrictive_market=restrictive_market,
         low_valuation_confidence=low_valuation_confidence,
     )
-
-    # All focus labels carry a uniform default weight of 0.5 in
-    # v1.12.8. Future calibration milestones may differentiate
-    # weights per label / per actor.
-    focus_weights = {label: _DEFAULT_FOCUS_WEIGHT for label in focus_labels}
-
-    # ``max_selected_refs`` is a synthetic non-negative integer
-    # the menu builder may use as a soft cap. Default formula:
-    # base + len(focus_labels). v1.12.8 stores it; v1.12.9+ may
-    # enforce it.
-    max_selected_refs = _BASE_MAX_SELECTED_REFS + len(focus_labels)
 
     # ------------------------------------------------------------------
     # Resolve previous-period attention state (chain link).
@@ -1029,8 +1177,117 @@ def build_attention_feedback(
     )
 
     # ------------------------------------------------------------------
+    # v1.12.9 — decay / crowding / saturation.
+    #
+    # Inherit the prior state's focus_labels at decayed weight
+    # unless they are reinforced by the current period's
+    # outcomes:
+    #
+    # 1. **Reinforced** (label appears in both prior and fresh):
+    #    weight resets to ``_RESET_FOCUS_WEIGHT`` (1.0);
+    #    stale_count resets to 0.
+    # 2. **Stale-but-not-yet-decayed** (label in prior only AND
+    #    prior stale_count < decay_horizon): weight decays by
+    #    ``_DECAY_FOCUS_STEP`` (halved each period without
+    #    reinforcement); stale_count incremented.
+    # 3. **Stale-and-past-horizon**: dropped from the new state.
+    # 4. **Fresh-only** (label in current outcomes but not in
+    #    prior): weight ``_RESET_FOCUS_WEIGHT`` (1.0); stale_count
+    #    starts at 0.
+    #
+    # Saturation: the new state's focus_labels are capped at
+    # ``_MAX_FOCUS_LABELS``. If saturation policy is
+    # ``"drop_oldest"`` (the v1.12.9 default), labels with the
+    # highest stale_count are dropped first; ties broken by
+    # weight ascending and then alphabetic.
+    #
+    # Stale counts persist across periods via the new state's
+    # ``metadata["focus_stale_counts"]``; the v1.12.9 helper reads
+    # the prior state's metadata to decide carry-forward weights.
+    # ------------------------------------------------------------------
+    prior_focus_labels: tuple[str, ...] = (
+        tuple(prior_state.focus_labels) if prior_state is not None else ()
+    )
+    prior_focus_weights: Mapping[str, float] = (
+        dict(prior_state.focus_weights)
+        if prior_state is not None
+        else {}
+    )
+    prior_stale_counts: Mapping[str, int] = {}
+    if prior_state is not None:
+        raw = prior_state.metadata.get("focus_stale_counts", {})
+        if isinstance(raw, Mapping):
+            prior_stale_counts = {
+                str(k): int(v)
+                for k, v in raw.items()
+                if isinstance(v, int) and not isinstance(v, bool)
+            }
+
+    new_focus_weights: dict[str, float] = {}
+    new_stale_counts: dict[str, int] = {}
+
+    # Pass 1 — fresh labels (reinforced if also in prior, fresh otherwise).
+    for label in fresh_focus_labels:
+        new_focus_weights[label] = _RESET_FOCUS_WEIGHT
+        new_stale_counts[label] = 0
+
+    # Pass 2 — inherit prior labels under decay if not already
+    # reinforced this period.
+    for label in prior_focus_labels:
+        if label in new_focus_weights:
+            # Already added at full weight in pass 1.
+            continue
+        prior_w = float(prior_focus_weights.get(label, _DEFAULT_FOCUS_WEIGHT))
+        decayed_w = max(0.0, prior_w - _DECAY_FOCUS_STEP)
+        prior_count = int(prior_stale_counts.get(label, 0))
+        new_count = prior_count + 1
+        if new_count > decay_horizon:
+            # Past horizon — drop entirely.
+            continue
+        if decayed_w <= 0.0:
+            # Weight would round to zero — drop.
+            continue
+        new_focus_weights[label] = decayed_w
+        new_stale_counts[label] = new_count
+
+    # Saturation — cap at _MAX_FOCUS_LABELS using drop_oldest:
+    # drop labels with the highest stale_count first; ties
+    # broken by weight asc, then alpha asc.
+    if len(new_focus_weights) > _MAX_FOCUS_LABELS:
+        ordered_for_drop = sorted(
+            new_focus_weights.keys(),
+            key=lambda lbl: (
+                -int(new_stale_counts.get(lbl, 0)),
+                float(new_focus_weights[lbl]),
+                lbl,
+            ),
+        )
+        for victim in ordered_for_drop[
+            : len(new_focus_weights) - _MAX_FOCUS_LABELS
+        ]:
+            new_focus_weights.pop(victim, None)
+            new_stale_counts.pop(victim, None)
+
+    if not new_focus_weights:
+        new_focus_weights[FOCUS_LABEL_MEMORY] = _RESET_FOCUS_WEIGHT
+        new_stale_counts[FOCUS_LABEL_MEMORY] = 0
+
+    focus_labels = tuple(sorted(new_focus_weights.keys()))
+    focus_weights = dict(new_focus_weights)
+
+    # v1.12.9 capped max_selected_refs — finite budget, never
+    # grows past _MAX_SELECTED_REFS_CAP regardless of focus
+    # count.
+    max_selected_refs = min(
+        _BASE_MAX_SELECTED_REFS + len(focus_labels),
+        _MAX_SELECTED_REFS_CAP,
+    )
+
+    # ------------------------------------------------------------------
     # Compose the new attention state + feedback records.
     # ------------------------------------------------------------------
+    state_metadata: dict[str, Any] = dict(metadata or {})
+    state_metadata["focus_stale_counts"] = dict(new_stale_counts)
     state = ActorAttentionStateRecord(
         attention_state_id=asid,
         actor_id=actor_id,
@@ -1039,6 +1296,9 @@ def build_attention_feedback(
         status="active",
         confidence=_DEFAULT_FEEDBACK_CONFIDENCE,
         max_selected_refs=max_selected_refs,
+        per_dimension_budget=per_dimension_budget,
+        decay_horizon=decay_horizon,
+        saturation_policy=saturation_policy,
         base_profile_ids=tuple(base_profile_ids),
         focus_labels=focus_labels,
         focus_weights=focus_weights,
@@ -1050,7 +1310,7 @@ def build_attention_feedback(
         source_dialogue_ids=tuple(dialogue_ids),
         source_escalation_candidate_ids=tuple(escalation_candidate_ids),
         previous_attention_state_id=previous_attention_state_id,
-        metadata=dict(metadata or {}),
+        metadata=state_metadata,
     )
     try:
         book.add_attention_state(state)

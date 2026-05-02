@@ -94,6 +94,7 @@ from world.attention_feedback import (
     FOCUS_LABEL_FIRM_STATE,
     FOCUS_LABEL_MARKET_ENVIRONMENT,
     FOCUS_LABEL_VALUATION,
+    apply_attention_budget,
     build_attention_feedback,
 )
 from world.investor_intent import (
@@ -999,17 +1000,30 @@ def _build_memory_selection_if_any(
         # Defensive: only feed forward from strictly-prior periods.
         return None
 
-    selected_refs: list[str] = []
-    seen: set[str] = set()
+    # v1.12.9 — apply the attention budget. Build a
+    # ``candidate_refs_by_focus`` mapping from the prior state's
+    # source-id tuples gated by which focus labels point at each
+    # source attribute, then call ``apply_attention_budget`` to
+    # bound the result by ``per_dimension_budget`` per focus and
+    # ``max_selected_refs`` total. Two periods with byte-identical
+    # prior states produce byte-identical memory selections.
+    candidate_refs_by_focus: dict[str, list[str]] = {}
     focus_set = set(prior_state.focus_labels)
     for focus_label, source_attr in _MEMORY_FOCUS_TO_SOURCE_ATTR:
         if focus_label not in focus_set:
             continue
-        for ref_id in getattr(prior_state, source_attr, ()):
-            if ref_id in seen:
-                continue
-            seen.add(ref_id)
-            selected_refs.append(ref_id)
+        candidate_refs_by_focus.setdefault(focus_label, []).extend(
+            list(getattr(prior_state, source_attr, ()))
+        )
+
+    bounded = apply_attention_budget(
+        focus_labels=prior_state.focus_labels,
+        focus_weights=prior_state.focus_weights,
+        candidate_refs_by_focus=candidate_refs_by_focus,
+        max_selected_refs=prior_state.max_selected_refs,
+        per_dimension_budget=prior_state.per_dimension_budget,
+    )
+    selected_refs = list(bounded)
 
     if not selected_refs:
         # Focus labels carried no concrete source ids (e.g.,

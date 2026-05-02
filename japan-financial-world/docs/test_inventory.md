@@ -1,25 +1,27 @@
 # Test Inventory
 
-Snapshot of the test suite at **v1.12.8** (`Next-period attention
-feedback` — the **first cross-period attention feedback loop** in
-public FWE: each period writes one
-`ActorAttentionStateRecord` + one `AttentionFeedbackRecord` per
-investor + per bank, chained via `previous_attention_state_id`;
-at period N+1 the orchestrator builds a memory
-`SelectedObservationSet` from the prior state's `focus_labels`
-+ `source_*_ids` so the v1.12.4 / v1.12.5 / v1.12.6 helpers see
-**wider selected evidence than period N**; the headline test
-pins *period N+1's investor-intent record references 2
-selections (period + memory) vs period N's 1 selection*, and
-*period N+1's resolved dialogue evidence is strictly wider than
-period N's* — proving the cross-period loop closed; per-period
-record count moves from 71 to 79 (period 0) / 81 (period 1+);
-per-run window widens from `[284, 316]` to `[316, 364]`;
-default-fixture `living_world_digest` moves from `2c748aa6...`
-to `3002a499df6aff5c37628df5f14fbb3186481b276fab36a4fe2f13a89c5feeff`
+Snapshot of the test suite at **v1.12.9** (`Attention budget /
+decay / saturation` — disciplines the v1.12.8 cross-period
+feedback loop with a **finite synthetic attention budget**:
+`ActorAttentionStateRecord` carries `per_dimension_budget=3` /
+`decay_horizon=2` / `saturation_policy="drop_oldest"`;
+`max_selected_refs` is capped at 12; an inherited focus label
+halves to 0.5 in the next period without reinforcement, halves
+to 0.0 after that, or is dropped once stale_count exceeds
+`decay_horizon`; reinforcement resets weight to 1.0 and
+stale_count to 0; saturation above 8 focus labels triggers
+drop-oldest; new `apply_attention_budget` helper bounds candidate
+selected refs by per-dimension and total caps deterministically;
+the headline crowding pin shows new risk focus replaces decayed
+engagement focus in a 3-period synthetic scenario; per-period
+record count and per-run window unchanged from v1.12.8 (the
+v1.12.9 changes are internal to attention-state field shapes
+and memory-selection contents); default-fixture
+`living_world_digest` moves from `3002a499...` to
+`e508b4bf10df217f7b561b41aea845f841b12215d5bf815587375c52cffcdcb5`
 by design — pinned in a regression test):
-`2725 / 2725 passing` (444 v0 + 188 v1.0-v1.7 frozen reference +
-2093 post-v1.7 additions covering reference demo, replay, manifest,
+`2751 / 2751 passing` (444 v0 + 188 v1.0-v1.7 frozen reference +
+2119 post-v1.7 additions covering reference demo, replay, manifest,
 catalog-shape, experiment harness, renamed WorldID tests,
 interactions, routines, attention, routine engine, the corporate
 quarterly reporting routine, the world-variable storage layer, the
@@ -1378,9 +1380,9 @@ no-mutation guarantee.
 | -------------------------------- | ----- | ----- |
 | v0                               | 35    | 444   |
 | v1.0–v1.7 frozen reference       | 7     | 188   |
-| Attention feedback (v1.12.8)        | 1     | 102   |
-| post-v1.7 (v1.7-public-rc1+ / v1.8.x / v1.9.0 / v1.9.1-prep / v1.9.1 / v1.9.2 / v1.9.3 / v1.9.3.1 / CLI argv pin / v1.9.4 / v1.9.5 / v1.9.6 / v1.9.7 / v1.9.8 / v1.10.1 / v1.10.2 / v1.10.3 / v1.10.4 / v1.10.4.1 / v1.10.5 / v1.11.0 / v1.11.1 / v1.11.2 / v1.12.0 / v1.12.1 / v1.12.2 / v1.12.3 / v1.12.4 / v1.12.5 / v1.12.6 / v1.12.7 / v1.12.8) | 40 | 2093 |
-| **Total**                        | **82**| **2725** |
+| Attention feedback (v1.12.8) + budget/decay/saturation (v1.12.9) | 1 | 122   |
+| post-v1.7 (v1.7-public-rc1+ / v1.8.x / v1.9.0 / v1.9.1-prep / v1.9.1 / v1.9.2 / v1.9.3 / v1.9.3.1 / CLI argv pin / v1.9.4 / v1.9.5 / v1.9.6 / v1.9.7 / v1.9.8 / v1.10.1 / v1.10.2 / v1.10.3 / v1.10.4 / v1.10.4.1 / v1.10.5 / v1.11.0 / v1.11.1 / v1.11.2 / v1.12.0 / v1.12.1 / v1.12.2 / v1.12.3 / v1.12.4 / v1.12.5 / v1.12.6 / v1.12.7 / v1.12.8 / v1.12.9) | 40 | 2119 |
+| **Total**                        | **82**| **2751** |
 
 ## Auditing for jurisdiction-neutral identifiers
 
