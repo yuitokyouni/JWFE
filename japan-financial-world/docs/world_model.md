@@ -5151,9 +5151,108 @@ The manifest is **synthetic-demo metadata only**. It carries no real data, no pr
 | v1.9.0 Living Reference World Demo | Code (§59). | Shipped |
 | v1.9.1-prep Report Contract Audit | Docs + contract test (§60). | Shipped |
 | v1.9.1 Living World Trace Report | Code (§61). | Shipped |
-| **v1.9.2 Living World Replay / Manifest / Digest** | Code (§62). | **Shipped** |
-| v1.9.x | Report polishing, sparse / performance boundary, public-prototype readiness. | Next |
-| v1.9.last | First lightweight public prototype. | Planned |
+| v1.9.2 Living World Replay / Manifest / Digest | Code (§62). | Shipped |
+| **v1.9.3 Model Mechanism Inventory + Behavioral Gap Audit + Mechanism Interface** | Docs + interface contract (§63). | **Shipped** |
+| v1.9.4 Synthetic Firm Financial Update / Margin Pressure | First concrete `MechanismAdapter`. | Next |
+| v1.9.5 Valuation Refresh Lite | `valuation_mechanism` adapter. | After v1.9.4 |
+| v1.9.6 Bank Credit Review Lite | `credit_review_mechanism` adapter. | After v1.9.5 |
+| v1.9.7 Performance Boundary | Sparse-iteration / complexity-budget hardening. | After v1.9.6 |
+| v1.9.last | First lightweight public prototype. | After v1.9.7 |
+
+## 63. v1.9.3 Model Mechanism Inventory + Behavioral Gap Audit + Mechanism Interface
+
+§63 (v1.9.3) is a **substance audit + interface contract**. It ships no economic behavior. Its job is to:
+
+1. record what the project *actually* implements (vs what the surface area might appear to imply);
+2. name the missing mechanisms ranked by suitability for the next milestone;
+3. lock the mechanism interface so v1.9.4+ concrete mechanisms cannot quietly drift the contract;
+4. tighten anti-overclaiming language in the README before any public-prototype polish.
+
+The audit ships before v1.9.last so the public prototype gate cannot be cleared while the project is still infrastructure-only.
+
+### 63.1 Numbering note
+
+The user-facing task that prompted this work was titled *"v1.9.2 Model Mechanism Inventory & Behavioral Gap Audit."* However v1.9.2 had already shipped one milestone earlier as Living World Replay / Manifest / Digest (§62, commit `9d495bf`). This audit therefore lands as **v1.9.3**; the v1.9 plan's "recommended next path" is renumbered accordingly (see [`v1_9_living_reference_world_plan.md`](v1_9_living_reference_world_plan.md) and [`behavioral_gap_audit.md`](behavioral_gap_audit.md)). Every downstream milestone (firm-financial, valuation lite, credit-review lite, performance boundary, public-prototype freeze) shifts one slot.
+
+### 63.2 What lands in v1.9.3
+
+- [`docs/model_mechanism_inventory.md`](model_mechanism_inventory.md) — the per-component classification table. Maps every kernel / book / engine / routine / attention / report component to one of: *infrastructure / source-of-truth storage / structural model / observation-attention model / routine-process model / deterministic demo rule / economic behavior model / not yet modeled*. Every row names what the component does, what it does not do, whether it changes economic state, whether it makes a decision, whether it is deterministic, whether it is calibrated, whether it is synthetic-only, and where a future mechanism could plug in.
+- [`docs/behavioral_gap_audit.md`](behavioral_gap_audit.md) — the gap analysis. Names the highest-value missing mechanisms (firm financial update, input-cost / margin-pressure propagation, valuation refresh, bank credit review, investor intent, constraint / covenant response, macro / world-variable process, market price formation), ranks them on five filters (reuses existing infra; synthetic / jurisdiction-neutral; no real data; produces visible ledger traces; avoids price formation), records the recommended next path, and provides verbatim anti-overclaiming language for the public prototype.
+- `world/mechanisms.py` — the mechanism interface contract. Five immutable types:
+  - `MechanismSpec` — `model_id`, `model_family`, `version`, `assumptions`, `calibration_status`, `stochasticity`, `required_inputs`, `output_types`, `metadata`.
+  - `MechanismInputBundle` — `request_id`, `model_id`, `actor_id`, `as_of_date`, `selected_observation_set_ids`, `input_refs`, `state_views`, `parameters`, `metadata`.
+  - `MechanismOutputBundle` — `request_id`, `model_id`, `status`, five `proposed_*` tuples (signals / valuation records / constraint pressure deltas / intent records / run records), `output_summary`, `warnings`, `metadata`.
+  - `MechanismRunRecord` — `run_id`, `request_id`, `model_id`, `model_family`, `version`, `actor_id`, `as_of_date`, `status`, `input_refs`, `committed_output_refs`, `parent_record_ids`, `input_summary_hash`, `output_summary_hash`, `metadata`.
+  - `MechanismAdapter` — `runtime_checkable` Protocol exposing `spec` and `apply(bundle) -> output`.
+  - Vocabulary tuples: `MECHANISM_FAMILIES`, `CALIBRATION_STATUSES`, `STOCHASTICITY_LABELS`.
+- `tests/test_mechanism_interface.py` — 39 contract tests pinning required-field shape on all four dataclasses, immutability (`frozen=True`), validation rejection of empty required strings and empty tuple entries, `to_dict` JSON round-trips, the `runtime_checkable` Protocol's structural acceptance / rejection, the vocabulary tuples cover the canonical set, and the "constructing interface records does not require a kernel" anti-behavior check.
+- `README.md` — anti-overclaiming language tightened. The opening paragraph now says explicitly: not a forecasting model, not investment advice, not calibrated, currently demonstrates auditable endogenous information and review flows, financial decision behavior intentionally limited. The roadmap is renumbered to reflect the recommended path.
+
+### 63.3 Verdict
+
+> **The current system is an auditable routine-driven information-flow substrate. It is not yet a price-formation model, credit model, valuation model, macro model, or firm-financial dynamics model.**
+
+What v1.9.3 changes is *clarity*, not *substrate*. Code that already shipped is unchanged; the new module (`world/mechanisms.py`) introduces no behavior; the new docs catalogue what exists rather than promising what does not.
+
+### 63.4 Mechanism principles (ship-or-die invariants)
+
+These principles apply to v1.9.4+ mechanisms and are pinned in the contract test file:
+
+1. **Mechanisms do not directly mutate books.** They propose; the caller commits.
+2. **Mechanisms consume typed refs / selected observations / state views.** Inputs are explicit; no hidden globals.
+3. **Mechanisms return proposed records or output bundles.**
+4. **The caller decides which outputs are committed.**
+5. **Every mechanism run is ledger-auditable.**
+6. **Each mechanism declares**: `model_id`, `model_family`, `version`, `assumptions`, `calibration_status`, `stochasticity`, `required_inputs`, `output_types`.
+7. **Reference mechanisms are simple and synthetic.** v1.9.4 – v1.9.6 mechanisms are jurisdiction-neutral, deterministic (or pinned-seed stochastic), and produce visible ledger traces.
+8. **Advanced mechanisms (FCN, herding, minority game, speculation game, LOB models) attach as adapters.** They are v2+ candidates; v1.x ships only the contract they fit into.
+
+### 63.5 Suggested mechanism families (forward-looking, not shipped)
+
+- `firm_financial_mechanism` — synthetic margin / liquidity / debt pressure update.
+- `valuation_mechanism` — selected refs → `ValuationRecord` proposals.
+- `credit_review_mechanism` — selected refs → credit-review notes + constraint-pressure deltas.
+- `investor_intent_mechanism` — selected refs → non-binding `investor_intent` records (no orders, no trades).
+- `market_mechanism` — FCN / herding / minority-game / speculation-game / LOB adapters. v2+ territory.
+
+### 63.6 Anti-scope
+
+§63 is contract + audit only. v1.9.3 does **not** add:
+
+- any concrete mechanism (those are v1.9.4 onward);
+- any new ledger record type;
+- any auto-firing scheduler hook;
+- any economic interpretation of any record;
+- any real-data ingestion, Japan-specific calibration, or scenario engine;
+- any v1.9.0 / v1.9.1 / v1.9.2 code change. The v1.9.0 living-world helper, the v1.9.1 reporter, and the v1.9.2 replay / manifest helpers are all byte-identical before / after.
+
+### 63.7 v1.9.3 success criteria
+
+§63 is complete when **all** hold:
+
+1. `docs/model_mechanism_inventory.md` and `docs/behavioral_gap_audit.md` exist and cross-reference each other.
+2. `world/mechanisms.py` exports `MechanismSpec`, `MechanismInputBundle`, `MechanismOutputBundle`, `MechanismRunRecord`, `MechanismAdapter`, plus the three vocabulary tuples.
+3. The four dataclasses are frozen, validate empty / wrong-type inputs, and `to_dict` JSON-round-trips.
+4. `tests/test_mechanism_interface.py` (39) passes; the full suite passes.
+5. `compileall world spaces tests examples` is clean and `ruff check .` from the repo root is clean.
+6. `world/reference_living_world.py`, `world/living_world_report.py`, and `examples/reference_world/living_world_replay.py` / `living_world_manifest.py` are unchanged.
+7. The README's opening paragraph reflects the v1.9.3 anti-overclaiming language.
+
+### 63.8 Position in the v1.9 sequence
+
+| Milestone | Scope | Status |
+| --- | --- | --- |
+| v1.9.0 Living Reference World Demo | Code (§59). | Shipped |
+| v1.9.1-prep Report Contract Audit | Docs + contract test (§60). | Shipped |
+| v1.9.1 Living World Trace Report | Code (§61). | Shipped |
+| v1.9.2 Living World Replay / Manifest / Digest | Code (§62). | Shipped |
+| **v1.9.3 Model Mechanism Inventory + Behavioral Gap Audit + Mechanism Interface** | Docs + interface contract (§63). | **Shipped** |
+| v1.9.4 Firm Financial Update / Margin Pressure | First concrete `MechanismAdapter`. | Next |
+| v1.9.5 Valuation Refresh Lite | `valuation_mechanism` adapter. | After v1.9.4 |
+| v1.9.6 Bank Credit Review Lite | `credit_review_mechanism` adapter. | After v1.9.5 |
+| v1.9.7 Performance Boundary | Sparse-iteration hardening. | After v1.9.6 |
+| v1.9.last | First lightweight public prototype. | After v1.9.7 |
+
 
 
 

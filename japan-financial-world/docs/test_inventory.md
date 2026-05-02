@@ -1,19 +1,20 @@
 # Test Inventory
 
-Snapshot of the test suite at **v1.9.2** (`Living World Replay /
-Manifest / Digest`): `1442 / 1442 passing` (444 v0 + 188 v1.0-v1.7
-frozen reference + 810 post-v1.7 additions covering reference
-demo, replay, manifest, catalog-shape, experiment harness,
-renamed WorldID tests, interactions, routines, attention,
-routine engine, the corporate quarterly reporting routine, the
-world-variable storage layer, the exposure / dependency storage
-layer, the observation-menu builder join service, the
+Snapshot of the test suite at **v1.9.3** (`Model Mechanism
+Inventory + Behavioral Gap Audit + Mechanism Interface`):
+`1481 / 1481 passing` (444 v0 + 188 v1.0-v1.7 frozen reference +
+849 post-v1.7 additions covering reference demo, replay,
+manifest, catalog-shape, experiment harness, renamed WorldID
+tests, interactions, routines, attention, routine engine, the
+corporate quarterly reporting routine, the world-variable
+storage layer, the exposure / dependency storage layer, the
+observation-menu builder join service, the
 heterogeneous-attention investor / bank demo, the investor /
 bank review routines, the endogenous chain harness, the ledger
 trace report, the multi-period living reference world demo, the
 v1.9.1-prep report contract, the v1.9.1 living world trace
-report, and the v1.9.2 living-world replay-determinism + manifest
-helpers).
+report, the v1.9.2 living-world replay-determinism + manifest
+helpers, and the v1.9.3 mechanism interface contract).
 
 This inventory is grouped by what each component verifies. The numbers in
 parentheses are test counts per file. Run the full suite with:
@@ -280,6 +281,37 @@ no-mutation guarantee.
   determinism; snapshot determinism; ledger emission of
   `RecordType.INTERACTION_ADDED`; kernel wiring; no-mutation
   guarantee against every other v0 / v1 source-of-truth book.
+
+## Mechanism interface contract (v1.9.3)
+
+- `test_mechanism_interface.py` (39) — required-field contract
+  on `MechanismSpec` (model_id / model_family / version /
+  assumptions / calibration_status / stochasticity /
+  required_inputs / output_types / metadata),
+  `MechanismInputBundle` (request_id / model_id / actor_id /
+  as_of_date / selected_observation_set_ids / input_refs /
+  state_views / parameters / metadata), `MechanismOutputBundle`
+  (request_id / model_id / status / proposed_signals /
+  proposed_valuation_records /
+  proposed_constraint_pressure_deltas / proposed_intent_records /
+  proposed_run_records / output_summary / warnings / metadata),
+  and `MechanismRunRecord` (run_id / request_id / model_id /
+  model_family / version / actor_id / as_of_date / status /
+  input_refs / committed_output_refs / parent_record_ids /
+  input_summary_hash / output_summary_hash / metadata); all
+  four dataclasses are immutable (`frozen=True`); empty required
+  strings and empty tuple entries are rejected; non-Mapping
+  proposal entries are rejected; `to_dict` JSON round-trips
+  byte-identically; the `runtime_checkable` `MechanismAdapter`
+  Protocol accepts a minimally-shaped class (with `spec` +
+  `apply`) and rejects classes missing `apply`; the three
+  vocabulary tuples (`MECHANISM_FAMILIES` ⊇ {firm_financial,
+  valuation, credit_review, investor_intent, market};
+  `CALIBRATION_STATUSES == {synthetic, public_data_calibrated,
+  proprietary_calibrated}`; `STOCHASTICITY_LABELS ==
+  {deterministic, pinned_seed, open_seed}`); constructing the
+  interface dataclasses requires no kernel (anti-behavior
+  invariant for v1.9.3).
 
 ## Living world replay / manifest / digest (v1.9.2)
 
@@ -822,7 +854,7 @@ no-mutation guarantee.
 | Reference loop (v1.6)            | 1     | 5     |
 | **v1 subtotal**                  | **7** | **188** |
 
-### v1.7-public-rc1+ / v1.8.x / v1.9.0 / v1.9.1-prep / v1.9.1 / v1.9.2 additions
+### v1.7-public-rc1+ / v1.8.x / v1.9.0 / v1.9.1-prep / v1.9.1 / v1.9.2 / v1.9.3 additions
 
 | Component                               | Files | Tests |
 | --------------------------------------- | ----- | ----- |
@@ -849,7 +881,8 @@ no-mutation guarantee.
 | Living world trace report (v1.9.1)      | 1     | 27    |
 | Living world replay (v1.9.2)            | 1     | 16    |
 | Living world manifest (v1.9.2)          | 1     | 19    |
-| **post-v1.7 subtotal**                  | **23**| **810** |
+| Mechanism interface contract (v1.9.3)   | 1     | 39    |
+| **post-v1.7 subtotal**                  | **24**| **849** |
 
 ### v0 + v1 + post-v1.7 totals
 
@@ -857,8 +890,8 @@ no-mutation guarantee.
 | -------------------------------- | ----- | ----- |
 | v0                               | 35    | 444   |
 | v1.0–v1.7 frozen reference       | 7     | 188   |
-| post-v1.7 (v1.7-public-rc1+ / v1.8.x / v1.9.0 / v1.9.1-prep / v1.9.1 / v1.9.2) | 23 | 810 |
-| **Total**                        | **65**| **1442** |
+| post-v1.7 (v1.7-public-rc1+ / v1.8.x / v1.9.0 / v1.9.1-prep / v1.9.1 / v1.9.2 / v1.9.3) | 24 | 849 |
+| **Total**                        | **66**| **1481** |
 
 ## Auditing for jurisdiction-neutral identifiers
 

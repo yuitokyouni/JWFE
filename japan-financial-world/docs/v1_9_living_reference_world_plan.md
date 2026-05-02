@@ -121,6 +121,54 @@ the living-world demo, mirroring the v1.7-era reference-demo
 
 The full suite passes 1442 tests (1407 prior + 35 reproducibility).
 
+## v1.9.3 — what shipped
+
+A **substance-audit milestone**, not a code milestone. v1.9.3
+ships:
+
+- `docs/model_mechanism_inventory.md` — per-component
+  classification (infrastructure / source-of-truth storage /
+  structural model / observation-attention model / routine-process
+  model / deterministic demo rule / economic behavior model /
+  not yet modeled).
+- `docs/behavioral_gap_audit.md` — gap analysis, missing
+  mechanism ranking, recommended next path, anti-overclaiming
+  language for the public prototype.
+- `world/mechanisms.py` — interface contract (`MechanismSpec`,
+  `MechanismInputBundle`, `MechanismOutputBundle`,
+  `MechanismRunRecord`, `MechanismAdapter` Protocol). No
+  behavior. Eight ship-or-die principles documented in the
+  module docstring and pinned in the contract test.
+- `tests/test_mechanism_interface.py` (39 tests) — required-field
+  shape, immutability, validation, JSON round-trip,
+  `runtime_checkable` Protocol semantics, vocabulary
+  invariants.
+- `README.md` opening paragraph and roadmap renumbered to
+  reflect the v1.9.3 audit and the recommended next path.
+
+**Numbering note.** The user task that prompted this work was
+titled "v1.9.2 …" but v1.9.2 had already shipped as Living World
+Replay / Manifest / Digest one milestone earlier. The audit
+therefore lands as v1.9.3; downstream milestones shift by one.
+
+**Recommended next path** (from the gap audit):
+
+| Milestone | Scope | Status |
+| --- | --- | --- |
+| v1.9.0 Living Reference World Demo | Code. | Shipped |
+| v1.9.1-prep Report Contract Audit | Docs + contract test. | Shipped |
+| v1.9.1 Living World Trace Report | Code. | Shipped |
+| v1.9.2 Living World Replay / Manifest / Digest | Code. | Shipped |
+| **v1.9.3** Model Mechanism Inventory + Gap Audit + Mechanism Interface | **Docs + contract.** | **Shipped** |
+| v1.9.4 Synthetic Firm Financial Update / Margin Pressure | First `MechanismAdapter`. | Next |
+| v1.9.5 Valuation Refresh Lite | `valuation_mechanism` adapter. | Planned |
+| v1.9.6 Bank Credit Review Lite | `credit_review_mechanism` adapter. | Planned |
+| v1.9.7 Performance Boundary | Sparse-iteration hardening. | Planned |
+| v1.9.last | First lightweight public prototype. | Planned |
+
+The full suite passes 1481 tests (1442 prior + 39 mechanism
+contract).
+
 ## v1.9 goal
 
 Build a small **synthetic, multi-period, jurisdiction-neutral
