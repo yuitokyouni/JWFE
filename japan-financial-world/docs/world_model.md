@@ -8260,3 +8260,37 @@ The book emits **only** `INTERBANK_LIQUIDITY_STATE_RECORDED` records and refuses
 v1.13.3 is storage-only. Per-period record count, per-run window, and `living_world_digest` are **unchanged** from v1.13.2. The orchestrator integration arrives at v1.13.5.
 
 The test count moves from `2832 / 2832` (v1.13.2) to `2895 / 2895` (v1.13.3) — `+63` tests in the new `tests/test_interbank_liquidity.py`.
+
+## 96. v1.13.4 CentralBankOperationSignal + CollateralEligibilitySignal — generic synthetic monetary-authority signal storage
+
+§96 ships the fourth concrete code milestone in the v1.13 sequence: two append-only label-based generic signal records and one shared book. Storage only — there is **no operation amount, no policy rate, no monetary-policy stance numeric, no real central-bank operation execution, no haircut percentage, no margin number, no real collateral revaluation, no securities settlement execution, no Japan calibration**.
+
+### 96.1 What v1.13.4 ships
+
+A new module `world/central_bank_signals.py` containing:
+
+- `CentralBankOperationSignalRecord` (frozen dataclass) — fields: `operation_signal_id`, `authority_id`, `as_of_date`, label triple (`operation_label` / `direction_label` / `horizon_label`), `status`, `visibility`, `confidence` in `[0.0, 1.0]` (booleans rejected), three `source_*_ids` plain-id tuples (settlement accounts, interbank liquidity states, market-environment states), `metadata`.
+- `CollateralEligibilitySignalRecord` (frozen dataclass) — fields: `eligibility_signal_id`, `authority_id`, `collateral_class_label`, `as_of_date`, label pair (`eligibility_label` / `haircut_tier_label`), `status`, `visibility`, `confidence` in `[0.0, 1.0]`, two `source_*_ids` plain-id tuples (market-environment states, interbank liquidity states), `metadata`.
+- `CentralBankSignalBook` (append-only) — `add_operation` / `get_operation` / `list_operations` / `list_operations_by_authority` / `list_operations_by_label`; `add_eligibility` / `get_eligibility` / `list_eligibilities` / `list_eligibilities_by_class` / `list_eligibilities_by_label`; `snapshot`.
+- Two new ledger record types: `CENTRAL_BANK_OPERATION_SIGNAL_RECORDED` and `COLLATERAL_ELIGIBILITY_SIGNAL_RECORDED`.
+- Wired into `WorldKernel.central_bank_signals`.
+
+Recommended (but not enforced) label vocabulary:
+
+- `operation_label` ∈ { `open_market_operation`, `standing_facility`, `policy_communication`, `unknown` }
+- `direction_label` ∈ { `inject`, `withdraw`, `neutral`, `unknown` }
+- `horizon_label` ∈ { `intraday`, `short_term`, `medium_term`, `long_term`, `unknown` }
+- `eligibility_label` ∈ { `eligible`, `conditionally_eligible`, `ineligible`, `unknown` }
+- `haircut_tier_label` ∈ { `tier_low`, `tier_medium`, `tier_high`, `tier_severe`, `unknown` } — **never a percentage**
+
+### 96.2 Anti-claims
+
+Both records carry **no** `amount`, `currency_value`, `fx_rate`, `balance`, `policy_rate`, `interest`, `haircut_percentage`, `haircut_value`, `operation_amount`, `policy_stance_numeric`, `margin_amount`, `order`, `trade`, `recommendation`, `investment_advice`, `forecast_value`, `actual_value`, `real_data_value`, or `behavior_probability` field. Tests pin the absence on both the dataclass field set and the ledger payload key set.
+
+The book emits **only** `CENTRAL_BANK_OPERATION_SIGNAL_RECORDED` and `COLLATERAL_ELIGIBILITY_SIGNAL_RECORDED` records and refuses to mutate any other source-of-truth book. v1.13.4 does **not** decide policy, set rates, conduct operations, value collateral, calculate haircuts, settle securities, or apply any Japan-specific rule.
+
+### 96.3 Performance boundary
+
+v1.13.4 is storage-only. Per-period record count, per-run window, and `living_world_digest` are **unchanged** from v1.13.3. The orchestrator integration arrives at v1.13.5.
+
+The test count moves from `2895 / 2895` (v1.13.3) to `2973 / 2973` (v1.13.4) — `+78` tests in the new `tests/test_central_bank_signals.py`.

@@ -84,6 +84,12 @@ class RecordType(str, Enum):
     PAYMENT_INSTRUCTION_REGISTERED = "payment_instruction_registered"
     SETTLEMENT_EVENT_RECORDED = "settlement_event_recorded"
     INTERBANK_LIQUIDITY_STATE_RECORDED = "interbank_liquidity_state_recorded"
+    CENTRAL_BANK_OPERATION_SIGNAL_RECORDED = (
+        "central_bank_operation_signal_recorded"
+    )
+    COLLATERAL_ELIGIBILITY_SIGNAL_RECORDED = (
+        "collateral_eligibility_signal_recorded"
+    )
     STATE_SNAPSHOT_CREATED = "state_snapshot_created"
     WARNING = "warning"
     ERROR = "error"

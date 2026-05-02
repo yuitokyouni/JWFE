@@ -10,6 +10,7 @@ from world.attention_feedback import AttentionFeedbackBook
 from world.settlement_accounts import SettlementAccountBook
 from world.settlement_payments import SettlementInstructionBook
 from world.interbank_liquidity import InterbankLiquidityStateBook
+from world.central_bank_signals import CentralBankSignalBook
 from world.balance_sheet import BalanceSheetProjector
 from world.clock import Clock
 from world.constraints import ConstraintBook, ConstraintEvaluator
@@ -115,6 +116,9 @@ class WorldKernel:
     interbank_liquidity: InterbankLiquidityStateBook = field(
         default_factory=InterbankLiquidityStateBook
     )
+    central_bank_signals: CentralBankSignalBook = field(
+        default_factory=CentralBankSignalBook
+    )
     routine_engine: RoutineEngine | None = None
     observation_menu_builder: ObservationMenuBuilder | None = None
     # v1.12.3 — read-only evidence resolution service. Stateless;
@@ -154,6 +158,7 @@ class WorldKernel:
             self.settlement_accounts,
             self.settlement_payments,
             self.interbank_liquidity,
+            self.central_bank_signals,
         ):
             if book.ledger is None:
                 book.ledger = self.ledger
