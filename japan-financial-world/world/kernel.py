@@ -30,6 +30,7 @@ from world.state import State
 from world.engagement import DialogueBook, EscalationCandidateBook
 from world.firm_state import FirmFinancialStateBook
 from world.industry import IndustryConditionBook
+from world.investor_intent import InvestorIntentBook
 from world.market_conditions import MarketConditionBook
 from world.market_surface_readout import CapitalMarketReadoutBook
 from world.stewardship import StewardshipBook
@@ -90,6 +91,9 @@ class WorldKernel:
     firm_financial_states: FirmFinancialStateBook = field(
         default_factory=FirmFinancialStateBook
     )
+    investor_intents: InvestorIntentBook = field(
+        default_factory=InvestorIntentBook
+    )
     routine_engine: RoutineEngine | None = None
     observation_menu_builder: ObservationMenuBuilder | None = None
 
@@ -117,6 +121,7 @@ class WorldKernel:
             self.market_conditions,
             self.capital_market_readouts,
             self.firm_financial_states,
+            self.investor_intents,
         ):
             if book.ledger is None:
                 book.ledger = self.ledger

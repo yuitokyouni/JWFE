@@ -103,7 +103,14 @@ LIVING_WORLD_BOUNDARY_STATEMENT: str = (
     "documented rule set; no revenue, no sales, no EBITDA, no "
     "net income, no cash balance, no debt amount, no real "
     "financial statement, no forecast, no actual / accounting "
-    "value, no investment recommendation; latent ordering only."
+    "value, no investment recommendation; latent ordering only. "
+    "v1.12.1 investor intent signal: pre-action / pre-decision "
+    "review posture labels conditioned on cited evidence; no "
+    "order submission, no trade, no rebalancing, no buy / sell "
+    "/ overweight / underweight execution, no target weights, "
+    "no expected return, no target price, no security "
+    "recommendation, no investment advice, no portfolio "
+    "allocation; non-binding labels only."
 )
 
 CANONICAL_FORMAT_VERSION: str = "living_world_canonical.v1"
@@ -224,6 +231,9 @@ def _canonicalize_period(period: LivingReferencePeriodSummary) -> dict[str, Any]
         ),
         "firm_financial_state_ids": list(
             getattr(period, "firm_financial_state_ids", ())
+        ),
+        "investor_intent_ids": list(
+            getattr(period, "investor_intent_ids", ())
         ),
     }
 

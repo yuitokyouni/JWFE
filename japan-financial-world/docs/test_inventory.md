@@ -1,14 +1,13 @@
 # Test Inventory
 
-Snapshot of the test suite at **v1.12.0** (`Firm financial latent
-state` — first time-crossing endogenous state-update layer in
-public FWE; market regimes / readouts / industry demand / pressure
-evidence accumulate over time into per-firm latent ordering
-scalars in `[0, 1]`; per-run record-count window widens from
-`[244, 276]` to `[256, 288]`; default-fixture `living_world_digest`
-changes to `1b9ee84a...` by design):
-`2259 / 2259 passing` (444 v0 + 188 v1.0-v1.7 frozen reference +
-1627 post-v1.7 additions covering reference demo, replay, manifest,
+Snapshot of the test suite at **v1.12.1** (`Investor intent
+signal` — pre-action / pre-decision review-posture layer; intents
+are non-binding labels conditioned on cited evidence; per-run
+record-count window widens from `[256, 288]` to `[280, 312]`;
+default-fixture `living_world_digest` changes to `475d558d...` by
+design):
+`2349 / 2349 passing` (444 v0 + 188 v1.0-v1.7 frozen reference +
+1717 post-v1.7 additions covering reference demo, replay, manifest,
 catalog-shape, experiment harness, renamed WorldID tests,
 interactions, routines, attention, routine engine, the corporate
 quarterly reporting routine, the world-variable storage layer, the
@@ -58,6 +57,13 @@ in `world/firm_state.py` plus the per-period firm-state phase
 in the living reference world demo, the first time-crossing
 endogenous state-update layer, exercised in the new
 `tests/test_firm_state.py` and extended in
+`tests/test_living_reference_world.py`, and the v1.12.1
+investor intent signal — `InvestorIntentRecord` /
+`InvestorIntentBook` / `run_reference_investor_intent_signal`
+in `world/investor_intent.py` plus the per-period investor-intent
+phase between the v1.10.3 escalation and the v1.10.3 corporate
+response phases, exercised in the new
+`tests/test_investor_intent.py` and extended in
 `tests/test_living_reference_world.py`).
 
 This inventory is grouped by what each component verifies. The numbers in
@@ -1157,8 +1163,9 @@ no-mutation guarantee.
 | Capital-market condition (v1.11.0) | 1 | 84 |
 | Capital-market readout (v1.11.1) | 1 | 72 |
 | Firm financial latent state (v1.12.0) | 1 | 113 |
-| Living-world integration tests (v1.9.x core + v1.10.5 + v1.11.0 + v1.11.1 + v1.11.2 + v1.12.0 additive in test_living_reference_world.py — 15 v1.10.5-specific, 8 v1.11.0-specific, 7 v1.11.1-specific, 15 v1.11.2-specific, and 9 v1.12.0-specific integration tests) | (counted under existing files) | (+15 v1.10.5 / +8 v1.11.0 / +7 v1.11.1 / +15 v1.11.2 / +9 v1.12.0 in test_living_reference_world.py) |
-| **post-v1.7 subtotal**                  | **36**| **1627** |
+| Investor intent signal (v1.12.1) | 1 | 81 |
+| Living-world integration tests (v1.9.x core + v1.10.5 + v1.11.0 + v1.11.1 + v1.11.2 + v1.12.0 + v1.12.1 additive in test_living_reference_world.py — 15 v1.10.5, 8 v1.11.0, 7 v1.11.1, 15 v1.11.2, 9 v1.12.0, and 9 v1.12.1 integration tests) | (counted under existing files) | (+15 v1.10.5 / +8 v1.11.0 / +7 v1.11.1 / +15 v1.11.2 / +9 v1.12.0 / +9 v1.12.1 in test_living_reference_world.py) |
+| **post-v1.7 subtotal**                  | **37**| **1717** |
 
 ### v0 + v1 + post-v1.7 totals
 
@@ -1166,8 +1173,8 @@ no-mutation guarantee.
 | -------------------------------- | ----- | ----- |
 | v0                               | 35    | 444   |
 | v1.0–v1.7 frozen reference       | 7     | 188   |
-| post-v1.7 (v1.7-public-rc1+ / v1.8.x / v1.9.0 / v1.9.1-prep / v1.9.1 / v1.9.2 / v1.9.3 / v1.9.3.1 / CLI argv pin / v1.9.4 / v1.9.5 / v1.9.6 / v1.9.7 / v1.9.8 / v1.10.1 / v1.10.2 / v1.10.3 / v1.10.4 / v1.10.4.1 / v1.10.5 / v1.11.0 / v1.11.1 / v1.11.2 / v1.12.0) | 36 | 1627 |
-| **Total**                        | **78**| **2259** |
+| post-v1.7 (v1.7-public-rc1+ / v1.8.x / v1.9.0 / v1.9.1-prep / v1.9.1 / v1.9.2 / v1.9.3 / v1.9.3.1 / CLI argv pin / v1.9.4 / v1.9.5 / v1.9.6 / v1.9.7 / v1.9.8 / v1.10.1 / v1.10.2 / v1.10.3 / v1.10.4 / v1.10.4.1 / v1.10.5 / v1.11.0 / v1.11.1 / v1.11.2 / v1.12.0 / v1.12.1) | 37 | 1717 |
+| **Total**                        | **79**| **2349** |
 
 ## Auditing for jurisdiction-neutral identifiers
 

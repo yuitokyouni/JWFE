@@ -841,9 +841,11 @@ def test_living_world_stays_within_record_budget():
         (interactions, routines, profiles registered on the first
         period — currently ~14).
 
-    Lower bound 148 (per-period work × 4); upper bound 280
-    catches accidental quadratic loops while leaving headroom
-    for harmless infra adjustments.
+    Lower bound 148 (v1.9.x per-period work × 4); upper bound 320
+    catches accidental quadratic loops while leaving headroom for
+    every milestone through v1.12.1 (which sits at 298 records on
+    the default fixture). The tight per-version window lives in
+    ``test_living_reference_world_performance_boundary.py``.
     """
     k = _seed_kernel()
     r = _run_default(k)
@@ -856,8 +858,8 @@ def test_living_world_stays_within_record_budget():
         + 2 * (len(_INVESTOR_IDS) + len(_BANK_IDS))  # review_run + signal
     )  # = 4 * (6 + 3 + 8 + 6 + 6 + 8) = 148
     assert r.created_record_count >= minimum_expected
-    # Loose upper bound: 280 is well below dense product space.
-    assert r.created_record_count <= 280
+    # Loose upper bound: 320 is well below dense product space.
+    assert r.created_record_count <= 320
 
 
 # ---------------------------------------------------------------------------
@@ -2084,4 +2086,206 @@ def test_v1_12_0_markdown_report_includes_firm_financial_states_section():
         "not** an accounting statement" in md_lower
         or "not* an accounting statement" in md_lower
         or "ordering scalars" in md_lower
+    )
+
+
+# ===========================================================================
+# v1.12.1 — investor intent integration
+# ===========================================================================
+
+
+def test_v1_12_1_one_investor_intent_per_pair_per_period():
+    """The v1.12.1 investor-intent phase fires once per (investor,
+    firm) per period."""
+    k = _seed_kernel()
+    r = _run_default(k)
+    expected = len(_INVESTOR_IDS) * len(_FIRM_IDS)
+    for ps in r.per_period_summaries:
+        assert len(ps.investor_intent_ids) == expected
+
+
+def test_v1_12_1_intent_records_resolve_and_carry_evidence():
+    """Each intent must resolve to a stored record whose
+    intent_direction sits in the documented label set and whose
+    evidence id tuples carry the period's selection / readout /
+    firm_state / valuation / dialogue / escalation / theme ids
+    (attention discipline)."""
+    k = _seed_kernel()
+    r = _run_default(k)
+    allowed_directions = {
+        "increase_watch",
+        "decrease_confidence",
+        "engagement_watch",
+        "hold_review",
+        "risk_flag_watch",
+        "deepen_due_diligence",
+        "coverage_review",
+    }
+    for ps in r.per_period_summaries:
+        for iid in ps.investor_intent_ids:
+            rec = k.investor_intents.get_intent(iid)
+            assert rec.intent_direction in allowed_directions
+            # Evidence ids should be non-empty under the default
+            # fixture: the orchestrator cites at least one
+            # selection, the period's readout, the firm's state,
+            # the (investor, firm) pair's dialogue, and the
+            # escalation candidate.
+            assert len(rec.evidence_selected_observation_set_ids) >= 1
+            assert len(rec.evidence_market_readout_ids) >= 1
+            assert len(rec.evidence_firm_state_ids) >= 1
+            assert len(rec.evidence_dialogue_ids) >= 1
+            assert len(rec.evidence_escalation_candidate_ids) >= 1
+
+
+def test_v1_12_1_default_regime_yields_engagement_watch():
+    """Under the default fixture (open_or_constructive market +
+    dialogues + escalations cited but pressures not yet high),
+    every intent lands on engagement_watch."""
+    k = _seed_kernel()
+    r = _run_default(k)
+    for ps in r.per_period_summaries:
+        for iid in ps.investor_intent_ids:
+            rec = k.investor_intents.get_intent(iid)
+            assert rec.intent_direction == "engagement_watch"
+            assert rec.intent_type == "engagement_review"
+
+
+def test_v1_12_1_constrained_regime_yields_risk_or_due_diligence():
+    """Under the constrained market regime, firm pressures
+    accumulate and the market readout is restrictive, so intents
+    land on risk_flag_watch (rule 2) or deepen_due_diligence
+    (rule 1) — never on engagement_watch / hold_review."""
+    k = _seed_kernel()
+    r = run_living_reference_world(
+        k,
+        firm_ids=_FIRM_IDS,
+        investor_ids=_INVESTOR_IDS,
+        bank_ids=_BANK_IDS,
+        period_dates=_PERIOD_DATES,
+        market_regime="constrained",
+    )
+    seen: set[str] = set()
+    for ps in r.per_period_summaries:
+        for iid in ps.investor_intent_ids:
+            rec = k.investor_intents.get_intent(iid)
+            seen.add(rec.intent_direction)
+    assert seen.issubset({"risk_flag_watch", "deepen_due_diligence"})
+    # And the constrained regime must produce at least one
+    # risk_flag_watch / deepen_due_diligence intent.
+    assert seen
+
+
+def test_v1_12_1_no_order_or_recommendation_payload_keys_in_ledger():
+    """No v1.12.1 record's ledger payload may carry any
+    forbidden order / trade / rebalance / recommendation /
+    execution key."""
+    k = _seed_kernel()
+    r = _run_default(k)
+    forbidden_keys = {
+        "order",
+        "order_id",
+        "trade",
+        "buy",
+        "sell",
+        "rebalance",
+        "target_weight",
+        "overweight",
+        "underweight",
+        "expected_return",
+        "target_price",
+        "recommendation",
+        "investment_advice",
+        "portfolio_allocation",
+        "execution",
+    }
+    for rec in k.ledger.records[
+        r.ledger_record_count_before : r.ledger_record_count_after
+    ]:
+        leaked = set(rec.payload.keys()) & forbidden_keys
+        assert not leaked, (
+            f"v1.12.1 demo record {rec.object_id!r} leaks forbidden "
+            f"payload keys: {sorted(leaked)}"
+        )
+
+
+def test_v1_12_1_no_forbidden_action_event_types_appear():
+    """The integrated v1.12.1 sweep must not emit any
+    action / pricing / trading / firm-state-added (legacy) record."""
+    k = _seed_kernel()
+    r = _run_default(k)
+    forbidden_event_types = {
+        "order_submitted",
+        "price_updated",
+        "contract_created",
+        "contract_status_updated",
+        "contract_covenant_breached",
+        "ownership_position_added",
+        "ownership_transferred",
+        "institution_action_recorded",
+        "firm_state_added",
+    }
+    seen = {
+        rec.event_type
+        for rec in k.ledger.records[
+            r.ledger_record_count_before : r.ledger_record_count_after
+        ]
+    }
+    assert seen.isdisjoint(forbidden_event_types), (
+        "v1.12.1 integrated sweep emitted forbidden event types: "
+        f"{sorted(seen & forbidden_event_types)}"
+    )
+
+
+def test_v1_12_1_two_runs_produce_byte_identical_canonical_view():
+    from examples.reference_world.living_world_replay import (
+        canonicalize_living_world_result,
+        living_world_digest,
+    )
+
+    k1 = _seed_kernel()
+    r1 = _run_default(k1)
+    k2 = _seed_kernel()
+    r2 = _run_default(k2)
+    can1 = canonicalize_living_world_result(k1, r1)
+    can2 = canonicalize_living_world_result(k2, r2)
+    assert can1 == can2
+    assert living_world_digest(k1, r1) == living_world_digest(k2, r2)
+
+
+def test_v1_12_1_canonical_view_carries_investor_intent_id_tuples():
+    from examples.reference_world.living_world_replay import (
+        canonicalize_living_world_result,
+    )
+
+    k = _seed_kernel()
+    r = _run_default(k)
+    can = canonicalize_living_world_result(k, r)
+    expected_per_period = len(_INVESTOR_IDS) * len(_FIRM_IDS)
+    for ps in can["per_period_summaries"]:
+        assert "investor_intent_ids" in ps
+        assert len(ps["investor_intent_ids"]) == expected_per_period
+
+
+def test_v1_12_1_markdown_report_includes_investor_intent_section():
+    from world.living_world_report import (
+        build_living_world_trace_report,
+        render_living_world_markdown,
+    )
+
+    k = _seed_kernel()
+    r = _run_default(k)
+    report = build_living_world_trace_report(k, r)
+    md = render_living_world_markdown(report)
+    assert "## Investor intent" in md
+    # Histogram column must contain at least one of the v1.12.1
+    # direction labels.
+    assert "engagement_watch" in md or "hold_review" in md or "risk_flag_watch" in md
+    md_lower = md.lower()
+    # v1.12.1 anti-claims must show up either in the section
+    # caption or in the boundary footer.
+    assert (
+        "not** an order" in md_lower
+        or "not* an order" in md_lower
+        or "non-binding labels only" in md_lower
+        or "no order submission" in md_lower
     )

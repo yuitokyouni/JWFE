@@ -86,6 +86,7 @@ from world.market_conditions import (
 )
 from world.market_surface_readout import build_capital_market_readout
 from world.firm_state import run_reference_firm_financial_state_update
+from world.investor_intent import run_reference_investor_intent_signal
 from world.observation_menu_builder import ObservationMenuBuildRequest
 from world.stewardship import (
     DuplicateStewardshipThemeError,
@@ -215,6 +216,10 @@ class LivingReferencePeriodSummary:
     firm_financial_state_ids: tuple[str, ...] = field(
         default_factory=tuple
     )
+    # v1.12.1 additive: one investor-intent id per (investor,
+    # firm) pair per period. Pre-action review posture only —
+    # never an order, trade, allocation, or recommendation.
+    investor_intent_ids: tuple[str, ...] = field(default_factory=tuple)
     record_count_created: int = 0
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
@@ -244,6 +249,7 @@ class LivingReferencePeriodSummary:
             "market_condition_ids",
             "capital_market_readout_ids",
             "firm_financial_state_ids",
+            "investor_intent_ids",
         ):
             value = tuple(getattr(self, tuple_field_name))
             for entry in value:
@@ -1289,6 +1295,7 @@ def run_living_reference_world(
         # forecast; not a financial-statement update.
         # ------------------------------------------------------------------
         firm_financial_state_ids: list[str] = []
+        firm_state_id_by_firm: dict[str, str] = {}
         for firm_id in firms:
             state_result = run_reference_firm_financial_state_update(
                 kernel,
@@ -1306,6 +1313,7 @@ def run_living_reference_world(
                 ),
             )
             firm_financial_state_ids.append(state_result.state_id)
+            firm_state_id_by_firm[firm_id] = state_result.state_id
 
         # Attention phase. We iterate investors and banks in order so
         # the resulting summary tuples match the input order. Each
@@ -1583,6 +1591,59 @@ def run_living_reference_world(
                     kernel.escalations.get_candidate(escalation_id)
                 investor_escalation_candidate_ids.append(escalation_id)
 
+        # ------------------------------------------------------------------
+        # v1.12.1 — investor intent signal phase.
+        # For each (investor, firm) pair, build one synthetic
+        # ``InvestorIntentRecord`` that conditions a pre-action
+        # review posture on the cited evidence: the investor's
+        # period selection (attention), the period's market
+        # readout, the firm's latent state, the (investor, firm)
+        # pair's valuation, the (investor, firm) pair's dialogue,
+        # the (investor, firm) pair's escalation candidate, and
+        # the investor's stewardship themes. Pre-trade /
+        # pre-decision posture only — never an order, trade,
+        # rebalance, allocation, or recommendation.
+        # ------------------------------------------------------------------
+        investor_intent_ids: list[str] = []
+        investor_selection_id_by_investor = dict(
+            zip(investors, investor_selection_ids)
+        )
+        for investor_id in investors:
+            inv_selection = investor_selection_id_by_investor.get(investor_id)
+            inv_themes = themes_by_investor[investor_id]
+            for firm_id in firms:
+                pair_dialogue = dialogue_id_by_pair.get(
+                    (investor_id, firm_id)
+                )
+                pair_escalation = _escalation_id_for(
+                    investor_id, firm_id, iso_date
+                )
+                pair_valuation = tuple(
+                    vid
+                    for vid in valuation_ids
+                    if f":{investor_id}:{firm_id}:" in vid
+                )
+                firm_state = firm_state_id_by_firm.get(firm_id)
+                intent_result = run_reference_investor_intent_signal(
+                    kernel,
+                    investor_id=investor_id,
+                    target_company_id=firm_id,
+                    as_of_date=iso_date,
+                    selected_observation_set_ids=(
+                        (inv_selection,) if inv_selection else ()
+                    ),
+                    market_readout_ids=tuple(capital_market_readout_ids),
+                    market_condition_ids=tuple(market_condition_ids),
+                    firm_state_ids=((firm_state,) if firm_state else ()),
+                    valuation_ids=pair_valuation,
+                    dialogue_ids=(
+                        (pair_dialogue,) if pair_dialogue else ()
+                    ),
+                    escalation_candidate_ids=(pair_escalation,),
+                    stewardship_theme_ids=inv_themes,
+                )
+                investor_intent_ids.append(intent_result.intent_id)
+
         # v1.10.3 corporate strategic response candidate phase — one
         # candidate per firm per period. Symmetric to the escalation
         # candidate, but on the corporate side. The candidate names
@@ -1730,6 +1791,7 @@ def run_living_reference_world(
                     capital_market_readout_ids
                 ),
                 firm_financial_state_ids=tuple(firm_financial_state_ids),
+                investor_intent_ids=tuple(investor_intent_ids),
                 record_count_created=period_end_idx - period_start_idx,
                 metadata={
                     "period_index": period_idx,

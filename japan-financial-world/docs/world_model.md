@@ -6144,7 +6144,8 @@ A `StewardshipThemeRecord` and the `StewardshipBook` storing it are jurisdiction
 | v1.11.0 Capital-market surface | Code (§77). | Shipped |
 | v1.11.1 Capital-market readout | Code (§78). Additive readout layer. | Shipped |
 | v1.11.2 Demo market regime presets | Code (§79). Additive demo-only preset layer. | Shipped |
-| **v1.12.0 Firm financial latent state** | Code (§80). First time-crossing endogenous state-update layer. | **Shipped** |
+| v1.12.0 Firm financial latent state | Code (§80). First time-crossing endogenous state-update layer. | Shipped |
+| **v1.12.1 Investor intent signal** | Code (§81). Pre-action review-posture layer; non-binding labels only. | **Shipped** |
 | v1.10.last Public engagement layer freeze | Docs-only. | Planned |
 | v2.0 Japan public-data calibration design gate | — | Not started |
 
@@ -6230,7 +6231,8 @@ A `PortfolioCompanyDialogueRecord` and the `DialogueBook` storing it are jurisdi
 | v1.11.0 Capital-market surface | Code (§77). | Shipped |
 | v1.11.1 Capital-market readout | Code (§78). Additive readout layer. | Shipped |
 | v1.11.2 Demo market regime presets | Code (§79). Additive demo-only preset layer. | Shipped |
-| **v1.12.0 Firm financial latent state** | Code (§80). First time-crossing endogenous state-update layer. | **Shipped** |
+| v1.12.0 Firm financial latent state | Code (§80). First time-crossing endogenous state-update layer. | Shipped |
+| **v1.12.1 Investor intent signal** | Code (§81). Pre-action review-posture layer; non-binding labels only. | **Shipped** |
 | v1.10.last Public engagement layer freeze | Docs-only. | Planned |
 | v2.0 Japan public-data calibration design gate | — | Not started |
 
@@ -6358,7 +6360,8 @@ The v1.10.3 candidate records and their books are jurisdiction-neutral, signal-o
 | v1.11.0 Capital-market surface | Code (§77). | Shipped |
 | v1.11.1 Capital-market readout | Code (§78). Additive readout layer. | Shipped |
 | v1.11.2 Demo market regime presets | Code (§79). Additive demo-only preset layer. | Shipped |
-| **v1.12.0 Firm financial latent state** | Code (§80). First time-crossing endogenous state-update layer. | **Shipped** |
+| v1.12.0 Firm financial latent state | Code (§80). First time-crossing endogenous state-update layer. | Shipped |
+| **v1.12.1 Investor intent signal** | Code (§81). Pre-action review-posture layer; non-binding labels only. | **Shipped** |
 | v1.10.last Public engagement layer freeze | Docs-only. | Planned |
 | v2.0 Japan public-data calibration design gate | — | Not started |
 
@@ -6441,7 +6444,8 @@ An `IndustryDemandConditionRecord` and the `IndustryConditionBook` storing it ar
 | v1.11.0 Capital-market surface | Code (§77). | Shipped |
 | v1.11.1 Capital-market readout | Code (§78). Additive readout layer. | Shipped |
 | v1.11.2 Demo market regime presets | Code (§79). Additive demo-only preset layer. | Shipped |
-| **v1.12.0 Firm financial latent state** | Code (§80). First time-crossing endogenous state-update layer. | **Shipped** |
+| v1.12.0 Firm financial latent state | Code (§80). First time-crossing endogenous state-update layer. | Shipped |
+| **v1.12.1 Investor intent signal** | Code (§81). Pre-action review-posture layer; non-binding labels only. | **Shipped** |
 | v1.10.last Public engagement layer freeze | Docs-only. | Planned |
 | v2.0 Japan public-data calibration design gate | — | Not started |
 
@@ -6661,7 +6665,8 @@ v1.10.5 is **integration only**. It does **not**:
 | v1.11.0 Capital-market surface | Code (§77). | Shipped |
 | v1.11.1 Capital-market readout | Code (§78). Additive readout layer. | Shipped |
 | v1.11.2 Demo market regime presets | Code (§79). Additive demo-only preset layer. | Shipped |
-| **v1.12.0 Firm financial latent state** | Code (§80). First time-crossing endogenous state-update layer. | **Shipped** |
+| v1.12.0 Firm financial latent state | Code (§80). First time-crossing endogenous state-update layer. | Shipped |
+| **v1.12.1 Investor intent signal** | Code (§81). Pre-action review-posture layer; non-binding labels only. | **Shipped** |
 | v1.10.last Public engagement layer freeze | Docs-only. | Planned |
 | v2.0 Japan public-data calibration design gate | — | Not started |
 
@@ -6801,7 +6806,8 @@ A `MarketConditionRecord` and the `MarketConditionBook` storing it are jurisdict
 | v1.11.0 Capital-market surface | Code (§77). | Shipped |
 | v1.11.1 Capital-market readout | Code (§78). Additive readout layer. | Shipped |
 | v1.11.2 Demo market regime presets | Code (§79). Additive demo-only preset layer. | Shipped |
-| **v1.12.0 Firm financial latent state** | Code (§80). First time-crossing endogenous state-update layer. | **Shipped** |
+| v1.12.0 Firm financial latent state | Code (§80). First time-crossing endogenous state-update layer. | Shipped |
+| **v1.12.1 Investor intent signal** | Code (§81). Pre-action review-posture layer; non-binding labels only. | **Shipped** |
 | v1.10.last Public engagement layer freeze | Docs-only. | Planned |
 | v2.0 Japan public-data calibration design gate | — | Not started |
 
@@ -6915,7 +6921,8 @@ A `CapitalMarketReadoutRecord` and the `CapitalMarketReadoutBook` storing it are
 | v1.11.0 Capital-market surface | Code (§77). | Shipped |
 | v1.11.1 Capital-market readout | Code (§78). Additive readout layer. | Shipped |
 | v1.11.2 Demo market regime presets | Code (§79). Additive demo-only preset layer. | Shipped |
-| **v1.12.0 Firm financial latent state** | Code (§80). First time-crossing endogenous state-update layer. | **Shipped** |
+| v1.12.0 Firm financial latent state | Code (§80). First time-crossing endogenous state-update layer. | Shipped |
+| **v1.12.1 Investor intent signal** | Code (§81). Pre-action review-posture layer; non-binding labels only. | **Shipped** |
 | v1.10.last Public engagement layer freeze | Docs-only. | Planned |
 | v1.12 Funding / issuance intent layer (anticipated) | Code. | Planned |
 | v2.0 Japan public-data calibration design gate | — | Not started |
@@ -7093,3 +7100,97 @@ The v1.12.0 living-world digest is **not** equal to the v1.11.2 / v1.11.1 defaul
 | v2.0 Japan public-data calibration design gate | — | Not started |
 
 The test count moves from `2137 / 2137` (v1.11.2) to `2259 / 2259` (v1.12.0) — `+122` tests (`+113` in the new `tests/test_firm_state.py`, `+9` v1.12.0 integration tests in `tests/test_living_reference_world.py`). The CLI surface gains a `firm_states=` column; the per-period record count moves from 61 to 64; the per-run record window widens from `[244, 276]` to `[256, 288]`; the default-fixture `living_world_digest` changes to `1b9ee84ab8e6e0f3012004a8fe2932c689d5dff5ea0031997a3dd5bca6b913ca` (expected — see §80.6).
+
+## 81. v1.12.1 Investor intent signal — pre-action review posture, non-binding labels only
+
+§81 adds a jurisdiction-neutral, synthetic, **non-binding** investor intent layer that sits between the v1.10.3 escalation phase and the v1.10.3 corporate-response phase in the living reference world. An investor intent is a *pre-trade / pre-decision review posture* — `increase_watch`, `decrease_confidence`, `engagement_watch`, `hold_review`, `risk_flag_watch`, `deepen_due_diligence`, `coverage_review` — that an investor records about a target portfolio company in a given period, citing the evidence the posture was conditioned on.
+
+This is **not** an order, **not** a trade, **not** a portfolio allocation decision, **not** a security recommendation, **not** an expected-return forecast. The record stores *labels* and plain-id cross-references; it does not move ownership, does not change prices, does not mutate any contract or constraint, and does not emit any execution-class record.
+
+### 81.1 Why this exists
+
+Through v1.12.0 the engine could already accumulate firm-level state across periods. v1.12.1 closes the next loop on the investor side: how does *information* (market regime / readout / firm state / valuation evidence / engagement context / theme priors) propagate into *investor review posture* before any decision is taken? This is the layer between "I see what is happening" and "I take an action" — and v1.12.1 fills it without crossing into action territory.
+
+### 81.2 What v1.12.1 ships
+
+- `world/investor_intent.py` (new):
+  - `InvestorIntentRecord` (immutable dataclass) with bounded `confidence` in `[0.0, 1.0]` (bool rejection), eight evidence id tuples (selection / readout / market_condition / firm_state / valuation / dialogue / escalation / stewardship_theme), and the v1.12.1 anti-fields binding: no `order`, `order_id`, `trade`, `buy`, `sell`, `rebalance`, `target_weight`, `overweight`, `underweight`, `expected_return`, `target_price`, `recommendation`, `investment_advice`, `portfolio_allocation`, or `execution` field.
+  - `InvestorIntentBook` (append-only store) with `add_intent` / `get_intent` / `list_intents` / `list_by_investor` / `list_by_target_company` / `list_by_intent_type` / `list_by_intent_direction` / `list_by_status` / `list_by_date` / `snapshot`.
+  - `run_reference_investor_intent_signal(...)` — deterministic helper that reads only the evidence ids the caller passes (the v1.12.1 *attention discipline*), applies the v1.12.1 priority-order classifier, and emits exactly one record. Idempotent on `intent_id`. The helper is tolerant of unresolved firm-state / readout / valuation ids (they are recorded as data on the intent's evidence tuples but do not block emission).
+  - Errors: `DuplicateInvestorIntentError`, `UnknownInvestorIntentError`.
+  - `InvestorIntentSignalResult` dataclass returns the produced record + the resolved `intent_direction`.
+- `world/ledger.py` — new `RecordType.INVESTOR_INTENT_SIGNAL_ADDED` (event type `investor_intent_signal_added`).
+- `world/kernel.py` — `investor_intents: InvestorIntentBook` wired in `WorldKernel.__post_init__`.
+- `world/reference_living_world.py` — new per-period investor-intent phase between the v1.10.3 escalation phase and the v1.10.3 corporate-response phase. `LivingReferencePeriodSummary` grows additively with `investor_intent_ids`. The phase walks every (investor, firm) pair and cites: the investor's period selection (attention surface), the period's market readout, the period's market conditions, the firm's latent state (from v1.12.0), the (investor, firm) pair's valuation, the (investor, firm) pair's dialogue, the pair's escalation candidate, and the investor's stewardship themes.
+- `world/living_world_report.py` — `LivingWorldPeriodReport` grows with `investor_intent_count` plus `investor_intent_direction_counts` (sorted histogram of intent_direction labels for determinism). The Markdown renderer adds an `## Investor intent` section between the v1.12.0 firm-state section and the attention-divergence section. The boundary statement is extended in place to cover the v1.12.1 anti-claims.
+- `examples/reference_world/living_world_replay.py` — the canonical view echoes `investor_intent_ids` per period; the boundary statement constant tracks the reporter's. **Expected digest change**: the v1.12.1 living-world digest is *not* the same as the v1.12.0 default digest.
+- `examples/reference_world/living_world_manifest.py` — manifest summary echoes the new `investor_intent_total` count.
+- `examples/reference_world/run_living_reference_world.py` — per-period CLI trace line names `investor_intents=`; summary line names the investor-intent phase and the v1.12.1 anti-claims.
+- `tests/test_investor_intent.py` (new) — 81 tests covering field validation, bounded `confidence` with bool rejection, anti-fields on dataclass + ledger payload, listings (every filter), snapshot determinism, ledger emission, kernel wiring, no-mutation against every other source-of-truth book (including v1.12.0 firm states), no-action / no-pricing / no-firm_state / no-firm_latent_state_updated invariant, the helper's deterministic priority-order classifier (idempotency, default → `hold_review`, engagement → `engagement_watch`, restrictive readout → `risk_flag_watch`, low valuation confidence → `decrease_confidence`, high firm funding need → `deepen_due_diligence`, priority-order tie-breaks, constructive-vs-constrained label divergence, evidence-tuple recording, helper does not mutate evidence books, deterministic across two fresh kernels), plus a jurisdiction-neutral identifier scan over both module and test file.
+- `tests/test_living_reference_world.py` — `+9` v1.12.1 integration tests: one intent per (investor, firm) per period, intents resolve and carry the period's evidence id tuples, default fixture lands every intent on `engagement_watch`, the constrained regime lands every intent on `risk_flag_watch` or `deepen_due_diligence`, no forbidden order / recommendation payload keys end-to-end, no forbidden action event types, two fresh runs produce byte-identical canonical view, canonical view carries the new id tuples, Markdown report includes the `## Investor intent` section.
+- `tests/test_living_reference_world_performance_boundary.py` — `count_expected_living_world_records` and the per-run upper-bound test refreshed for the v1.12.1 fixture. The legacy v1.9.x loose-budget test in `test_living_reference_world.py` had its ceiling raised from 280 to 320 to leave headroom through v1.12.1.
+
+### 81.3 Classifier rule set (binding, illustrative, deterministic)
+
+The helper resolves `intent_direction` by **priority-order match**:
+
+| Priority | Trigger | `intent_direction` | `intent_type` |
+| --- | --- | --- | --- |
+| 1 | Any cited firm state has `funding_need_intensity ≥ 0.7` | `deepen_due_diligence` | `risk_review` |
+| 2 | Any cited firm state has `funding_need_intensity ≥ 0.65` OR `market_access_pressure ≥ 0.65`, OR any cited readout has `overall_market_access_label = "selective_or_constrained"` | `risk_flag_watch` | `risk_review` |
+| 3 | Any cited valuation has `confidence < 0.4` | `decrease_confidence` | `confidence_adjustment` |
+| 4 | At least one dialogue id or escalation candidate id is cited | `engagement_watch` | `engagement_review` |
+| 5 | (default) | `hold_review` | `watch_adjustment` |
+
+Higher-priority rules pre-empt lower-priority rules. Priority-order tie-breaks are pinned by tests (`test_helper_priority_order_high_funding_need_beats_engagement`, `test_helper_priority_order_constrained_market_beats_engagement`).
+
+The thresholds (`0.7`, `0.65`, `0.4`) are documented anchors; a future tuning milestone may shift them, as long as the qualitative ordering holds: constructive market regimes do not produce risk-flag intents under bare evidence; constrained / tightening market regimes do.
+
+### 81.4 Attention discipline (binding)
+
+The helper reads **only the evidence ids the caller supplies**. It does not scan `kernel.firm_financial_states`, `kernel.capital_market_readouts`, or any other book for additional context. If the caller wants the helper to use a particular firm state or readout, the caller passes the relevant id; otherwise the helper treats that signal as absent. This keeps investor intent local to its cited evidence — a downstream attention-conditioned consumer can re-walk *exactly* the evidence set the intent was conditioned on, by reading the eight `evidence_*_ids` tuples.
+
+This is the same v0/v1 cross-reference rule applied throughout v1.10 / v1.11 / v1.12.0: cited ids are stored as data, not validated against any other book; consumers do not silently expand their evidence set beyond what the producer cited.
+
+### 81.5 Anti-fields and anti-claims (binding)
+
+The dataclass deliberately has **no** `order`, `order_id`, `trade`, `buy`, `sell`, `rebalance`, `target_weight`, `overweight`, `underweight`, `expected_return`, `target_price`, `recommendation`, `investment_advice`, `portfolio_allocation`, or `execution` field. The ledger payload likewise carries none of these keys. Two explicit tests (`test_intent_record_has_no_order_or_recommendation_field`, `test_add_intent_payload_carries_no_order_or_recommendation_keys`) introspect the dataclass field set and the ledger payload key set respectively.
+
+v1.12.1 does **not**:
+
+- submit any order, execute any trade, rebalance any portfolio, set any target weight, mark any position overweight / underweight, or take any allocation decision;
+- recommend any investment, divestment, or weight change;
+- forecast any expected return, target price, or any real-world quantity;
+- mutate any other source-of-truth book (the no-mutation test asserts this against ownership, contracts, prices, constraints, signals, valuations, institutions, external_processes, relationships, interactions, routines, attention, variables, exposures, stewardship, engagement, escalations, strategic_responses, industry_conditions, market_conditions, capital_market_readouts, and firm_financial_states);
+- emit the legacy v0/v1 `firm_state_added` event from `add_intent`, the v1.12.0 `firm_latent_state_updated` event, or any action-class event;
+- enforce membership of any free-form tag against any controlled vocabulary;
+- emit any ledger record other than `INVESTOR_INTENT_SIGNAL_ADDED` from a bare `add_intent` call.
+
+### 81.6 Performance boundary (binding)
+
+v1.12.1 adds **investors × firms** records per period — same shape as the v1.10.2 dialogue and v1.10.3 escalation phases. The per-period formula gains `I × F`; the per-run formula moves from 256 to **280** for the default fixture (2 × 3 × 4 = +24); the per-run window moves from `[256, 288]` to **`[280, 312]`**. The phase introduces no new dense traversal beyond the existing `I × F` shape.
+
+### 81.7 Living-world digest (expected change)
+
+The v1.12.1 living-world digest is **not** equal to the v1.12.0 default digest. The canonical view now carries `investor_intent_ids` per period and the boundary string was extended. This is **expected**. Tests assert that two fresh runs of the v1.12.1 default fixture produce *byte-identical* canonical JSON and the same digest. The default-fixture digest at v1.12.1 is `475d558d2d0eae491b3f7f4a8c983627d655336c13f3acad9f75439a353f090c`.
+
+### 81.8 What v1.12.1 does not decide
+
+- The shape of an eventual *intent → action* layer. v1.12.1 deliberately stops at posture; whether a future milestone introduces a `decision_candidate` or `pre_order_intent` record on top of investor intent is a future decision. v1.12.1 makes intent ids citable by plain id; a future consumer would add an `evidence_investor_intent_ids` slot mirroring the v1.10.4.1 / v1.11.0 type-correct cross-reference patterns.
+- Whether `confidence` should average the cited evidence's confidences (instead of a hardcoded `0.5`). v1.12.1 keeps the simpler hardcode; a future milestone may refine.
+- The exact rule values beyond the v1.12.1 minimum. A future milestone may extend or tune the rule set without breaking the v1.12.1 freeze surface, as long as: each cited evidence is read locally; the priority-order discipline is preserved; constructive market regimes do not promote intents into the risk / due-diligence branch under bare evidence.
+
+### 81.9 Position in the v1.12 sequence
+
+| Milestone | Scope | Status |
+| --- | --- | --- |
+| v1.9.last Public Prototype Freeze | Docs-only (§69). | Shipped |
+| v1.10.0 → v1.10.5 (engagement / strategic-response stack) | Code (§70 → §76). | Shipped |
+| v1.11.0 → v1.11.2 (capital-market surface stack) | Code (§77 → §79). | Shipped |
+| v1.12.0 Firm financial latent state | Code (§80). | Shipped |
+| **v1.12.1 Investor intent signal** | Code (§81). Pre-action review-posture layer. | **Shipped** |
+| v1.10.last Public engagement layer freeze | Docs-only. | Planned |
+| v1.12.x next steps (anticipated) | Code. | Planned |
+| v2.0 Japan public-data calibration design gate | — | Not started |
+
+The test count moves from `2259 / 2259` (v1.12.0) to `2349 / 2349` (v1.12.1) — `+90` tests (`+81` in the new `tests/test_investor_intent.py`, `+9` v1.12.1 integration tests in `tests/test_living_reference_world.py`). The CLI surface gains an `investor_intents=` column; the per-period record count moves from 64 to 70; the per-run record window widens from `[256, 288]` to `[280, 312]`; the default-fixture `living_world_digest` changes to `475d558d2d0eae491b3f7f4a8c983627d655336c13f3acad9f75439a353f090c` (expected — see §81.7).

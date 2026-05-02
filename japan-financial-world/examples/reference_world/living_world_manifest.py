@@ -149,6 +149,10 @@ def _summary_from_result(result: LivingReferenceWorldResult) -> dict[str, Any]:
         len(getattr(p, "firm_financial_state_ids", ()))
         for p in result.per_period_summaries
     )
+    investor_intent_total = sum(
+        len(getattr(p, "investor_intent_ids", ()))
+        for p in result.per_period_summaries
+    )
     return {
         "run_id": result.run_id,
         "period_count": result.period_count,
@@ -168,6 +172,7 @@ def _summary_from_result(result: LivingReferenceWorldResult) -> dict[str, Any]:
         "market_condition_total": market_condition_total,
         "capital_market_readout_total": capital_market_readout_total,
         "firm_financial_state_total": firm_financial_state_total,
+        "investor_intent_total": investor_intent_total,
         "created_record_count": result.created_record_count,
     }
 

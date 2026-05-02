@@ -133,7 +133,14 @@ _BOUNDARY_STATEMENT: str = (
     "documented rule set; no revenue, no sales, no EBITDA, no "
     "net income, no cash balance, no debt amount, no real "
     "financial statement, no forecast, no actual / accounting "
-    "value, no investment recommendation; latent ordering only."
+    "value, no investment recommendation; latent ordering only. "
+    "v1.12.1 investor intent signal: pre-action / pre-decision "
+    "review posture labels conditioned on cited evidence; no "
+    "order submission, no trade, no rebalancing, no buy / sell "
+    "/ overweight / underweight execution, no target weights, "
+    "no expected return, no target price, no security "
+    "recommendation, no investment advice, no portfolio "
+    "allocation; non-binding labels only."
 )
 
 
@@ -202,6 +209,14 @@ class LivingWorldPeriodReport:
     avg_market_access_pressure: float = 0.0
     avg_funding_need_intensity: float = 0.0
     avg_response_readiness: float = 0.0
+    # v1.12.1 additive: investor-intent record counts + a
+    # histogram of intent_direction labels (sorted tuple of
+    # (label, count) pairs for determinism). Used by the
+    # Markdown renderer's "## Investor intent" section.
+    investor_intent_count: int = 0
+    investor_intent_direction_counts: tuple[tuple[str, int], ...] = field(
+        default_factory=tuple
+    )
     # v1.11.1 additive: per-period banker-readable labels lifted
     # from the period's CapitalMarketReadoutRecord (if any). When
     # the period has no readout, the labels default to empty
@@ -242,6 +257,7 @@ class LivingWorldPeriodReport:
             "market_condition_count",
             "capital_market_readout_count",
             "firm_financial_state_count",
+            "investor_intent_count",
         ):
             value = getattr(self, name)
             if not isinstance(value, int) or value < 0:
@@ -304,6 +320,31 @@ class LivingWorldPeriodReport:
                 )
             object.__setattr__(self, name, float(value))
 
+        # v1.12.1 — investor-intent direction histogram. Each entry
+        # is a (label, count) tuple; the sorted tuple is what we
+        # store, for determinism.
+        normalized_intent_counts: list[tuple[str, int]] = []
+        for entry in self.investor_intent_direction_counts:
+            if (
+                not isinstance(entry, tuple)
+                or len(entry) != 2
+                or not isinstance(entry[0], str)
+                or not entry[0]
+                or not isinstance(entry[1], int)
+                or entry[1] < 0
+            ):
+                raise ValueError(
+                    "investor_intent_direction_counts entries must be "
+                    "(non-empty str, non-negative int); "
+                    f"got {entry!r}"
+                )
+            normalized_intent_counts.append((entry[0], entry[1]))
+        object.__setattr__(
+            self,
+            "investor_intent_direction_counts",
+            tuple(sorted(normalized_intent_counts)),
+        )
+
         object.__setattr__(self, "metadata", dict(self.metadata))
 
     def to_dict(self) -> dict[str, Any]:
@@ -342,6 +383,11 @@ class LivingWorldPeriodReport:
             "avg_market_access_pressure": self.avg_market_access_pressure,
             "avg_funding_need_intensity": self.avg_funding_need_intensity,
             "avg_response_readiness": self.avg_response_readiness,
+            "investor_intent_count": self.investor_intent_count,
+            "investor_intent_direction_counts": [
+                [label, count]
+                for label, count in self.investor_intent_direction_counts
+            ],
             "rates_tone": self.rates_tone,
             "credit_tone": self.credit_tone,
             "equity_tone": self.equity_tone,
@@ -880,6 +926,7 @@ def _build_period_report(
                 getattr(period, "capital_market_readout_ids", ())
             ),
             **_extract_firm_state_averages(kernel, period),
+            **_extract_investor_intent_summary(kernel, period),
             **_extract_readout_labels(kernel, period),
             record_type_counts=period_record_type_counts,
             warnings=tuple(period_warnings),
@@ -894,6 +941,40 @@ def _build_period_report(
         ),
         period_warnings,
     )
+
+
+def _extract_investor_intent_summary(
+    kernel: Any, period: LivingReferencePeriodSummary
+) -> dict[str, Any]:
+    """v1.12.1 — read the period's InvestorIntentRecords (if any)
+    and return a count + a sorted histogram of intent_direction
+    labels. When the period has no intents, returns the empty
+    histogram so the renderer skips the section."""
+    intent_ids = getattr(period, "investor_intent_ids", ())
+    if not intent_ids:
+        return {
+            "investor_intent_count": 0,
+            "investor_intent_direction_counts": (),
+        }
+    book = getattr(kernel, "investor_intents", None)
+    if book is None:
+        return {
+            "investor_intent_count": 0,
+            "investor_intent_direction_counts": (),
+        }
+    counts: dict[str, int] = {}
+    resolved = 0
+    for iid in intent_ids:
+        try:
+            rec = book.get_intent(iid)
+        except Exception:
+            continue
+        counts[rec.intent_direction] = counts.get(rec.intent_direction, 0) + 1
+        resolved += 1
+    return {
+        "investor_intent_count": resolved,
+        "investor_intent_direction_counts": tuple(sorted(counts.items())),
+    }
 
 
 def _extract_firm_state_averages(
@@ -1276,6 +1357,52 @@ def render_living_world_markdown(report: LivingWorldTraceReport) -> str:
             "by the v1.12.0 rule set. **Not** an accounting "
             "statement, **not** revenue / EBITDA / cash / debt, "
             "**not** a forecast, **not** investment advice."
+        )
+        lines.append("")
+
+    # v1.12.1 investor intent section. Each row shows the
+    # period's per-(investor, firm) intent count plus a sorted
+    # histogram of intent_direction labels. Pre-action review
+    # posture only — never an order, trade, allocation, or
+    # recommendation.
+    has_v121_signal = any(
+        ps.get("investor_intent_count", 0) > 0
+        for ps in md["period_summaries"]
+    )
+    if has_v121_signal:
+        lines.append("## Investor intent")
+        lines.append("")
+        lines.append(
+            "| period | as_of_date | intents | direction histogram |"
+        )
+        lines.append("| --- | --- | --- | --- |")
+        for ps in md["period_summaries"]:
+            if ps.get("investor_intent_count", 0) == 0:
+                continue
+            histogram = ps.get(
+                "investor_intent_direction_counts", []
+            )
+            histogram_str = (
+                ", ".join(
+                    f"{label}={count}"
+                    for label, count in histogram
+                )
+                if histogram
+                else "—"
+            )
+            lines.append(
+                f"| `{ps['period_id']}` | `{ps['as_of_date']}` | "
+                f"{ps.get('investor_intent_count', 0)} | "
+                f"{histogram_str} |"
+            )
+        lines.append("")
+        lines.append(
+            "> Investor intent is pre-action / pre-decision "
+            "review posture conditioned on the period's evidence. "
+            "**Not** an order, **not** a trade, **not** a "
+            "rebalance, **not** a portfolio-allocation decision, "
+            "**not** a security recommendation, **not** "
+            "investment advice."
         )
         lines.append("")
 
