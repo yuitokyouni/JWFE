@@ -111,13 +111,22 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any, Mapping, Sequence
 
+from world.evidence import (
+    ActorContextFrame,
+    EvidenceResolutionError,
+    StrictEvidenceResolutionError,
+    resolve_actor_context,
+)
 from world.mechanisms import (
     MechanismOutputBundle,
     MechanismRunRecord,
     MechanismRunRequest,
     MechanismSpec,
 )
-from world.valuations import ValuationRecord
+from world.valuations import (
+    UnknownValuationError,
+    ValuationRecord,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -777,3 +786,581 @@ def run_reference_valuation_refresh_lite(
         valuation_id=record.valuation_id,
         valuation_summary=summary,
     )
+
+
+# ---------------------------------------------------------------------------
+# v1.12.5 — attention-conditioned valuation refresh lite helper
+# ---------------------------------------------------------------------------
+
+
+# v1.12.5 — small, documented, deterministic synthetic deltas. The
+# attention-conditioned helper applies these on top of the v1.9.5
+# pressure-haircut formula so the resulting valuation is sensitive
+# to *what evidence the valuer actually selected*. Magnitudes are
+# illustrative round numbers; the qualitative ordering (more
+# resolved evidence → higher confidence; restrictive market /
+# unresolved refs → lower confidence; restrictive market →
+# additional small downward adjustment to estimated_value) is what
+# tests pin, never specific calibrated numbers.
+_ATTN_CONFIDENCE_RESOLVED_BUCKET_BONUS: float = 0.02
+_ATTN_CONFIDENCE_RESOLVED_BUCKET_BONUS_CAP: float = 0.10
+_ATTN_CONFIDENCE_UNRESOLVED_PENALTY: float = 0.05
+_ATTN_CONFIDENCE_UNRESOLVED_PENALTY_CAP: float = 0.20
+_ATTN_RESTRICTIVE_MARKET_VALUE_HAIRCUT: float = 0.02
+_ATTN_RESTRICTIVE_RISK_APPETITE_VALUE_HAIRCUT: float = 0.01
+_ATTN_PRESSURE_HIGH_THRESHOLD: float = 0.7
+
+_RESTRICTIVE_OVERALL_LABEL: str = "selective_or_constrained"
+_RESTRICTIVE_RISK_APPETITE_LABEL: str = "risk_off"
+
+
+def run_attention_conditioned_valuation_refresh_lite(
+    kernel: Any,
+    *,
+    firm_id: str,
+    valuer_id: str,
+    as_of_date: date | str | None = None,
+    selected_observation_set_ids: Sequence[str] = (),
+    explicit_pressure_signal_ids: Sequence[str] = (),
+    explicit_corporate_signal_ids: Sequence[str] = (),
+    explicit_firm_state_ids: Sequence[str] = (),
+    explicit_market_readout_ids: Sequence[str] = (),
+    explicit_market_environment_state_ids: Sequence[str] = (),
+    explicit_variable_observation_ids: Sequence[str] = (),
+    explicit_exposure_ids: Sequence[str] = (),
+    baseline_value: float | None = None,
+    currency: str = "unspecified",
+    numeraire: str = "unspecified",
+    pressure_haircut_per_unit_pressure: float | None = None,
+    confidence_decay_per_unit_pressure: float | None = None,
+    valuation_id: str | None = None,
+    request_id: str | None = None,
+    strict: bool = False,
+    metadata: Mapping[str, Any] | None = None,
+) -> ValuationRefreshLiteResult:
+    """
+    v1.12.5 — attention-conditioned valuation-refresh-lite helper.
+
+    Builds an :class:`ActorContextFrame` for the valuer (treated as
+    the actor whose attention conditions this run) on
+    ``(firm_id, as_of_date)`` via the v1.12.3
+    :func:`world.evidence.resolve_actor_context` substrate, then
+    runs the v1.9.5 pressure-haircut adapter on **only the resolved
+    frame ids**, and applies a small documented v1.12.5 synthetic
+    delta to the produced ``estimated_value`` and ``confidence``
+    based on what the resolver surfaced for *this* valuer.
+
+    Idempotent: a valuation already present under the same
+    ``valuation_id`` returns the existing record unchanged. The
+    helper is read-only over every other source-of-truth book; it
+    writes only to ``kernel.valuations`` and the kernel ledger via
+    ``ValuationBook.add_valuation``.
+
+    The helper reads only what the resolver surfaced for *this*
+    valuer on *this* date — never a global book scan. Pressure
+    signals, corporate signals, firm states, market readouts,
+    market environment states, variable observations, and exposures
+    can all be surfaced through the actor's ``SelectedObservationSet``
+    selection refs OR through the explicit-id kwargs the helper
+    exposes. Resolved ids land in the matching evidence bucket on
+    the produced :class:`ValuationRecord`'s ``related_ids`` /
+    ``inputs`` fields; unresolved refs land in the record's
+    ``metadata["unresolved_refs"]`` list. The resolver's
+    ``context_frame_id`` / ``status`` / ``confidence`` are stamped
+    on ``metadata``.
+
+    The helper does **not**:
+
+    - introduce real data ingestion or any Japan-specific
+      calibration;
+    - compute beta, WACC, D/E, equity premium, or cost of capital;
+    - decide impairment;
+    - recommend an investment / form a price / form a target price
+      / form an expected return;
+    - match orders / clear trades / execute any DCM/ECM action;
+    - dispatch to an LLM agent or an external solver;
+    - mutate any other source-of-truth book in the kernel;
+    - scan books globally — only the resolver's surfaced ids drive
+      classification.
+
+    The synthetic delta v1.12.5 introduces (small, documented,
+    deterministic) on top of the v1.9.5 formula:
+
+    - **More resolved evidence**:
+      ``confidence += 0.02 * resolved_buckets`` (capped at +0.10).
+      Where ``resolved_buckets`` counts how many of the helper's
+      seven evidence buckets had at least one resolved id.
+    - **Unresolved refs**:
+      ``confidence -= 0.05 * unresolved_count`` (capped at -0.20).
+    - **Restrictive market readout / environment**:
+      ``estimated_value *= 1 - 0.02`` if any resolved readout has
+      ``overall_market_access_label == "selective_or_constrained"``
+      OR any resolved environment state has the same label.
+    - **risk_off market environment**:
+      additional ``estimated_value *= 1 - 0.01``.
+
+    The deltas only fire when ``estimated_value`` is not ``None``;
+    confidence is always clamped to ``[0, 1]``. Tests pin the
+    qualitative ordering (more cited → higher confidence;
+    restrictive → lower estimated_value), never the absolute
+    arithmetic.
+
+    Strict mode (``strict=True``) is forwarded to the resolver and
+    raises :class:`StrictEvidenceResolutionError` on any unresolved
+    id; the helper does not commit a valuation in that case.
+    """
+    if kernel is None:
+        raise ValueError("kernel is required")
+    if not isinstance(firm_id, str) or not firm_id:
+        raise ValueError("firm_id is required and must be a non-empty string")
+    if not isinstance(valuer_id, str) or not valuer_id:
+        raise ValueError(
+            "valuer_id is required and must be a non-empty string"
+        )
+
+    iso_date = _coerce_iso_date(as_of_date, kernel=kernel)
+    rid = request_id or _default_request_id(firm_id, iso_date)
+    vid = valuation_id or _default_valuation_id(firm_id, iso_date)
+
+    # --------------------------------------------------------------
+    # Idempotency check — same valuation_id returns the existing
+    # record's audit shape unchanged.
+    # --------------------------------------------------------------
+    try:
+        existing = kernel.valuations.get_valuation(vid)
+    except UnknownValuationError:
+        existing = None
+    except Exception:
+        existing = None
+    if existing is not None:
+        existing_summary: dict[str, Any] = {
+            "estimated_value": existing.estimated_value,
+            "confidence": float(existing.confidence),
+            "overall_pressure": float(
+                existing.inputs.get("overall_pressure", 0.0)
+                if isinstance(existing.inputs, Mapping)
+                else 0.0
+            ),
+            "baseline_value": (
+                existing.inputs.get("baseline_value")
+                if isinstance(existing.inputs, Mapping)
+                else None
+            ),
+            "pressure_signal_id": (
+                existing.inputs.get("pressure_signal_id")
+                if isinstance(existing.inputs, Mapping)
+                else None
+            ),
+            "method": existing.method,
+        }
+        existing_request = MechanismRunRequest(
+            request_id=rid,
+            model_id=VALUATION_REFRESH_MODEL_ID,
+            actor_id=firm_id,
+            as_of_date=iso_date,
+            evidence_refs=tuple(existing.related_ids),
+        )
+        existing_output = MechanismOutputBundle(
+            request_id=rid,
+            model_id=VALUATION_REFRESH_MODEL_ID,
+            status="completed",
+            proposed_valuation_records=(),
+            output_summary=existing_summary,
+        )
+        existing_run_record = MechanismRunRecord(
+            run_id=f"mechanism_run:{rid}",
+            request_id=rid,
+            model_id=VALUATION_REFRESH_MODEL_ID,
+            model_family=VALUATION_REFRESH_MODEL_FAMILY,
+            version=VALUATION_REFRESH_MECHANISM_VERSION,
+            actor_id=firm_id,
+            as_of_date=iso_date,
+            status="completed",
+            input_refs=tuple(existing.related_ids),
+            committed_output_refs=(existing.valuation_id,),
+            metadata={
+                "calibration_status": "synthetic",
+                "valuation_summary": existing_summary,
+                "idempotent_replay": True,
+            },
+        )
+        return ValuationRefreshLiteResult(
+            request=existing_request,
+            output=existing_output,
+            run_record=existing_run_record,
+            valuation_id=existing.valuation_id,
+            valuation_summary=existing_summary,
+        )
+
+    # --------------------------------------------------------------
+    # Pass 1 — resolve actor context. Strict mode raises *before*
+    # any record is committed.
+    # --------------------------------------------------------------
+    frame: ActorContextFrame = resolve_actor_context(
+        kernel,
+        actor_id=valuer_id,
+        actor_type="valuer",
+        as_of_date=iso_date,
+        selected_observation_set_ids=tuple(selected_observation_set_ids),
+        explicit_signal_ids=(
+            tuple(explicit_pressure_signal_ids)
+            + tuple(explicit_corporate_signal_ids)
+        ),
+        explicit_variable_observation_ids=tuple(
+            explicit_variable_observation_ids
+        ),
+        explicit_exposure_ids=tuple(explicit_exposure_ids),
+        explicit_market_readout_ids=tuple(explicit_market_readout_ids),
+        explicit_market_environment_state_ids=tuple(
+            explicit_market_environment_state_ids
+        ),
+        explicit_firm_state_ids=tuple(explicit_firm_state_ids),
+        strict=strict,
+    )
+
+    # --------------------------------------------------------------
+    # Pass 2 — read evidence ONLY from the resolver's surfaced ids
+    # and shape the v1.9.5 evidence bundle. The adapter never sees
+    # the kernel; only the request.evidence the helper packs.
+    # --------------------------------------------------------------
+    evidence: dict[str, list[dict[str, Any]]] = {
+        "InformationSignal": [],
+        "VariableObservation": [],
+        "ExposureRecord": [],
+        "SelectedObservationSet": [],
+    }
+
+    pressure_signal_id_resolved: str | None = None
+    for sid in frame.resolved_signal_ids:
+        try:
+            sig = kernel.signals.get_signal(sid)
+        except Exception:
+            continue
+        sig_dict = {
+            "signal_id": sig.signal_id,
+            "signal_type": sig.signal_type,
+            "subject_id": sig.subject_id,
+            "source_id": sig.source_id,
+            "published_date": sig.published_date,
+            "payload": dict(sig.payload),
+            "metadata": dict(sig.metadata),
+        }
+        evidence["InformationSignal"].append(sig_dict)
+        if (
+            sig.signal_type == _FIRM_PRESSURE_SIGNAL_TYPE
+            and sig.subject_id == firm_id
+            and pressure_signal_id_resolved is None
+        ):
+            pressure_signal_id_resolved = sig.signal_id
+
+    for oid in frame.resolved_variable_observation_ids:
+        try:
+            obs = kernel.variables.get_observation(oid)
+        except Exception:
+            continue
+        try:
+            spec = kernel.variables.get_variable(obs.variable_id)
+            variable_group = spec.variable_group
+        except Exception:
+            variable_group = None
+        evidence["VariableObservation"].append(
+            {
+                "observation_id": obs.observation_id,
+                "variable_id": obs.variable_id,
+                "variable_group": variable_group,
+                "as_of_date": obs.as_of_date,
+                "value": obs.value,
+                "unit": obs.unit,
+            }
+        )
+
+    for eid in frame.resolved_exposure_ids:
+        try:
+            exp = kernel.exposures.get_exposure(eid)
+        except Exception:
+            continue
+        evidence["ExposureRecord"].append(
+            {
+                "exposure_id": exp.exposure_id,
+                "subject_id": exp.subject_id,
+                "subject_type": exp.subject_type,
+                "variable_id": exp.variable_id,
+                "exposure_type": exp.exposure_type,
+                "metric": exp.metric,
+                "magnitude": float(exp.magnitude),
+                "direction": exp.direction,
+            }
+        )
+
+    for sel_id in frame.selected_observation_set_ids:
+        try:
+            sel = kernel.attention.get_selection(sel_id)
+        except Exception:
+            continue
+        evidence["SelectedObservationSet"].append(
+            {
+                "selection_id": sel.selection_id,
+                "actor_id": sel.actor_id,
+                "menu_id": sel.menu_id,
+                "selected_refs": list(sel.selected_refs),
+                "as_of_date": sel.as_of_date,
+            }
+        )
+
+    # Build evidence_refs from the resolver's frame in canonical
+    # bucket order. This is the lineage the audit MechanismRunRecord
+    # carries.
+    resolved_refs_list: list[str] = []
+    for bucket_ids in (
+        frame.resolved_signal_ids,
+        frame.resolved_variable_observation_ids,
+        frame.resolved_exposure_ids,
+        frame.resolved_market_condition_ids,
+        frame.resolved_market_readout_ids,
+        frame.resolved_market_environment_state_ids,
+        frame.resolved_industry_condition_ids,
+        frame.resolved_firm_state_ids,
+        frame.resolved_valuation_ids,
+        frame.resolved_dialogue_ids,
+        frame.resolved_escalation_candidate_ids,
+        frame.resolved_stewardship_theme_ids,
+    ):
+        for ref_id in bucket_ids:
+            if ref_id not in resolved_refs_list:
+                resolved_refs_list.append(ref_id)
+    for sel_id in frame.selected_observation_set_ids:
+        if sel_id not in resolved_refs_list:
+            resolved_refs_list.append(sel_id)
+    resolved_refs: tuple[str, ...] = tuple(resolved_refs_list)
+
+    # --------------------------------------------------------------
+    # Pass 3 — assemble adapter parameters and run.
+    # --------------------------------------------------------------
+    parameters: dict[str, Any] = {
+        "valuer_id": valuer_id,
+        "currency": currency,
+        "numeraire": numeraire,
+        "valuation_id": vid,
+    }
+    if baseline_value is not None:
+        parameters["baseline_value"] = float(baseline_value)
+    if pressure_haircut_per_unit_pressure is not None:
+        parameters["pressure_haircut_per_unit_pressure"] = float(
+            pressure_haircut_per_unit_pressure
+        )
+    if confidence_decay_per_unit_pressure is not None:
+        parameters["confidence_decay_per_unit_pressure"] = float(
+            confidence_decay_per_unit_pressure
+        )
+
+    request = MechanismRunRequest(
+        request_id=rid,
+        model_id=VALUATION_REFRESH_MODEL_ID,
+        actor_id=firm_id,
+        as_of_date=iso_date,
+        selected_observation_set_ids=tuple(frame.selected_observation_set_ids),
+        evidence_refs=resolved_refs,
+        evidence=evidence,
+        parameters=parameters,
+        metadata=dict(metadata or {}),
+    )
+
+    adapter = ValuationRefreshLiteAdapter()
+    output = adapter.apply(request)
+
+    if not output.proposed_valuation_records:
+        raise RuntimeError(
+            "ValuationRefreshLiteAdapter returned no proposed valuation; "
+            "the v1.12.5 contract requires exactly one"
+        )
+    proposed = dict(output.proposed_valuation_records[0])
+
+    # --------------------------------------------------------------
+    # Pass 4 — apply v1.12.5 attention deltas. These are small,
+    # documented synthetic adjustments — not calibrated sensitivities
+    # — driven by what the resolver surfaced for *this* valuer.
+    # --------------------------------------------------------------
+    estimated_value = proposed.get("estimated_value")
+    confidence = float(proposed.get("confidence", 0.0))
+
+    # Count resolved buckets (a synthetic ordering on attention
+    # breadth — more buckets surfaced → small confidence bonus).
+    resolved_buckets_present = sum(
+        1
+        for bucket_ids in (
+            frame.resolved_signal_ids,
+            frame.resolved_variable_observation_ids,
+            frame.resolved_exposure_ids,
+            frame.resolved_market_readout_ids,
+            frame.resolved_market_environment_state_ids,
+            frame.resolved_firm_state_ids,
+            frame.resolved_valuation_ids,
+        )
+        if bucket_ids
+    )
+    confidence_bonus = min(
+        _ATTN_CONFIDENCE_RESOLVED_BUCKET_BONUS_CAP,
+        _ATTN_CONFIDENCE_RESOLVED_BUCKET_BONUS * resolved_buckets_present,
+    )
+    unresolved_count = len(frame.unresolved_refs)
+    confidence_penalty = min(
+        _ATTN_CONFIDENCE_UNRESOLVED_PENALTY_CAP,
+        _ATTN_CONFIDENCE_UNRESOLVED_PENALTY * unresolved_count,
+    )
+    confidence = max(0.0, min(1.0, confidence + confidence_bonus - confidence_penalty))
+
+    # Restrictive market environment / readout — small downward
+    # adjustment to estimated_value when present (only fires when a
+    # numeric value is computable).
+    restrictive_market = False
+    risk_off_environment = False
+    if estimated_value is not None:
+        for rid_resolved in frame.resolved_market_readout_ids:
+            try:
+                readout = kernel.capital_market_readouts.get_readout(rid_resolved)
+            except Exception:
+                continue
+            if (
+                getattr(readout, "overall_market_access_label", None)
+                == _RESTRICTIVE_OVERALL_LABEL
+            ):
+                restrictive_market = True
+                break
+        for env_id in frame.resolved_market_environment_state_ids:
+            try:
+                env = kernel.market_environments.get_state(env_id)
+            except Exception:
+                continue
+            if (
+                getattr(env, "overall_market_access_label", None)
+                == _RESTRICTIVE_OVERALL_LABEL
+            ):
+                restrictive_market = True
+            if (
+                getattr(env, "risk_appetite_regime", None)
+                == _RESTRICTIVE_RISK_APPETITE_LABEL
+            ):
+                risk_off_environment = True
+
+        if restrictive_market:
+            estimated_value = float(estimated_value) * (
+                1.0 - _ATTN_RESTRICTIVE_MARKET_VALUE_HAIRCUT
+            )
+        if risk_off_environment:
+            estimated_value = float(estimated_value) * (
+                1.0 - _ATTN_RESTRICTIVE_RISK_APPETITE_VALUE_HAIRCUT
+            )
+
+    proposed["estimated_value"] = estimated_value
+    proposed["confidence"] = confidence
+
+    # --------------------------------------------------------------
+    # Pass 5 — stamp v1.12.5 attention metadata onto the proposed
+    # record's metadata dict (no new field on the dataclass).
+    # --------------------------------------------------------------
+    record_metadata: dict[str, Any] = dict(proposed.get("metadata", {}))
+    record_metadata["attention_conditioned"] = True
+    record_metadata["context_frame_id"] = frame.context_frame_id
+    record_metadata["context_frame_status"] = frame.status
+    record_metadata["context_frame_confidence"] = frame.confidence
+    record_metadata["resolved_buckets_present"] = resolved_buckets_present
+    record_metadata["restrictive_market_resolved"] = bool(restrictive_market)
+    record_metadata["risk_off_environment_resolved"] = bool(
+        risk_off_environment
+    )
+    if frame.unresolved_refs:
+        record_metadata["unresolved_refs"] = [
+            r.to_dict() for r in frame.unresolved_refs
+        ]
+    proposed["metadata"] = record_metadata
+
+    # --------------------------------------------------------------
+    # Pass 6 — extend related_ids with the resolver's surfaced ids
+    # (de-duplicated, first-seen order). The pressure signal id
+    # already lives in v1.9.5's related_ids; the resolver's other
+    # surfaced ids are the audit trail for the attention bottleneck.
+    # --------------------------------------------------------------
+    related_ids: list[str] = list(proposed.get("related_ids", ()))
+    for ref_id in resolved_refs:
+        if ref_id not in related_ids:
+            related_ids.append(ref_id)
+    proposed["related_ids"] = related_ids
+
+    # --------------------------------------------------------------
+    # Pass 7 — commit the record.
+    # --------------------------------------------------------------
+    record = ValuationRecord(
+        valuation_id=proposed["valuation_id"],
+        subject_id=proposed["subject_id"],
+        valuer_id=proposed["valuer_id"],
+        valuation_type=proposed["valuation_type"],
+        purpose=proposed["purpose"],
+        method=proposed["method"],
+        as_of_date=proposed["as_of_date"],
+        estimated_value=proposed.get("estimated_value"),
+        currency=proposed.get("currency", "unspecified"),
+        numeraire=proposed.get("numeraire", "unspecified"),
+        confidence=float(proposed.get("confidence", 1.0)),
+        assumptions=dict(proposed.get("assumptions", {})),
+        inputs=dict(proposed.get("inputs", {})),
+        related_ids=tuple(proposed.get("related_ids", ())),
+        metadata=dict(proposed.get("metadata", {})),
+    )
+    kernel.valuations.add_valuation(record)
+
+    summary: dict[str, Any] = {
+        "estimated_value": proposed.get("estimated_value"),
+        "confidence": float(proposed.get("confidence", 0.0)),
+        "overall_pressure": float(
+            output.output_summary.get("overall_pressure", 0.0)
+        ),
+        "baseline_value": output.output_summary.get("baseline_value"),
+        "pressure_signal_id": pressure_signal_id_resolved,
+        "method": output.output_summary.get("method"),
+    }
+
+    run_record = MechanismRunRecord(
+        run_id=f"mechanism_run:{request.request_id}",
+        request_id=request.request_id,
+        model_id=adapter.spec.model_id,
+        model_family=adapter.spec.model_family,
+        version=adapter.spec.version,
+        actor_id=request.actor_id,
+        as_of_date=request.as_of_date,
+        status=output.status,
+        input_refs=request.evidence_refs,
+        committed_output_refs=(record.valuation_id,),
+        metadata={
+            "calibration_status": adapter.spec.calibration_status,
+            "valuation_summary": summary,
+            "attention_conditioned": True,
+            "context_frame_id": frame.context_frame_id,
+            "context_frame_status": frame.status,
+            "context_frame_confidence": frame.confidence,
+        },
+    )
+
+    return ValuationRefreshLiteResult(
+        request=request,
+        output=output,
+        run_record=run_record,
+        valuation_id=record.valuation_id,
+        valuation_summary=summary,
+    )
+
+
+# Re-export for convenience.
+__all__ = [
+    "VALUATION_REFRESH_MECHANISM_VERSION",
+    "VALUATION_REFRESH_METHOD_LABEL",
+    "VALUATION_REFRESH_MODEL_FAMILY",
+    "VALUATION_REFRESH_MODEL_ID",
+    "VALUATION_REFRESH_PURPOSE",
+    "VALUATION_REFRESH_VALUATION_TYPE",
+    "ValuationRefreshLiteAdapter",
+    "ValuationRefreshLiteResult",
+    "run_reference_valuation_refresh_lite",
+    "run_attention_conditioned_valuation_refresh_lite",
+    "EvidenceResolutionError",
+    "StrictEvidenceResolutionError",
+]

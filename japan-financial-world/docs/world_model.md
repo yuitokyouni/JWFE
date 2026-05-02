@@ -7543,9 +7543,107 @@ A future milestone where the menu-builder surfaces firm states or market environ
 | v1.12.3 EvidenceResolver / ActorContextFrame | Code (§83). | Shipped |
 | v1.x Valuation Protocol — Comps Purpose Separation | Docs-only (§84). Advanced-actor-only. | Shipped |
 | **v1.12.4 Attention-conditioned investor intent** | Code (§85). First mechanism-level use of attention as a real bottleneck. | **Shipped** |
-| v1.12.5 Attention-conditioned valuation lite (anticipated) | Code. | Planned |
+| **v1.12.5 Attention-conditioned valuation lite** | Code (§86). Helper-level + tests (orchestrator integration deferred). | **Shipped** |
 | v1.12.6 Attention-conditioned bank credit review (anticipated) | Code. | Planned |
 | v1.12.7 Next-period attention feedback (anticipated) | Code. | Planned |
 | v2.0 Japan public-data calibration design gate | — | Not started |
 
 The test count moves from `2540 / 2540` (v1.12.3) to `2563 / 2563` (v1.12.4) — `+23` tests (`+19` in `tests/test_investor_intent.py` exercising the new helper plus the headline divergence test, `+4` orchestrator-side tests in `tests/test_living_reference_world.py`). The per-period record count, per-run window, and `living_world_digest` are unchanged from v1.12.3 (the new helper's frame metadata lives on the record's `metadata` field, not on the ledger payload).
+
+## 86. v1.12.5 Attention-conditioned valuation lite — different valuers see different worlds
+
+§86 extends the v1.12.4 attention-bottleneck pattern to the v1.9.5 valuation-refresh-lite mechanism. v1.12.5 ships **a second helper alongside the existing one** — `run_attention_conditioned_valuation_refresh_lite(...)` in `world/reference_valuation_refresh_lite.py` — which routes evidence through the v1.12.3 `EvidenceResolver` substrate and produces a `ValuationRecord` whose `estimated_value` and `confidence` are conditioned on what the *valuer actually selected*, not on a global book scan. The pre-existing `run_reference_valuation_refresh_lite(...)` helper is preserved bit-for-bit; the orchestrator continues to call it.
+
+This is still **a synthetic, opinionated valuation claim**, not a target price, expected return, recommendation, investment advice, or trading decision. Every v1.9.5 anti-claim is preserved (no real data, no Japan calibration, no beta / WACC / D/E / cost of capital, no impairment decision, no price formation, no order matching, no DCM/ECM execution, no LLM-agent dispatch, no mutation of any other source-of-truth book). v1.12.5 changes only **how the evidence the helper consumes is selected** — it now flows through the v1.12.3 attention bottleneck — and adds a small documented synthetic delta on top of the v1.9.5 pressure-haircut formula based on what the resolver surfaced.
+
+### 86.1 Why this exists
+
+Through v1.12.4 the v1.9.5 valuation helper still consumed evidence id tuples directly from its caller, with no per-actor attention bottleneck. The helper would happily produce one synthetic valuation per (firm, period) regardless of which investor the valuer was — every investor saw the same evidence kwargs because the orchestrator passed the same ones for every (investor, firm) pair.
+
+§86 closes that loop for valuation. The new helper resolves an `ActorContextFrame` for the valuer (`actor_type="valuer"`) on the requested period via the v1.12.3 substrate and consumes only the resolver's surfaced ids. Different valuers selecting different evidence sets for the same firm now produce **different synthetic valuations** because they attended to different things. The headline test (`test_attn_divergence_three_valuers_three_evidence_sets_diverge`) pins this property: three valuers cite three different selected/explicit evidence sets for the same firm and same period, and the helper produces records that differ on at least one of `(estimated_value, confidence)`.
+
+### 86.2 What v1.12.5 ships
+
+- `world/reference_valuation_refresh_lite.py` — new `run_attention_conditioned_valuation_refresh_lite(...)` helper. Idempotent on `valuation_id`. Read-only over every other source-of-truth book; writes only to `kernel.valuations` (and the kernel ledger via `ValuationBook.add_valuation`'s existing emission path). The pre-existing `run_reference_valuation_refresh_lite(...)` helper is preserved unchanged for backward compatibility — every existing v1.9.5 test continues to pass against it. The new helper exposes a small but complete kwarg vocabulary: `selected_observation_set_ids`, `explicit_pressure_signal_ids`, `explicit_corporate_signal_ids`, `explicit_firm_state_ids`, `explicit_market_readout_ids`, `explicit_market_environment_state_ids`, `explicit_variable_observation_ids`, `explicit_exposure_ids`, plus `baseline_value` / `currency` / `numeraire` / coefficient overrides / `valuation_id` / `request_id` / `strict` / `metadata`.
+- `tests/test_reference_valuation_refresh_lite.py` — `+17` v1.12.5 tests covering the new helper:
+  - resolver-call test pinning the four attention-metadata keys on `record.metadata` (`attention_conditioned`, `context_frame_id`, `context_frame_status`, `context_frame_confidence`);
+  - reads-only-selected-or-explicit-evidence pin (an un-cited pressure signal in the kernel is *not* surfaced; helper takes the degraded path);
+  - unresolved-refs land in `metadata["unresolved_refs"]` and lower the frame confidence; helper still emits a record (tolerant by default);
+  - strict-mode-raises and strict-mode-passes invariants;
+  - the headline divergence test (three valuers → at least two distinct `(estimated_value, confidence)` triples on the same target firm and same period);
+  - selection refs flow through to evidence buckets (a pressure-signal id reachable only via a `SelectedObservationSet` lands in the signal bucket and the v1.9.5 haircut fires);
+  - no-mutation guarantee against every other source-of-truth book in the kernel;
+  - no anti-field payload keys (`target_price` / `expected_return` / `recommendation` / `investment_advice` / `buy` / `sell` / `overweight` / `underweight` / `rebalance` / `target_weight` / `portfolio_allocation` / `execution` / `order` / `trade` / `forecast_value` / `real_data_value`) on either the ledger payload or `record.metadata`;
+  - determinism (two fresh kernels with identical inputs → byte-identical record output) and idempotency on `valuation_id`;
+  - qualitative ordering pins: more resolved evidence → strictly higher confidence; unresolved refs → strictly lower confidence;
+  - defensive errors on `kernel=None` / empty `firm_id` / empty `valuer_id`;
+  - jurisdiction-neutral identifier scan on the committed record (`valuation_id` / `subject_id` / `valuer_id` / `valuation_type` / `method` / `purpose` / `context_frame_id` checked against `_FORBIDDEN_TOKENS`).
+
+### 86.3 Synthetic delta rule set (binding)
+
+The v1.12.5 helper layers a small, documented synthetic delta on top of the v1.9.5 pressure-haircut formula. None of these is a calibrated sensitivity; tests pin the qualitative ordering, never specific arithmetic.
+
+1. **Resolved-evidence breadth bonus**: `confidence += 0.02 × resolved_buckets` (capped at `+0.10`). `resolved_buckets` counts how many of seven evidence buckets (signal / variable observation / exposure / market readout / market environment state / firm state / valuation) had at least one resolved id.
+2. **Unresolved-refs penalty**: `confidence -= 0.05 × unresolved_count` (capped at `-0.20`).
+3. **Restrictive-market value haircut**: when any resolved capital-market readout has `overall_market_access_label == "selective_or_constrained"` OR any resolved market-environment state has the same label, `estimated_value *= 1 - 0.02`.
+4. **Risk-off appetite haircut**: when any resolved market-environment state has `risk_appetite_regime == "risk_off"`, additionally `estimated_value *= 1 - 0.01`.
+
+`confidence` is always clamped to `[0.0, 1.0]`. The deltas only fire when `estimated_value` is not `None` (degraded-path runs without a baseline never adjust a value).
+
+### 86.4 Anti-fields and anti-claims (binding)
+
+The v1.12.5 helper introduces:
+
+- four new metadata keys on the produced `ValuationRecord` (`attention_conditioned`, `context_frame_id`, `context_frame_status`, `context_frame_confidence`), plus three audit booleans (`resolved_buckets_present`, `restrictive_market_resolved`, `risk_off_environment_resolved`), plus an optional `unresolved_refs` list when the resolver could not place every cited id;
+- one resolver call per helper invocation;
+- one new entry on `record.related_ids` per resolved evidence id;
+- no new `ValuationRecord` field;
+- no new ledger event type — the helper emits only `valuation_added` records via the existing `ValuationBook.add_valuation` path.
+
+The valuation record continues to have **no** field for `target_price`, `expected_return`, `recommendation`, `investment_advice`, `buy`, `sell`, `overweight`, `underweight`, `rebalance`, `target_weight`, `portfolio_allocation`, `execution`, `order`, `trade`, `forecast_value`, or `real_data_value`. The metadata fields v1.12.5 adds (frame audit) introduce none of these either; the test suite pins the absence on both `record.metadata.keys()` and the `valuation_added` ledger payload key set.
+
+### 86.5 Attention discipline (binding)
+
+The new helper:
+
+- builds an `ActorContextFrame` for `(valuer_id, as_of_date)` via `world.evidence.resolve_actor_context(...)` with `actor_type="valuer"`;
+- reads **only** `frame.resolved_*_ids` slots and `frame.unresolved_refs`; never scans `kernel.signals` / `kernel.firm_financial_states` / `kernel.market_environments` / any other book globally;
+- writes only to `kernel.valuations` (and the kernel ledger via the existing `valuation_added` event type); never to any other source-of-truth book;
+- forwards `strict=True` to the resolver; on strict failure raises `StrictEvidenceResolutionError` and emits no valuation record;
+- is read-only over the resolver itself (the resolver remains read-only and non-emitting per v1.12.3 §83).
+
+### 86.6 Living-world integration (deferred)
+
+v1.12.5 is a **helper-level + tests milestone**. The orchestrator (`world/reference_living_world.py`) continues to call the pre-existing `run_reference_valuation_refresh_lite(...)` helper through its v1.9.6 valuation phase. Wiring the orchestrator to the new helper would change the `living_world_digest` bytes — the orchestrator-passed evidence kwargs don't survive the resolver substrate intact (the resolver also surfaces selection refs, the resolved-buckets-bonus would shift `confidence` on the default fixture, and `confidence` is in the `valuation_added` ledger payload). Per the v1.12.5 task spec's gate ("If the orchestrator wiring would change the canonical view's bytes [...] defer orchestrator integration to a future sub-milestone"), v1.12.5 ships helper + tests only; orchestrator wiring is deferred to a future v1.12.5.x sub-milestone.
+
+A future sub-milestone where the orchestrator routes valuation evidence through the new helper will:
+
+- shift `valuation_added` payload bytes for the default fixture (resolved-buckets bonus on confidence, restrictive-market value haircut where applicable);
+- update `examples/reference_world/living_world_replay.py` and `living_world_manifest.py` to pin the new digest;
+- add `+2`-ish living-world integration tests in `tests/test_living_reference_world.py` mirroring the v1.12.4 orchestrator-side tests.
+
+Until that sub-milestone, the v1.9.6 valuation phase remains on the v1.9.5 evidence-kwarg path, the default-fixture `living_world_digest` remains unchanged from v1.12.4 (`d6b25704014c3f19da330f534d5f8266ce8a9b73b9ee8da378b19c4691cb5dfe`), and the per-run record-count window remains `[284, 316]`.
+
+### 86.7 What v1.12.5 does not decide
+
+- **Does not** form a price, target price, expected return, or any forecasted number. The `estimated_value` on the produced record remains a *synthetic opinionated claim*, never a market view, never a recommendation.
+- **Does not** decide impairment, lending, voting, allocation, or any binding action.
+- **Does not** introduce LLM-agent execution. The frame is the *substrate* a future LLM-agent valuer can read; v1.12.5 is not itself an LLM call.
+- **Does not** ingest real data or apply any Japan-specific calibration.
+- **Does not** drop the existing `run_reference_valuation_refresh_lite(...)` helper; both helpers continue to ship side by side, and existing v1.9.5 tests against the old helper continue to pass.
+- **Does not** wire the new helper into the orchestrator (see §86.6). A follow-up v1.12.5.x sub-milestone may do that opt-in once the canonical-view digest shift is documented.
+
+### 86.8 Position in the v1.12 sequence
+
+| Milestone | Scope | Status |
+| --- | --- | --- |
+| v1.12.0 → v1.12.2 (firm state / investor intent / market environment) | Code (§80 → §82). | Shipped |
+| v1.12.3 EvidenceResolver / ActorContextFrame | Code (§83). | Shipped |
+| v1.x Valuation Protocol — Comps Purpose Separation | Docs-only (§84). Advanced-actor-only. | Shipped |
+| v1.12.4 Attention-conditioned investor intent | Code (§85). First mechanism-level use of attention. | Shipped |
+| **v1.12.5 Attention-conditioned valuation lite** | Code (§86). Helper-level + tests. Orchestrator deferred. | **Shipped** |
+| v1.12.6 Attention-conditioned bank credit review (anticipated) | Code. | Planned |
+| v1.12.7 Next-period attention feedback (anticipated) | Code. | Planned |
+| v2.0 Japan public-data calibration design gate | — | Not started |
+
+The test count moves from `2563 / 2563` (v1.12.4) to `2580 / 2580` (v1.12.5) — `+17` tests, all in `tests/test_reference_valuation_refresh_lite.py`. The per-period record count, per-run window, and `living_world_digest` are unchanged from v1.12.4 because the orchestrator continues to call the pre-existing helper (the new helper is exercised by tests only).
