@@ -215,19 +215,25 @@ def count_expected_living_world_records(
     banks: int,
     periods: int,
 ) -> int:
-    """Per-period record formula for the v1.9 living reference
-    world, summed over ``periods`` periods. Excludes the
-    one-off setup records (interactions, routines, profiles)
-    that the helper registers on first invocation; those are
-    bounded by the upper budget.
+    """Returns the **total** record count across the entire
+    multi-period run — i.e. the per-period formula multiplied
+    by ``periods``. This is **not** a per-period count.
 
-    Per period:
+    Excludes the one-off setup records (interactions, routines,
+    profiles) that the helper registers on first invocation;
+    those are bounded by the upper budget in the test that
+    consumes this helper.
+
+    Per period (multiplied by ``periods`` to obtain the run total):
         2 * firms                  corporate run + corporate signal
         firms                      firm pressure signal (v1.9.4)
         2 * (investors + banks)    menu + selection
         investors * firms          valuation (v1.9.5)
         banks * firms              bank credit review note (v1.9.7)
         2 * (investors + banks)    review_run + review_signal
+
+    For the default fixture (3 firms, 2 investors, 2 banks,
+    4 periods) this is 37 records per period × 4 periods = 148.
     """
     actors = investors + banks
     per_period = (
@@ -271,14 +277,22 @@ def test_performance_boundary_doc_exists():
 
 
 # ---------------------------------------------------------------------------
-# Per-period and total record budget
+# Per-run record budget (total across all periods, not per-period)
 # ---------------------------------------------------------------------------
 
 
-def test_default_living_world_record_count_is_exactly_per_formula():
-    """Total record count equals the per-period formula × 4
-    plus a small infrastructure allowance for one-off setup
-    (interactions, routines, profiles, attention configs)."""
+def test_default_living_world_total_run_record_count_matches_formula():
+    """Total record count for a full default *run* (4 periods)
+    equals the per-period formula × 4 plus a small
+    infrastructure allowance for one-off setup (interactions,
+    routines, profiles, attention configs).
+
+    Note on units: the budget pinned here is a **per-run total
+    across all four periods**, NOT a per-period count. The
+    per-period count is 37 records; the per-run total is
+    37 × 4 = 148, plus up to 32 records of one-off setup
+    overhead, giving a tight total-run window of [148, 180].
+    """
     k = _seed_kernel()
     r = run_living_reference_world(
         k,
@@ -287,29 +301,33 @@ def test_default_living_world_record_count_is_exactly_per_formula():
         bank_ids=_BANK_IDS,
         period_dates=_PERIOD_DATES,
     )
-    expected_per_period_total = count_expected_living_world_records(
+    expected_run_total = count_expected_living_world_records(
         firms=len(_FIRM_IDS),
         investors=len(_INVESTOR_IDS),
         banks=len(_BANK_IDS),
         periods=len(_PERIOD_DATES),
     )
-    # Lower bound: at minimum the per-period formula must be
+    # Lower bound: at minimum the formula × periods must be
     # met. Anything less means a phase silently dropped output.
-    assert r.created_record_count >= expected_per_period_total, (
-        f"living world produced {r.created_record_count} records, "
-        f"below per-period formula minimum of {expected_per_period_total}"
+    assert r.created_record_count >= expected_run_total, (
+        f"living world produced {r.created_record_count} records "
+        f"across the full run, below per-run formula minimum "
+        f"of {expected_run_total} (= per-period formula × "
+        f"{len(_PERIOD_DATES)} periods)"
     )
-    # Tight upper bound: no more than 32 setup records on top
-    # of the per-period work. v1.9.7 currently sits at ~14 such
-    # records; 32 leaves headroom for harmless infra adjustments
-    # but is far below any quadratic explosion (which would push
-    # the count to triple-digit growth per period).
-    upper_bound = expected_per_period_total + 32
+    # Tight per-run upper bound: no more than 32 setup records
+    # on top of the per-period work over the entire run. v1.9.7
+    # currently sits at ~14 such records; 32 leaves headroom for
+    # harmless infra adjustments but is far below any quadratic
+    # explosion (which would push the count to triple-digit
+    # growth per period).
+    upper_bound = expected_run_total + 32
     assert r.created_record_count <= upper_bound, (
-        f"living world produced {r.created_record_count} records, "
-        f"above tight upper bound of {upper_bound}. "
-        "A new mechanism or a hidden quadratic loop has crept "
-        "in. Update count_expected_living_world_records and "
+        f"living world produced {r.created_record_count} records "
+        f"across the full run, above tight per-run upper bound "
+        f"of {upper_bound}. A new mechanism or a hidden "
+        "quadratic loop has crept in. Update "
+        "count_expected_living_world_records and "
         "docs/performance_boundary.md if intentional."
     )
 

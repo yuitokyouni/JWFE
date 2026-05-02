@@ -5796,7 +5796,7 @@ The two **bounded all-pairs** loops are the valuation `O(P × I × F)` and the c
 
 1. **All-pairs traversal is allowed inside fixed demo-size fixtures only.** No growth of `F`, `I`, or `B` beyond a small constant without a milestone that first introduces sparse gating.
 2. **No path enumeration.** No mechanism iterates over reachable paths in any graph (interactions, ownership, relationships, exposures). Path-shaped views remain diagnostic, not operational.
-3. **No hidden quadratic loops.** The total record count is pinned to `≥ 148` (per-period × 4 periods) and `≤ 180` (per-period × 4 periods + a 32-record infrastructure allowance). Any change adding a `(actor × actor)` or `(actor × event × firm)` loop fails the test.
+3. **No hidden quadratic loops.** The **per-run total** record count (i.e. across all four periods of a default sweep) is pinned to `≥ 148` (= per-period formula × 4 periods) and `≤ 180` (= 148 + a 32-record one-off-setup allowance). The per-period count itself is 37; the budget bound is a run total, not a per-period bound. Any change adding a `(actor × actor)` or `(actor × event × firm)` loop fails the test.
 4. **Tensor / matrix views are diagnostic.** v1.8 interaction tensor (`S × S × C`) and matrix views are not execution traversal plans and are not materialised on the per-period sweep path.
 5. **Reporting cost is `O(R)`.** Living-world report, replay-canonicalisation, and manifest are linear scans over the ledger record list.
 
@@ -5846,7 +5846,7 @@ A realistic origination workflow — *firm funding request → bank underwriting
 1. `docs/performance_boundary.md` exists and covers all eight subsections (purpose, current loop shapes, demo discipline, sparse-gating principles, future native acceleration, semantic caveat, test pins, position).
 2. `tests/test_living_reference_world_performance_boundary.py` exists and contains the 10 listed tests, all passing.
 3. `count_expected_living_world_records` returns `148` for the default fixture and scales linearly in `periods`.
-4. Total ledger record count for a default sweep sits in `[148, 180]`.
+4. Total ledger record count for a default 4-period run sits in `[148, 180]` — note this is a per-run total (per-period count is 37), not a per-period bound.
 5. Per-period record shape is constant across all four periods.
 6. Pressure-signal count = `P × F`; valuation count = `P × I × F`; credit-review count = `P × B × F`.
 7. None of the six forbidden mutation record types appear in the ledger after a default sweep.

@@ -506,8 +506,11 @@ simulator" before the public prototype freezes.
   (10 tests) — pins the discipline:
   * `test_performance_boundary_doc_exists` (with a section
     spot-check),
-  * `test_default_living_world_record_count_is_exactly_per_formula`
-    (lower bound = 148, tight upper bound = 148 + 32 = 180),
+  * `test_default_living_world_total_run_record_count_matches_formula`
+    (per-run total budget — across all four periods of a default
+    sweep — sits in `[148, 180]`; 148 = per-period formula × 4,
+    upper = 148 + 32-record one-off-setup allowance; the
+    per-period count itself is 37),
   * `test_per_period_record_count_is_constant_across_periods`,
   * `test_pressure_signal_count_is_exactly_periods_times_firms`,
   * `test_valuation_count_is_exactly_periods_times_investors_times_firms`,
@@ -523,8 +526,10 @@ simulator" before the public prototype freezes.
 
 - A `count_expected_living_world_records(*, firms, investors,
   banks, periods)` helper sits in the new test module and is
-  a written, reusable formula for the budget. It is intentionally
-  in the test file rather than `world/`: it documents the
+  a written, reusable formula for the budget. It returns the
+  *total* record count across the entire run (per-period formula
+  × `periods`), not a per-period count. It is intentionally in
+  the test file rather than `world/`: it documents the
   bounded-fixture assumption and is the canary that fails when
   the bound is broken, not a runtime planning helper.
 

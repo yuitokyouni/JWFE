@@ -188,19 +188,28 @@ loop on the actual `(bank, firm)` lending relationships.
 ## Test pins
 
 The discipline above is enforced by
-`tests/test_living_reference_world_performance_boundary.py`:
+`tests/test_living_reference_world_performance_boundary.py`.
+**Note on units:** the budget pinned below is a *per-run total*
+(across all four periods), not a per-period count. The
+per-period count is 37 records; the per-run total is
+`37 × 4 = 148`, plus an infrastructure allowance for one-off
+setup records.
 
-- the per-period record budget equals
+- per-period record formula equals
   `2F + F + 2(I+B) + IF + BF + 2(I+B) = 37` for the default
   fixture,
-- the total over four periods equals 148, plus a small
-  infrastructure allowance bounded above,
-- the valuation count equals exactly `P × I × F`,
-- the bank credit review count equals exactly `P × B × F`,
-- the firm pressure signal count equals exactly `P × F`,
+- per-run total record count for a default 4-period sweep sits
+  in `[148, 180]` — i.e. exactly `formula × periods` at the
+  lower edge plus up to a 32-record infrastructure allowance,
+- the valuation count for the run equals exactly `P × I × F`,
+- the bank credit review count for the run equals exactly
+  `P × B × F`,
+- the firm pressure signal count for the run equals exactly
+  `P × F`,
 - no order, price-update, contract-mutation, ownership-
-  transfer, or covenant-breach records appear,
-- only the documented record types appear in the ledger.
+  transfer, or covenant-breach records appear in the ledger,
+- no warnings or errors appear in the ledger on the default
+  sweep.
 
 If any of those pins fails, the demo has either grown the
 fixture (intentional but undocumented) or gained a hidden

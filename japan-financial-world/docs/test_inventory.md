@@ -293,11 +293,13 @@ no-mutation guarantee.
   expected section headings (Performance Boundary, Current loop
   shapes, Sparse gating principles, Future acceleration,
   Semantic caveat, "review is not origination", "demo-bounded").
-  `test_default_living_world_record_count_is_exactly_per_formula`
-  asserts the kernel ledger after a default sweep sits in
-  `[148, 180]` — lower bound = `P × (2F + F + 2(I+B) + IF + BF +
-  2(I+B))`, tight upper = lower + 32-record infrastructure
-  allowance.
+  `test_default_living_world_total_run_record_count_matches_formula`
+  asserts the **total** record count for a full default 4-period
+  run sits in `[148, 180]` — lower bound = `P × (2F + F + 2(I+B)
+  + IF + BF + 2(I+B))` = `4 × 37` = `148`, tight upper = lower +
+  32-record infrastructure allowance. (The per-period count is
+  37; the budget pinned here is the per-run total, not a
+  per-period bound.)
   `test_per_period_record_count_is_constant_across_periods`
   asserts the per-period summary shape tuple
   (`corporate_signal_ids`, `firm_pressure_signal_ids`, valuations,
