@@ -938,6 +938,15 @@ def test_cli_smoke_prints_per_period_trace():
     assert "no corporate-action execution" in out
     assert "no disclosure filing" in out
     assert "no demand / revenue forecasting" in out
+    # v1.11.0 — capital-market surface columns and anti-claims.
+    assert "markets=" in out
+    assert "market_conditions=" in out
+    assert "capital-market conditions" in out
+    assert "no yield-curve calibration" in out
+    assert "no order matching" in out
+    assert "no clearing" in out
+    assert "no quote dissemination" in out
+    assert "no security recommendation" in out
 
 
 # ===========================================================================
@@ -1228,3 +1237,179 @@ def test_v1_10_5_canonical_view_carries_engagement_id_tuples():
         assert "dialogue_ids" in ps
         assert "investor_escalation_candidate_ids" in ps
         assert "corporate_strategic_response_candidate_ids" in ps
+
+
+# ===========================================================================
+# v1.11.0 — capital-market surface integration
+# ===========================================================================
+
+
+def test_v1_11_0_market_condition_per_market_per_period():
+    """Each period emits one MarketConditionRecord per market in
+    the orchestrator's default market spec set (5 by default:
+    reference_rates, credit_spreads, equity_market, funding_market,
+    liquidity_market)."""
+    k = _seed_kernel()
+    r = _run_default(k)
+    assert len(r.market_ids) == 5
+    for ps in r.per_period_summaries:
+        assert len(ps.market_condition_ids) == 5
+
+
+def test_v1_11_0_market_conditions_resolve_to_stored_records():
+    k = _seed_kernel()
+    r = _run_default(k)
+    seen_mc_ids: set[str] = set()
+    for ps in r.per_period_summaries:
+        seen_mc_ids.update(ps.market_condition_ids)
+    for mc_id in seen_mc_ids:
+        rec = k.market_conditions.get_condition(mc_id)
+        assert 0.0 <= rec.strength <= 1.0
+        assert 0.0 <= rec.confidence <= 1.0
+
+
+def test_v1_11_0_default_markets_cover_finance_surface():
+    """The default market set must visibly cover the capital-market
+    surface — rates, credit spreads, equity, funding, liquidity —
+    so the demo looks finance-aware out of the box."""
+    k = _seed_kernel()
+    r = _run_default(k)
+    market_types_seen: set[str] = set()
+    for mc_id in r.per_period_summaries[0].market_condition_ids:
+        market_types_seen.add(
+            k.market_conditions.get_condition(mc_id).market_type
+        )
+    expected = {
+        "reference_rates",
+        "credit_spreads",
+        "equity_market",
+        "funding_market",
+        "liquidity_market",
+    }
+    assert market_types_seen == expected
+
+
+def test_v1_11_0_corporate_response_uses_market_condition_slot_not_signal_slot():
+    """v1.11.0 type-correct cross-reference: market-condition ids
+    must appear in trigger_market_condition_ids and **not** in
+    trigger_signal_ids or trigger_industry_condition_ids."""
+    k = _seed_kernel()
+    r = _run_default(k)
+    period = r.per_period_summaries[0]
+    market_condition_set = set(period.market_condition_ids)
+    industry_condition_set = set(period.industry_condition_ids)
+    for rid in period.corporate_strategic_response_candidate_ids:
+        c = k.strategic_responses.get_candidate(rid)
+        # Every period's market-condition ids are cited in the
+        # dedicated v1.11.0 slot.
+        assert any(
+            mc in market_condition_set
+            for mc in c.trigger_market_condition_ids
+        )
+        # Neither the signal slot nor the industry-condition slot
+        # may carry a market-condition id.
+        for sid in c.trigger_signal_ids:
+            assert sid not in market_condition_set
+        for icid in c.trigger_industry_condition_ids:
+            assert icid not in market_condition_set
+        # And industry-condition ids must not leak into the
+        # market-condition slot either.
+        for mcid in c.trigger_market_condition_ids:
+            assert mcid not in industry_condition_set
+
+
+def test_v1_11_0_no_price_or_forecast_payload_keys_in_ledger():
+    """No v1.11.0 record's ledger payload may carry a price /
+    yield / spread / index / forecast / recommendation key — the
+    capital-market surface is synthetic context only,
+    end-to-end."""
+    k = _seed_kernel()
+    r = _run_default(k)
+    forbidden_keys = {
+        "price",
+        "market_price",
+        "yield_value",
+        "spread_bps",
+        "index_level",
+        "forecast_value",
+        "expected_return",
+        "recommendation",
+        "target_price",
+        "real_data_value",
+        "market_size",
+    }
+    for rec in k.ledger.records[
+        r.ledger_record_count_before : r.ledger_record_count_after
+    ]:
+        leaked = set(rec.payload.keys()) & forbidden_keys
+        assert not leaked, (
+            f"v1.11.0 demo record {rec.object_id!r} leaks forbidden "
+            f"payload keys: {sorted(leaked)}"
+        )
+
+
+def test_v1_11_0_no_forbidden_action_or_price_event_types_appear():
+    """The integrated v1.11.0 sweep must emit no action-class or
+    price-formation-class record types — the capital-market
+    surface is synthetic context only."""
+    k = _seed_kernel()
+    r = _run_default(k)
+    forbidden_event_types = {
+        "order_submitted",
+        "price_updated",
+        "contract_created",
+        "contract_status_updated",
+        "contract_covenant_breached",
+        "ownership_position_added",
+        "ownership_transferred",
+        "institution_action_recorded",
+        "firm_state_added",
+    }
+    seen = {
+        rec.event_type
+        for rec in k.ledger.records[
+            r.ledger_record_count_before : r.ledger_record_count_after
+        ]
+    }
+    assert seen.isdisjoint(forbidden_event_types), (
+        "v1.11.0 integrated sweep emitted forbidden action / "
+        f"price-formation records: {sorted(seen & forbidden_event_types)}"
+    )
+
+
+def test_v1_11_0_two_runs_produce_byte_identical_canonical_view():
+    """v1.11.0 additions to LivingReferencePeriodSummary and the
+    canonical view must remain deterministic — two fresh runs of
+    the default fixture produce byte-identical canonical JSON."""
+    from examples.reference_world.living_world_replay import (
+        canonicalize_living_world_result,
+        living_world_digest,
+    )
+
+    k1 = _seed_kernel()
+    r1 = _run_default(k1)
+    k2 = _seed_kernel()
+    r2 = _run_default(k2)
+    can1 = canonicalize_living_world_result(k1, r1)
+    can2 = canonicalize_living_world_result(k2, r2)
+    assert can1 == can2
+    assert living_world_digest(k1, r1) == living_world_digest(k2, r2)
+
+
+def test_v1_11_0_canonical_view_carries_market_id_tuples():
+    """The canonical view must surface the v1.11.0 id tuples
+    explicitly so a downstream lineage / replay consumer does not
+    need to re-walk the ledger to find them."""
+    from examples.reference_world.living_world_replay import (
+        canonicalize_living_world_result,
+    )
+
+    k = _seed_kernel()
+    r = _run_default(k)
+    can = canonicalize_living_world_result(k, r)
+    assert "market_ids" in can
+    assert "market_count" in can
+    assert can["market_count"] == 5
+    for ps in can["per_period_summaries"]:
+        assert "market_condition_ids" in ps
+        assert len(ps["market_condition_ids"]) == 5

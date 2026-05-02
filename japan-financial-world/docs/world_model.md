@@ -6140,7 +6140,8 @@ A `StewardshipThemeRecord` and the `StewardshipBook` storing it are jurisdiction
 | v1.10.3 Investor escalation candidate + corporate strategic response candidate | Code (§73). | Shipped |
 | v1.10.4 Industry demand condition signal | Code (§74). | Shipped |
 | v1.10.4.1 Type-correct industry-condition cross-reference slot | Code (§75). Additive. | Shipped |
-| **v1.10.5 Living-world integration** | Code (§76). | **Shipped** |
+| v1.10.5 Living-world integration | Code (§76). | Shipped |
+| **v1.11.0 Capital-market surface** | Code (§77). | **Shipped** |
 | v1.10.last Public engagement layer freeze | Docs-only. | Planned |
 | v2.0 Japan public-data calibration design gate | — | Not started |
 
@@ -6222,7 +6223,8 @@ A `PortfolioCompanyDialogueRecord` and the `DialogueBook` storing it are jurisdi
 | v1.10.3 Investor escalation candidate + corporate strategic response candidate | Code (§73). | Shipped |
 | v1.10.4 Industry demand condition signal | Code (§74). | Shipped |
 | v1.10.4.1 Type-correct industry-condition cross-reference slot | Code (§75). Additive. | Shipped |
-| **v1.10.5 Living-world integration** | Code (§76). | **Shipped** |
+| v1.10.5 Living-world integration | Code (§76). | Shipped |
+| **v1.11.0 Capital-market surface** | Code (§77). | **Shipped** |
 | v1.10.last Public engagement layer freeze | Docs-only. | Planned |
 | v2.0 Japan public-data calibration design gate | — | Not started |
 
@@ -6346,7 +6348,8 @@ The v1.10.3 candidate records and their books are jurisdiction-neutral, signal-o
 | v1.10.3 Investor escalation candidate + corporate strategic response candidate | Code (§73). | Shipped |
 | v1.10.4 Industry demand condition signal | Code (§74). | Shipped |
 | v1.10.4.1 Type-correct industry-condition cross-reference slot | Code (§75). Additive. | Shipped |
-| **v1.10.5 Living-world integration** | Code (§76). | **Shipped** |
+| v1.10.5 Living-world integration | Code (§76). | Shipped |
+| **v1.11.0 Capital-market surface** | Code (§77). | **Shipped** |
 | v1.10.last Public engagement layer freeze | Docs-only. | Planned |
 | v2.0 Japan public-data calibration design gate | — | Not started |
 
@@ -6425,7 +6428,8 @@ An `IndustryDemandConditionRecord` and the `IndustryConditionBook` storing it ar
 | v1.10.3 Investor escalation candidate + corporate strategic response candidate | Code (§73). | Shipped |
 | v1.10.4 Industry demand condition signal | Code (§74). | Shipped |
 | v1.10.4.1 Type-correct industry-condition cross-reference slot | Code (§75). Additive. | Shipped |
-| **v1.10.5 Living-world integration** | Code (§76). | **Shipped** |
+| v1.10.5 Living-world integration | Code (§76). | Shipped |
+| **v1.11.0 Capital-market surface** | Code (§77). | **Shipped** |
 | v1.10.last Public engagement layer freeze | Docs-only. | Planned |
 | v2.0 Japan public-data calibration design gate | — | Not started |
 
@@ -6641,8 +6645,146 @@ v1.10.5 is **integration only**. It does **not**:
 | v1.10.3 Investor escalation candidate + corporate strategic response candidate | Code (§73). | Shipped |
 | v1.10.4 Industry demand condition signal | Code (§74). | Shipped |
 | v1.10.4.1 Type-correct industry-condition cross-reference slot | Code (§75). Additive. | Shipped |
-| **v1.10.5 Living-world integration** | Code (§76). | **Shipped** |
+| v1.10.5 Living-world integration | Code (§76). | Shipped |
+| **v1.11.0 Capital-market surface** | Code (§77). | **Shipped** |
 | v1.10.last Public engagement layer freeze | Docs-only. | Planned |
 | v2.0 Japan public-data calibration design gate | — | Not started |
 
 The test count moves from `1932 / 1932` (v1.10.4.1) to `1947 / 1947` (v1.10.5) — `+15` v1.10.5 integration tests in `tests/test_living_reference_world.py`. The CLI surface, the default fixture *shape*, the per-period flow, and the reproducibility surface all grow additively; the `living_world_digest` value changes (expected — see §76.6) and the per-run record window widens from `[148, 180]` to `[220, 252]` (documented — see §76.5).
+
+## 77. v1.11.0 Capital-market surface — synthetic context evidence
+
+§77 adds a jurisdiction-neutral *capital-market context* layer to public FWE: a `MarketConditionRecord` shape and a `MarketConditionBook` storing one record per (synthetic market, period) pair. The layer makes the living reference world visibly **finance-aware** — interest-rate environment, credit-spread environment, equity-valuation environment, funding window, liquidity / volatility regime — without implementing **any** of price formation, trading, yield-curve calibration, order matching, clearing, security recommendation, DCM / ECM execution, loan origination, lending decisions, covenant enforcement, or portfolio-allocation decisions. The runtime, the v1.9 / v1.10 mechanism contracts, and every existing book are unchanged. The v1.10 hard boundary (§70.3) and the meta-abstraction deferral rule (§70.4) continue to hold without modification, and v1.11 adds its own anti-claim list to the public-FWE freeze surface.
+
+### 77.1 Why this exists
+
+v1.10.5's living world reads, to a banker eye, like a *governance and stewardship* demo: stewardship themes → dialogues → escalation candidates → corporate response candidates. That is intentional and accurate, but it leaves the *capital-market surface* invisible. v1.11.0 names that surface as a small set of synthetic, jurisdiction-neutral context records so a viewer can see at a glance that the engine sits inside a financial-market world without the engine claiming to forecast, price, or recommend anything.
+
+This is *context*, not behavior. The v1.10 anti-claim list ("no price formation, no trading, no lending decisions, no investment advice") carries forward unchanged; v1.11 adds a parallel anti-claim list for the capital-market surface ("no yield-curve calibration, no order matching, no clearing, no quote dissemination, no security recommendation, no DCM / ECM execution, no portfolio-allocation decisions") that is enforced by tests on both the dataclass field set and the ledger payload key set.
+
+### 77.2 What v1.11.0 ships
+
+- `world/market_conditions.py` (new) — `MarketConditionRecord` (immutable dataclass) + `MarketConditionBook` (append-only store) + `DuplicateMarketConditionError` / `UnknownMarketConditionError`. Same shape pattern as v1.10.4 `IndustryDemandConditionRecord`. Bounded synthetic `strength` and `confidence` in `[0.0, 1.0]` with explicit bool rejection (matching v1 `world/exposures.py`). Listings: `list_conditions`, `list_by_market`, `list_by_market_type`, `list_by_condition_type`, `list_by_direction`, `list_by_status`, `list_by_date`, `snapshot`.
+- `world/ledger.py` — `RecordType.MARKET_CONDITION_ADDED`, emitted exactly once per `add_condition` call.
+- `world/kernel.py` — `market_conditions: MarketConditionBook` wired in `WorldKernel.__post_init__` with the same ledger / clock injection pattern every other source-of-truth book uses.
+- `world/strategic_response.py` — additive field `trigger_market_condition_ids: tuple[str, ...] = ()` on `CorporateStrategicResponseCandidate` + new `list_by_market_condition` filter on `StrategicResponseCandidateBook`. **Type-correct cross-reference slot**, parallel to the v1.10.4.1 `trigger_industry_condition_ids` slot. Market-condition ids must **never** ride in `trigger_signal_ids` (a `SignalBook` slot) or in `trigger_industry_condition_ids` (a v1.10.4 industry-condition slot); the v1.11.0 slot is what keeps `signal_id` / `industry_condition_id` / `market_condition_id` distinguishable in ledger replay, lineage reconstruction, and report generation by *field*, not by *payload introspection*.
+- `world/reference_living_world.py` — new per-period market-condition phase between firm pressure and attention. The orchestrator gains a `market_condition_specs` kwarg; default is a 5-market set covering reference rates, credit spreads, equity valuation environment, funding window, and liquidity / volatility regime. `LivingReferencePeriodSummary` grows with `market_condition_ids`; `LivingReferenceWorldResult` grows with setup-level `market_ids`. Every new field defaults to `()` so older callers keep working. The corporate response candidate now cites every period's full market-condition id set via the v1.11.0 type-correct slot.
+- `world/living_world_report.py` — `LivingWorldPeriodReport` grows with `market_condition_count`; the Markdown renderer adds a `## Capital market conditions` section (one row per period showing the count). The boundary statement is extended in place to cover the v1.11 anti-claims; the v1.9.1 / v1.10.5 prefixes are preserved verbatim.
+- `examples/reference_world/living_world_replay.py` — the canonical view echoes setup-level `market_ids` / `market_count` plus per-period `market_condition_ids`. The boundary statement constant tracks the reporter's. **Expected digest change**: the v1.11.0 living-world digest is *not* the same as the v1.10.5 digest — the canonical view now includes the new id tuples and the boundary string was extended. Two fresh runs of the v1.11.0 default fixture produce byte-identical canonical JSON and the same digest; the digest just differs from v1.10.5.
+- `examples/reference_world/living_world_manifest.py` — manifest summary echoes the new counts (`market_count`, `market_condition_total`).
+- `examples/reference_world/run_living_reference_world.py` — per-period CLI trace line names `market_conditions=`; the setup line names `markets=`; the summary line names the v1.11 anti-claims.
+- `tests/test_market_conditions.py` (new) — 84 tests covering field validation, bounded numeric fields with explicit bool rejection, immutability, duplicate rejection, unknown lookup, every list / filter, deterministic snapshots, ledger emission, kernel wiring, no-mutation guarantee against every other source-of-truth book (including all v1.10.x siblings), no-action / no-price-formation invariant, the explicit anti-fields assertion against `price` / `market_price` / `yield_value` / `spread_bps` / `index_level` / `forecast_value` / `expected_return` / `recommendation` / `target_price` / `real_data_value` / `market_size` on both the dataclass and the ledger payload, plain-id cross-reference acceptance, an explicit v1.10.3 ↔ v1.11.0 link test (citing a market-condition id from a `CorporateStrategicResponseCandidate.trigger_market_condition_ids` slot and asserting the slot-cleanliness of `trigger_signal_ids` and `trigger_industry_condition_ids`), and a jurisdiction-neutral identifier scan over both module and test file.
+- `tests/test_strategic_response.py` — extended with `+4` tests for the v1.11.0 cross-reference slot (default empty tuple, listing, anti-leak from signal slot, anti-leak from industry slot) plus an additional parametrize entry for the empty-string-rejection test on the new tuple field. Existing to_dict / payload / unresolved-trigger / no-mutation tests are extended in place.
+- `tests/test_living_reference_world.py` — extended with `+8` v1.11.0 integration tests: market-condition per market per period, conditions resolve to `MarketConditionBook` with strength / confidence in `[0.0, 1.0]`, default markets cover the finance surface (rates / credit / equity / funding / liquidity), corporate response candidates use the v1.11.0 slot and never `trigger_signal_ids` / `trigger_industry_condition_ids`, no v1.11.0 ledger payload across the integrated demo carries any of the anti-fields, no forbidden action / price-formation event types appear, two fresh runs produce byte-identical canonical JSON and the same digest, and the canonical view surfaces the v1.11.0 id tuples explicitly.
+- `tests/test_living_reference_world_performance_boundary.py` — `count_expected_living_world_records` and the per-run upper-bound test refreshed for the v1.11.0 fixture.
+
+### 77.3 Per-period flow (runtime order, v1.11.0)
+
+```
+1. corporate quarterly report (§49)
+2. firm operating-pressure assessment (§64)
+3. industry demand condition (§74)
+3a. capital-market condition (§77) — NEW
+4. heterogeneous attention (§54)
+5. valuation refresh lite (§65)
+6. bank credit review lite (§67)
+7. portfolio-company dialogue metadata (§72)
+8. investor escalation candidate (§73, investor side)
+9. corporate strategic response candidate (§73, corporate side)
+   → cites every period's market-condition id set in the v1.11.0
+     ``trigger_market_condition_ids`` slot
+10. review routines (§55)
+```
+
+Setup-time (idempotent): stewardship themes (§71). v1.11.0 adds no new setup records.
+
+### 77.4 Default fixture
+
+The v1.11.0 default extends the v1.10.5 fixture with five synthetic markets:
+
+| Slice | Count | Notes |
+| --- | --- | --- |
+| firms | 3 | unchanged |
+| investors | 2 | unchanged |
+| banks | 2 | unchanged |
+| periods | 4 | unchanged |
+| industries | 3 | unchanged |
+| themes per investor | 2 | unchanged |
+| markets | 5 | reference rates, credit spreads, equity valuation, funding window, liquidity/volatility (NEW) |
+
+Every market spec carries a deterministic `(direction, strength, confidence, time_horizon)` triple chosen to be visible / distinguishable in the report — never calibrated to any real yield, spread, index, level, or forecast. Callers may override via the `market_condition_specs` kwarg.
+
+### 77.5 Performance boundary (binding)
+
+The v1.11.0 per-period formula and per-run window are pinned by `tests/test_living_reference_world_performance_boundary.py` and `count_expected_living_world_records`:
+
+```
+per_period_total =
+    2 * firms                    # corporate run + corporate signal
+  + firms                        # firm pressure signal (v1.9.4)
+  + industries                   # industry demand condition (v1.10.4)
+  + markets                      # capital-market condition (v1.11.0)
+  + 2 * (investors + banks)      # menu + selection
+  + investors * firms            # valuation (v1.9.5)
+  + banks * firms                # bank credit review (v1.9.7)
+  + investors * firms            # dialogue (v1.10.2)
+  + investors * firms            # escalation candidate (v1.10.3 investor)
+  + firms                        # response candidate (v1.10.3 corporate)
+  + 2 * (investors + banks)      # review run + review signal
+```
+
+For the default fixture (firms=3, investors=2, banks=2, industries=3, markets=5, periods=4):
+
+- per-period: **60 records** (was 55 at v1.10.5; **+5** v1.11.0).
+- per-run total formula: 60 × 4 = **240 records**.
+- setup allowance: up to **32 records** (14 v1.9.x infra + 4 v1.10.5 stewardship themes + headroom; v1.11.0 adds **0** new setup records — the market-condition phase is per-period only).
+- per-run window: **[240, 272]**.
+
+The market-condition loop is `O(P × N)` where `N` is the number of markets — linear in `markets`, not in any actor count. v1.11.0 introduces **no new dense traversal**.
+
+### 77.6 Living-world digest (expected change)
+
+The v1.11.0 living-world digest is **not** equal to the v1.10.5 digest. The canonical view now carries:
+
+- setup-level `market_ids` / `market_count`;
+- per-period `market_condition_ids`;
+- the extended `boundary_statement` covering the v1.11 anti-claims.
+
+This is **expected** and is part of v1.11.0's freeze surface. Tests assert that two fresh runs of the v1.11.0 default fixture produce *byte-identical* canonical JSON and the same digest. The default-fixture digest at v1.11.0 is `bb572567d87ba34ff94dca2db99bf7671ea061222a520ed9830a39e29ac54a11`.
+
+### 77.7 Anti-fields (binding)
+
+The dataclass deliberately has **no** `price`, `market_price`, `yield_value`, `spread_bps`, `index_level`, `forecast_value`, `expected_return`, `recommendation`, `target_price`, `real_data_value`, or `market_size` field. The ledger payload likewise carries none of these keys. Two explicit tests (`test_condition_record_has_no_price_or_forecast_field`, `test_add_condition_payload_carries_no_price_or_forecast_keys`) introspect the dataclass field set and the ledger payload key set respectively. A future v1.11.x or later milestone that introduces such a field would by construction trip these tests.
+
+### 77.8 No-behavior boundary (binding)
+
+A `MarketConditionRecord` and the `MarketConditionBook` storing it are jurisdiction-neutral, signal-only, behavior-free, and price-free. v1.11.0 does **not**:
+
+- form any price, quote, yield, spread, or index level (no order matching, no microstructure, no clearing);
+- trade, allocate, or recommend any security;
+- originate, approve, reject, price, or mutate any loan / contract / covenant / ownership relation;
+- mutate any firm financial statement;
+- forecast any market level, return, or default probability;
+- issue, allocate, or price any DCM / ECM offering;
+- introduce voting, proxy filing, public-campaign execution, exit execution, AGM / EGM action, corporate-action execution, disclosure-filing execution, demand / sales / revenue forecasting, real-data ingestion, Japan calibration, jurisdiction-specific market codes, or calibrated behavior probabilities;
+- mutate any other source-of-truth book (the no-mutation test asserts this against ownership, contracts, prices, constraints, signals, valuations, institutions, external_processes, relationships, interactions, routines, attention, variables, exposures, stewardship, engagement, escalations, strategic_responses, and industry_conditions);
+- enforce membership of `market_id`, `market_type`, `condition_type`, `direction`, `time_horizon`, `status`, or `visibility` against any controlled vocabulary — the recommended labels are illustrative;
+- emit any ledger record other than `MARKET_CONDITION_ADDED` from a bare `add_condition` call.
+
+### 77.9 What v1.11.0 does not decide
+
+- The v1.10.last freeze gate. v1.10.last is a docs-only freeze for the v1.10 engagement layer; v1.11.0 layers on top without altering the v1.10 freeze surface.
+- The fixture composition for v2.x Japan public-data calibration. The v1.11.0 demo remains 100% synthetic.
+- The interface for *consumer* mechanisms reading market conditions (e.g., a future "valuation refresh adjusted for funding window" mechanism). v1.11.0 makes market conditions *citable* by plain id from any future or existing layer; it does not change v1.9.5 / v1.9.7 mechanism contracts. The corporate response candidate is the only existing artifact updated to cite market conditions, via the v1.11.0 type-correct slot.
+
+### 77.10 Position in the v1.11 sequence
+
+| Milestone | Scope | Status |
+| --- | --- | --- |
+| v1.9.last Public Prototype Freeze | Docs-only (§69). | Shipped |
+| v1.10.0 → v1.10.5 (engagement / strategic-response stack) | Code (§70 → §76). | Shipped |
+| **v1.11.0 Capital-market surface** | Code (§77). | **Shipped** |
+| v1.10.last Public engagement layer freeze | Docs-only. | Planned |
+| v2.0 Japan public-data calibration design gate | — | Not started |
+
+The test count moves from `1947 / 1947` (v1.10.5) to `2043 / 2043` (v1.11.0) — `+96` tests (`+84` in the new `tests/test_market_conditions.py`, `+4` in `tests/test_strategic_response.py` for the v1.11.0 cross-reference slot, `+8` v1.11.0 integration tests in `tests/test_living_reference_world.py`). The CLI surface, the default fixture *shape*, the per-period flow, and the reproducibility surface all grow additively; the `living_world_digest` value changes (expected — see §77.6) and the per-run record window widens from `[220, 252]` to `[240, 272]` (documented — see §77.5).

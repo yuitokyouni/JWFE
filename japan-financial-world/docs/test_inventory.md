@@ -1,14 +1,14 @@
 # Test Inventory
 
-Snapshot of the test suite at **v1.10.5** (`Living-world
-integration` — wires v1.10.1 → v1.10.4 (and v1.10.4.1) engagement
-/ strategic-response storage primitives into the multi-period
-living reference world demo; signal-only / candidate-only /
-content-free; per-run record window widens from `[148, 180]` to
-`[220, 252]`; `living_world_digest` value differs from v1.9.last
-by design):
-`1947 / 1947 passing` (444 v0 + 188 v1.0-v1.7 frozen reference +
-1315 post-v1.7 additions covering reference demo, replay, manifest,
+Snapshot of the test suite at **v1.11.0** (`Capital-market
+surface` — adds a jurisdiction-neutral capital-market context
+layer to public FWE: rates / credit spreads / equity valuation
+environment / funding window / liquidity & volatility regime,
+all signal-only and price-formation-free; per-run record window
+widens from `[220, 252]` to `[240, 272]`; `living_world_digest`
+value differs from v1.10.5 by design):
+`2043 / 2043 passing` (444 v0 + 188 v1.0-v1.7 frozen reference +
+1411 post-v1.7 additions covering reference demo, replay, manifest,
 catalog-shape, experiment harness, renamed WorldID tests,
 interactions, routines, attention, routine engine, the corporate
 quarterly reporting routine, the world-variable storage layer, the
@@ -33,7 +33,15 @@ type-correct industry-condition cross-reference slot on
 strategic-response test file, and the v1.10.5 living-world
 integration that wires the v1.10.1 → v1.10.4.1 storage layer
 into the living reference world demo's per-period sweep
-exercised in `tests/test_living_reference_world.py`).
+exercised in `tests/test_living_reference_world.py`, and the
+v1.11.0 capital-market surface — `MarketConditionRecord` /
+`MarketConditionBook` in `world/market_conditions.py` plus the
+v1.11.0 ``trigger_market_condition_ids`` type-correct slot on
+`CorporateStrategicResponseCandidate` plus the per-period
+capital-market phase in the living reference world demo
+exercised in the new `tests/test_market_conditions.py` and
+extended in `tests/test_strategic_response.py` and
+`tests/test_living_reference_world.py`).
 
 This inventory is grouped by what each component verifies. The numbers in
 parentheses are test counts per file. Run the full suite with:
@@ -1127,10 +1135,11 @@ no-mutation guarantee.
 | Performance boundary (v1.9.8)           | 1     | 10    |
 | Stewardship theme signal (v1.10.1)      | 1     | 58    |
 | Portfolio-company dialogue record (v1.10.2) + investor escalation candidate (v1.10.3, added to test_engagement.py) | 1 | 105    |
-| Corporate strategic response candidate (v1.10.3) + v1.10.4.1 type-correct industry-condition cross-reference slot (added to test_strategic_response.py) | 1 | 59    |
+| Corporate strategic response candidate (v1.10.3) + v1.10.4.1 type-correct industry-condition cross-reference slot + v1.11.0 type-correct market-condition cross-reference slot (added to test_strategic_response.py) | 1 | 63    |
 | Industry demand condition signal (v1.10.4) | 1 | 84    |
-| Living-world integration tests (v1.9.x core + v1.10.5 additive in test_living_reference_world.py — 15 of these are v1.10.5-specific integration tests) | (counted under existing files) | (+15 in test_living_reference_world.py) |
-| **post-v1.7 subtotal**                  | **33**| **1315** |
+| Capital-market condition (v1.11.0) | 1 | 84 |
+| Living-world integration tests (v1.9.x core + v1.10.5 + v1.11.0 additive in test_living_reference_world.py — 15 of these are v1.10.5-specific and 8 are v1.11.0-specific integration tests) | (counted under existing files) | (+15 v1.10.5 / +8 v1.11.0 in test_living_reference_world.py) |
+| **post-v1.7 subtotal**                  | **34**| **1411** |
 
 ### v0 + v1 + post-v1.7 totals
 
@@ -1138,8 +1147,8 @@ no-mutation guarantee.
 | -------------------------------- | ----- | ----- |
 | v0                               | 35    | 444   |
 | v1.0–v1.7 frozen reference       | 7     | 188   |
-| post-v1.7 (v1.7-public-rc1+ / v1.8.x / v1.9.0 / v1.9.1-prep / v1.9.1 / v1.9.2 / v1.9.3 / v1.9.3.1 / CLI argv pin / v1.9.4 / v1.9.5 / v1.9.6 / v1.9.7 / v1.9.8 / v1.10.1 / v1.10.2 / v1.10.3 / v1.10.4 / v1.10.4.1 / v1.10.5) | 33 | 1315 |
-| **Total**                        | **75**| **1947** |
+| post-v1.7 (v1.7-public-rc1+ / v1.8.x / v1.9.0 / v1.9.1-prep / v1.9.1 / v1.9.2 / v1.9.3 / v1.9.3.1 / CLI argv pin / v1.9.4 / v1.9.5 / v1.9.6 / v1.9.7 / v1.9.8 / v1.10.1 / v1.10.2 / v1.10.3 / v1.10.4 / v1.10.4.1 / v1.10.5 / v1.11.0) | 34 | 1411 |
+| **Total**                        | **76**| **2043** |
 
 ## Auditing for jurisdiction-neutral identifiers
 

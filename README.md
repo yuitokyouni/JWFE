@@ -29,8 +29,9 @@ and
 The reference data is fully synthetic; Japan calibration is v2 / v3
 territory.
 
-The current code is at **v1.10.5 living-world integration**, layered
-on top of the **v1.9.last public prototype freeze**. v1.9 layered
+The current code is at **v1.11.0 capital-market surface**, layered
+on top of v1.10.5 living-world integration and the **v1.9.last
+public prototype freeze**. v1.9 layered
 three review-only synthetic mechanisms (firm operating-pressure
 assessment, valuation refresh lite, bank credit review lite) onto
 the v1.8 endogenous activity stack and integrated them into a
@@ -244,7 +245,8 @@ in well under a second, and are deterministic across invocations.
 | v1.10.3       | Investor escalation candidate + corporate strategic response candidate (`InvestorEscalationCandidate` + `EscalationCandidateBook` added to `world/engagement.py`; `CorporateStrategicResponseCandidate` + `StrategicResponseCandidateBook` in new `world/strategic_response.py`; ledger `INVESTOR_ESCALATION_CANDIDATE_ADDED` + `CORPORATE_STRATEGIC_RESPONSE_CANDIDATE_ADDED` + kernel wiring + 107 tests; candidate-metadata storage / audit only — no execution, no vote_cast / proposal_filed / campaign_executed / exit_executed / letter_sent on the investor side, no buyback_executed / dividend_changed / divestment_executed / merger_executed / board_change_executed / disclosure_filed on the corporate side) | Shipped |
 | v1.10.4       | Industry demand condition signal (`IndustryDemandConditionRecord` + `IndustryConditionBook` in new `world/industry.py`; ledger `INDUSTRY_DEMAND_CONDITION_ADDED` + kernel wiring + 84 tests; synthetic, jurisdiction-neutral context evidence — bounded `demand_strength` and `confidence` in `[0.0, 1.0]`; no forecast_value / revenue_forecast / sales_forecast / market_size / vendor_consensus fields; not a demand forecast, not a revenue model, not real data) | Shipped |
 | v1.10.4.1     | Type-correct industry-condition cross-reference slot (additive `trigger_industry_condition_ids` field + `list_by_industry_condition` filter on `CorporateStrategicResponseCandidate` / `StrategicResponseCandidateBook`; +4 tests; backward-compatible — disambiguates `signal_id` vs `condition_id` by field, not by payload introspection; no new primitive, no new book, no new ledger record type) | Shipped |
-| **v1.10.5**   | **Living-world integration** (wires v1.10.1 → v1.10.4 (+ v1.10.4.1) into `world/reference_living_world.py` as five new per-period phases — industry demand → dialogue → escalation → corporate response — plus one setup-time phase — stewardship themes; `LivingReferencePeriodSummary` / `LivingReferenceWorldResult` / `LivingWorldTraceReport` / canonical / manifest grow additively; CLI surfaces new counts; +15 integration tests; per-run record window widens from `[148, 180]` to `[220, 252]`; `living_world_digest` value differs from v1.9.last by design; no new mechanism, no new `RecordType`, no new book, no executed action) | **Shipped (1947 tests)** |
+| v1.10.5       | Living-world integration (wires v1.10.1 → v1.10.4 (+ v1.10.4.1) into `world/reference_living_world.py` as five new per-period phases — industry demand → dialogue → escalation → corporate response — plus one setup-time phase — stewardship themes; `LivingReferencePeriodSummary` / `LivingReferenceWorldResult` / `LivingWorldTraceReport` / canonical / manifest grow additively; CLI surfaces new counts; +15 integration tests; per-run record window widens from `[148, 180]` to `[220, 252]`; `living_world_digest` value differs from v1.9.last by design; no new mechanism, no new `RecordType`, no new book, no executed action) | Shipped |
+| **v1.11.0**   | **Capital-market surface** (`MarketConditionRecord` + `MarketConditionBook` in new `world/market_conditions.py`; ledger `MARKET_CONDITION_ADDED` + kernel wiring; additive `trigger_market_condition_ids` slot + `list_by_market_condition` filter on `CorporateStrategicResponseCandidate` / `StrategicResponseCandidateBook`; living-world demo gains a per-period capital-market phase covering rates / credit spreads / equity valuation / funding window / liquidity & volatility regime; +96 tests; per-run record window widens from `[220, 252]` to `[240, 272]`; `living_world_digest` value differs from v1.10.5 by design; no price formation, no yield-curve calibration, no order matching, no clearing, no security recommendation, no DCM / ECM execution, no portfolio-allocation decisions) | **Shipped (2043 tests)** |
 | v1.10.last    | Public engagement layer freeze (docs-only) | Planned |
 | v2.0          | Japan public-data calibration design gate                 | Not started                  |
 | v3.0          | Proprietary Japan calibration / expert-data layer         | Private                      |
@@ -515,7 +517,7 @@ Start here:
 
 **Tests:**
 - [docs/test_inventory.md](japan-financial-world/docs/test_inventory.md)
-  — 1947 tests grouped by component (444 v0 + 188 v1.0–v1.7 + 1315 post-v1.7)
+  — 2043 tests grouped by component (444 v0 + 188 v1.0–v1.7 + 1411 post-v1.7)
 
 **Long-form / original ambition (kept for reference):**
 - [docs/architecture.md](japan-financial-world/docs/architecture.md) —
@@ -553,8 +555,8 @@ From the `japan-financial-world` directory:
 python -m pytest -q
 ```
 
-Expected: `1947 passed` at the latest commit (444 v0 + 188 v1
-frozen reference + 1315 post-v1.7 additions covering the reference
+Expected: `2043 passed` at the latest commit (444 v0 + 188 v1
+frozen reference + 1411 post-v1.7 additions covering the reference
 demo, replay, manifest, catalog-shape, experiment harness, the
 v1.8.x endogenous-activity stack — interactions, routines,
 attention, variable / exposure layers, the menu builder, the
@@ -579,10 +581,18 @@ condition signal storage / audit layer in the new
 industry-conditions test file, the v1.10.4.1 additive
 type-correct industry-condition cross-reference slot on
 `CorporateStrategicResponseCandidate` exercised in the
-strategic-response test file, and the v1.10.5 living-world
+strategic-response test file, the v1.10.5 living-world
 integration that wires the v1.10.1 → v1.10.4.1 storage layer
 into the living reference world demo's per-period sweep
-exercised in `tests/test_living_reference_world.py`).
+exercised in `tests/test_living_reference_world.py`, and the
+v1.11.0 capital-market surface — `MarketConditionRecord` /
+`MarketConditionBook` plus the v1.11.0 type-correct
+`trigger_market_condition_ids` slot on
+`CorporateStrategicResponseCandidate` plus the per-period
+capital-market phase in the living reference world — exercised
+in the new `tests/test_market_conditions.py` and extended in
+`tests/test_strategic_response.py` and
+`tests/test_living_reference_world.py`).
 
 To run only v0 tests, exclude the v1 test files; to run only v1 tests:
 

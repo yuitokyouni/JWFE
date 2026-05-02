@@ -80,6 +80,10 @@ from world.industry import (
     DuplicateIndustryConditionError,
     IndustryDemandConditionRecord,
 )
+from world.market_conditions import (
+    DuplicateMarketConditionError,
+    MarketConditionRecord,
+)
 from world.observation_menu_builder import ObservationMenuBuildRequest
 from world.stewardship import (
     DuplicateStewardshipThemeError,
@@ -188,6 +192,10 @@ class LivingReferencePeriodSummary:
     corporate_strategic_response_candidate_ids: tuple[str, ...] = field(
         default_factory=tuple
     )
+    # v1.11.0 additive: capital-market condition surface. One
+    # entry per (market, period) pair from the orchestrator's
+    # default market set (or the caller's override).
+    market_condition_ids: tuple[str, ...] = field(default_factory=tuple)
     record_count_created: int = 0
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
@@ -214,6 +222,7 @@ class LivingReferencePeriodSummary:
             "dialogue_ids",
             "investor_escalation_candidate_ids",
             "corporate_strategic_response_candidate_ids",
+            "market_condition_ids",
         ):
             value = tuple(getattr(self, tuple_field_name))
             for entry in value:
@@ -259,6 +268,12 @@ class LivingReferenceWorldResult:
     # summary's ``stewardship_theme_ids`` field for convenience.
     industry_ids: tuple[str, ...] = field(default_factory=tuple)
     stewardship_theme_ids: tuple[str, ...] = field(default_factory=tuple)
+    # v1.11.0 additive: setup-level capital-market context. The
+    # ``market_ids`` tuple names the unique synthetic markets the
+    # run generated condition records against (one record per
+    # market per period; the per-period tuple lives on
+    # :class:`LivingReferencePeriodSummary`).
+    market_ids: tuple[str, ...] = field(default_factory=tuple)
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -277,6 +292,7 @@ class LivingReferenceWorldResult:
             "created_record_ids",
             "industry_ids",
             "stewardship_theme_ids",
+            "market_ids",
         ):
             value = tuple(getattr(self, tuple_field_name))
             for entry in value:
@@ -414,6 +430,70 @@ def _escalation_id_for(
 
 def _response_id_for(firm_id: str, as_of_date: str) -> str:
     return f"response:{firm_id}:{as_of_date}"
+
+
+# v1.11.0 — default capital-market condition specs. Each entry is
+# (market_id, market_type, condition_type, direction, strength,
+# confidence, time_horizon). The triple (direction, strength,
+# confidence) is small, deterministic, and explicitly *not* a
+# forecast — values illustrate ordering only. ``strength`` and
+# ``confidence`` are bounded in [0.0, 1.0] inclusive per the
+# v1.11.0 record contract. The list is kept short so the
+# per-period record budget stays small (5 markets × 4 periods =
+# 20 condition records per run).
+_MarketConditionSpec = tuple[str, str, str, str, float, float, str]
+
+_DEFAULT_MARKET_CONDITION_SPECS: tuple[_MarketConditionSpec, ...] = (
+    (
+        "market:reference_rates_general",
+        "reference_rates",
+        "rate_level",
+        "supportive",
+        0.5,
+        0.5,
+        "medium_term",
+    ),
+    (
+        "market:reference_credit_spreads_general",
+        "credit_spreads",
+        "spread_level",
+        "stable",
+        0.5,
+        0.5,
+        "medium_term",
+    ),
+    (
+        "market:reference_equity_general",
+        "equity_market",
+        "valuation_environment",
+        "supportive",
+        0.5,
+        0.5,
+        "medium_term",
+    ),
+    (
+        "market:reference_funding_general",
+        "funding_market",
+        "funding_window",
+        "supportive",
+        0.5,
+        0.5,
+        "short_term",
+    ),
+    (
+        "market:reference_liquidity_general",
+        "liquidity_market",
+        "liquidity_regime",
+        "stable",
+        0.5,
+        0.5,
+        "short_term",
+    ),
+)
+
+
+def _market_condition_id_for(market_id: str, as_of_date: str) -> str:
+    return f"market_condition:{market_id}:{as_of_date}"
 
 
 def _ensure_stewardship_themes(
@@ -585,6 +665,9 @@ def run_living_reference_world(
         str, tuple[str, float, float]
     ] | None = None,
     stewardship_theme_types: Sequence[str] | None = None,
+    market_condition_specs: Sequence[
+        tuple[str, str, str, str, float, float, str]
+    ] | None = None,
 ) -> LivingReferenceWorldResult:
     """
     Sweep the v1.8 endogenous chain plus the v1.9.4 / v1.9.5 / v1.9.7
@@ -608,6 +691,12 @@ def run_living_reference_world(
        :class:`IndustryDemandConditionRecord` per unique industry
        in ``firm_industry_map``. Synthetic context evidence;
        *not* a forecast.
+    3a. **Capital-market condition phase** (v1.11.0) — one
+        :class:`MarketConditionRecord` per market spec
+        (reference rates, credit spreads, equity valuation
+        environment, funding window, liquidity / volatility
+        regime by default). Synthetic context evidence; *not*
+        price formation, *not* yield-curve calibration.
     4. **Attention phase** (v1.8.11 + v1.8.12) — one menu + one
        selection per actor.
     5. **Valuation phase** (v1.9.5) — one
@@ -630,7 +719,10 @@ def run_living_reference_world(
        merger_executed, no board_change_executed, no
        disclosure_filed. Industry-condition cross-references go
        in ``trigger_industry_condition_ids`` (v1.10.4.1
-       type-correct slot), never ``trigger_signal_ids``.
+       type-correct slot); v1.11.0 capital-market condition
+       cross-references go in ``trigger_market_condition_ids``
+       (v1.11.0 type-correct slot). Neither ever rides in
+       ``trigger_signal_ids``.
     10. **Review phase** — one investor review run + one bank
         review run.
 
@@ -751,6 +843,23 @@ def run_living_reference_world(
                 )
             )
 
+    # v1.11.0 — capital-market condition specs. Resolved once for
+    # the run; the per-period market-condition phase just iterates
+    # this tuple and stamps each spec with the period's as-of date.
+    resolved_market_specs: tuple[
+        tuple[str, str, str, str, float, float, str], ...
+    ] = (
+        tuple(tuple(s) for s in market_condition_specs)  # type: ignore[arg-type]
+        if market_condition_specs is not None
+        else _DEFAULT_MARKET_CONDITION_SPECS
+    )
+    # Deduplicated, insertion-order-preserving market-id list.
+    seen_market_ids: list[str] = []
+    for spec in resolved_market_specs:
+        if spec[0] not in seen_market_ids:
+            seen_market_ids.append(spec[0])
+    unique_market_ids = tuple(seen_market_ids)
+
     # ------------------------------------------------------------------
     # Per-period sweep
     # ------------------------------------------------------------------
@@ -849,6 +958,49 @@ def run_living_reference_world(
                 kernel.industry_conditions.get_condition(condition_id)
             industry_condition_ids.append(condition_id)
             condition_id_by_industry[industry_id] = condition_id
+
+        # ------------------------------------------------------------------
+        # v1.11.0 — capital-market condition phase.
+        # For each market spec, emit one synthetic
+        # ``MarketConditionRecord``. The (direction, strength,
+        # confidence) triple is small, deterministic, and explicitly
+        # *not* a forecast — values illustrate ordering only.
+        # ``strength`` and ``confidence`` are bounded in [0.0, 1.0]
+        # inclusive per the v1.11.0 record contract. The book's
+        # no-mutation discipline applies: only ``MarketConditionBook``
+        # and the ledger are written to. No price formation, no
+        # yield-curve calibration, no order matching, no clearing.
+        # ------------------------------------------------------------------
+        market_condition_ids: list[str] = []
+        for (
+            market_id,
+            market_type,
+            condition_type,
+            direction,
+            strength,
+            confidence,
+            time_horizon,
+        ) in resolved_market_specs:
+            mc_id = _market_condition_id_for(market_id, iso_date)
+            try:
+                kernel.market_conditions.add_condition(
+                    MarketConditionRecord(
+                        condition_id=mc_id,
+                        market_id=market_id,
+                        market_type=market_type,
+                        as_of_date=iso_date,
+                        condition_type=condition_type,
+                        direction=direction,
+                        strength=strength,
+                        time_horizon=time_horizon,
+                        confidence=confidence,
+                        status="active",
+                        visibility="internal_only",
+                    )
+                )
+            except DuplicateMarketConditionError:
+                kernel.market_conditions.get_condition(mc_id)
+            market_condition_ids.append(mc_id)
 
         # Attention phase. We iterate investors and banks in order so
         # the resulting summary tuples match the input order. Each
@@ -1166,6 +1318,15 @@ def run_living_reference_world(
                 firm_condition_ref = (
                     condition_id_by_industry[firm_industry_id],
                 )
+            # v1.11.0 — every period's full set of capital-market
+            # condition ids is cited as context for every corporate
+            # response candidate (every firm's response is shaped by
+            # the same rate / spread / equity / funding / liquidity
+            # context this period). Cited via the v1.11.0
+            # ``trigger_market_condition_ids`` slot, never via
+            # ``trigger_signal_ids`` or
+            # ``trigger_industry_condition_ids``.
+            firm_market_condition_refs = tuple(market_condition_ids)
             try:
                 kernel.strategic_responses.add_candidate(
                     CorporateStrategicResponseCandidate(
@@ -1189,6 +1350,7 @@ def run_living_reference_world(
                         ),
                         trigger_valuation_ids=firm_valuations,
                         trigger_industry_condition_ids=firm_condition_ref,
+                        trigger_market_condition_ids=firm_market_condition_refs,
                     )
                 )
             except DuplicateResponseCandidateError:
@@ -1258,6 +1420,7 @@ def run_living_reference_world(
                 corporate_strategic_response_candidate_ids=tuple(
                     corporate_strategic_response_candidate_ids
                 ),
+                market_condition_ids=tuple(market_condition_ids),
                 record_count_created=period_end_idx - period_start_idx,
                 metadata={
                     "period_index": period_idx,
@@ -1284,5 +1447,6 @@ def run_living_reference_world(
         ledger_record_count_after=ledger_count_after,
         industry_ids=unique_industry_ids,
         stewardship_theme_ids=stewardship_theme_ids,
+        market_ids=unique_market_ids,
         metadata=dict(metadata or {}),
     )

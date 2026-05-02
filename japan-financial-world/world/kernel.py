@@ -29,6 +29,7 @@ from world.signals import SignalBook
 from world.state import State
 from world.engagement import DialogueBook, EscalationCandidateBook
 from world.industry import IndustryConditionBook
+from world.market_conditions import MarketConditionBook
 from world.stewardship import StewardshipBook
 from world.strategic_response import StrategicResponseCandidateBook
 from world.valuations import ValuationBook, ValuationComparator
@@ -78,6 +79,9 @@ class WorldKernel:
     industry_conditions: IndustryConditionBook = field(
         default_factory=IndustryConditionBook
     )
+    market_conditions: MarketConditionBook = field(
+        default_factory=MarketConditionBook
+    )
     routine_engine: RoutineEngine | None = None
     observation_menu_builder: ObservationMenuBuilder | None = None
 
@@ -102,6 +106,7 @@ class WorldKernel:
             self.escalations,
             self.strategic_responses,
             self.industry_conditions,
+            self.market_conditions,
         ):
             if book.ledger is None:
                 book.ledger = self.ledger

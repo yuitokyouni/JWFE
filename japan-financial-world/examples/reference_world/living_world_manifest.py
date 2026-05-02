@@ -120,6 +120,7 @@ def _summary_from_result(result: LivingReferenceWorldResult) -> dict[str, Any]:
     """
     industry_count = len(getattr(result, "industry_ids", ()))
     theme_count = len(getattr(result, "stewardship_theme_ids", ()))
+    market_count = len(getattr(result, "market_ids", ()))
     dialogue_total = sum(
         len(getattr(p, "dialogue_ids", ()))
         for p in result.per_period_summaries
@@ -136,6 +137,10 @@ def _summary_from_result(result: LivingReferenceWorldResult) -> dict[str, Any]:
         len(getattr(p, "industry_condition_ids", ()))
         for p in result.per_period_summaries
     )
+    market_condition_total = sum(
+        len(getattr(p, "market_condition_ids", ()))
+        for p in result.per_period_summaries
+    )
     return {
         "run_id": result.run_id,
         "period_count": result.period_count,
@@ -147,10 +152,12 @@ def _summary_from_result(result: LivingReferenceWorldResult) -> dict[str, Any]:
         "bank_count": len(result.bank_ids),
         "industry_count": industry_count,
         "stewardship_theme_count": theme_count,
+        "market_count": market_count,
         "industry_condition_total": industry_condition_total,
         "dialogue_total": dialogue_total,
         "investor_escalation_candidate_total": escalation_total,
         "corporate_strategic_response_candidate_total": response_total,
+        "market_condition_total": market_condition_total,
         "created_record_count": result.created_record_count,
     }
 

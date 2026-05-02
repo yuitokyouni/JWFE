@@ -204,6 +204,18 @@ class CorporateStrategicResponseCandidate:
       reconstruction, and report generation can disambiguate
       ``signal_id`` vs ``condition_id`` by field rather than by
       payload introspection.
+    - ``trigger_market_condition_ids`` is a tuple of v1.11.0
+      market-condition ids (``MarketConditionRecord``) that
+      triggered (or contextualize) the candidate;
+      cross-references are stored as data and not validated against
+      ``MarketConditionBook``. **Type-correctness slot, added in
+      v1.11.0**: keeps capital-market condition ids out of both
+      ``trigger_signal_ids`` and ``trigger_industry_condition_ids``
+      so that the v1.11 capital-market surface is distinguishable
+      by field at replay / lineage / report time. Market-condition
+      ids must **never** ride in ``trigger_signal_ids`` (a
+      ``SignalBook`` slot) or ``trigger_industry_condition_ids``
+      (a v1.10.4 industry-condition slot).
     - ``expected_effect_label`` is a small free-form tag describing
       the generic expected-effect class the firm attached to the
       candidate (e.g.,
@@ -257,6 +269,9 @@ class CorporateStrategicResponseCandidate:
     trigger_industry_condition_ids: tuple[str, ...] = field(
         default_factory=tuple
     )
+    trigger_market_condition_ids: tuple[str, ...] = field(
+        default_factory=tuple
+    )
     next_review_date: str | None = None
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
@@ -279,6 +294,7 @@ class CorporateStrategicResponseCandidate:
         "trigger_signal_ids",
         "trigger_valuation_ids",
         "trigger_industry_condition_ids",
+        "trigger_market_condition_ids",
     )
 
     def __post_init__(self) -> None:
@@ -341,6 +357,9 @@ class CorporateStrategicResponseCandidate:
             "trigger_valuation_ids": list(self.trigger_valuation_ids),
             "trigger_industry_condition_ids": list(
                 self.trigger_industry_condition_ids
+            ),
+            "trigger_market_condition_ids": list(
+                self.trigger_market_condition_ids
             ),
             "metadata": dict(self.metadata),
         }
@@ -422,6 +441,9 @@ class StrategicResponseCandidateBook:
                     ),
                     "trigger_industry_condition_ids": list(
                         candidate.trigger_industry_condition_ids
+                    ),
+                    "trigger_market_condition_ids": list(
+                        candidate.trigger_market_condition_ids
                     ),
                 },
                 space_id="strategic_response",
@@ -521,6 +543,29 @@ class StrategicResponseCandidateBook:
             c
             for c in self._candidates.values()
             if condition_id in c.trigger_industry_condition_ids
+        )
+
+    def list_by_market_condition(
+        self, condition_id: str
+    ) -> tuple[CorporateStrategicResponseCandidate, ...]:
+        """
+        Return every candidate whose ``trigger_market_condition_ids``
+        tuple contains ``condition_id``.
+
+        v1.11.0: type-correct cross-reference filter for v1.11.0
+        ``MarketConditionRecord`` ids. Market-condition ids do
+        **not** appear in ``trigger_signal_ids`` (a ``SignalBook``
+        slot) or in ``trigger_industry_condition_ids`` (a v1.10.4
+        industry-condition slot) — they live in their own slot so
+        that ledger replay, lineage reconstruction, and report
+        generation can disambiguate ``signal_id`` vs
+        ``industry_condition_id`` vs ``market_condition_id`` by
+        field rather than by payload introspection.
+        """
+        return tuple(
+            c
+            for c in self._candidates.values()
+            if condition_id in c.trigger_market_condition_ids
         )
 
     def list_by_date(

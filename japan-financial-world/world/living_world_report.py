@@ -117,7 +117,12 @@ _BOUNDARY_STATEMENT: str = (
     "execution, no AGM/EGM action, no corporate-action execution "
     "(buyback / dividend / divestment / merger / governance "
     "change), no disclosure-filing execution, no demand / sales "
-    "/ revenue forecasting, no firm financial-statement updates."
+    "/ revenue forecasting, no firm financial-statement updates. "
+    "v1.11.0 capital-market surface: no price formation, no "
+    "yield-curve calibration, no order matching, no clearing, no "
+    "quote dissemination, no security recommendation, no DCM / "
+    "ECM execution, no portfolio-allocation decisions; market "
+    "conditions are synthetic context only."
 )
 
 
@@ -168,6 +173,9 @@ class LivingWorldPeriodReport:
     dialogue_count: int = 0
     investor_escalation_candidate_count: int = 0
     corporate_strategic_response_candidate_count: int = 0
+    # v1.11.0 additive: capital-market condition surface count.
+    # Default 0 for backwards compat with pre-v1.11 result objects.
+    market_condition_count: int = 0
     record_type_counts: tuple[tuple[str, int], ...] = field(default_factory=tuple)
     warnings: tuple[str, ...] = field(default_factory=tuple)
     metadata: Mapping[str, Any] = field(default_factory=dict)
@@ -194,6 +202,7 @@ class LivingWorldPeriodReport:
             "dialogue_count",
             "investor_escalation_candidate_count",
             "corporate_strategic_response_candidate_count",
+            "market_condition_count",
         ):
             value = getattr(self, name)
             if not isinstance(value, int) or value < 0:
@@ -265,6 +274,7 @@ class LivingWorldPeriodReport:
             "corporate_strategic_response_candidate_count": (
                 self.corporate_strategic_response_candidate_count
             ),
+            "market_condition_count": self.market_condition_count,
             "record_type_counts": [
                 [event_type, count]
                 for event_type, count in self.record_type_counts
@@ -789,6 +799,9 @@ def _build_period_report(
             corporate_strategic_response_candidate_count=len(
                 getattr(period, "corporate_strategic_response_candidate_ids", ())
             ),
+            market_condition_count=len(
+                getattr(period, "market_condition_ids", ())
+            ),
             record_type_counts=period_record_type_counts,
             warnings=tuple(period_warnings),
             metadata={
@@ -906,6 +919,34 @@ def render_living_world_markdown(report: LivingWorldTraceReport) -> str:
     else:
         lines.append("- _(none)_")
     lines.append("")
+
+    # v1.11.0 capital-market conditions section. One row per
+    # period showing the count of synthetic market-condition
+    # records emitted that period. The section is intentionally
+    # narrow; full per-condition detail lives on the canonical
+    # view, not the rendered report.
+    has_v111_signal = any(
+        ps.get("market_condition_count", 0) > 0
+        for ps in md["period_summaries"]
+    )
+    if has_v111_signal:
+        lines.append("## Capital market conditions")
+        lines.append("")
+        lines.append("| period | as_of_date | market_conditions |")
+        lines.append("| --- | --- | --- |")
+        for ps in md["period_summaries"]:
+            lines.append(
+                f"| `{ps['period_id']}` | `{ps['as_of_date']}` | "
+                f"{ps.get('market_condition_count', 0)} |"
+            )
+        lines.append("")
+        lines.append(
+            "> Capital-market conditions are synthetic context "
+            "evidence only — no price formation, no yield-curve "
+            "calibration, no order matching, no clearing, no "
+            "quote dissemination, no real market data."
+        )
+        lines.append("")
 
     # v1.10.5 engagement / strategic-response section. Per-period
     # counts for stewardship themes (setup-level; same on every

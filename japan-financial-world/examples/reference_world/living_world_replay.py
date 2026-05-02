@@ -87,7 +87,12 @@ LIVING_WORLD_BOUNDARY_STATEMENT: str = (
     "execution, no AGM/EGM action, no corporate-action execution "
     "(buyback / dividend / divestment / merger / governance "
     "change), no disclosure-filing execution, no demand / sales "
-    "/ revenue forecasting, no firm financial-statement updates."
+    "/ revenue forecasting, no firm financial-statement updates. "
+    "v1.11.0 capital-market surface: no price formation, no "
+    "yield-curve calibration, no order matching, no clearing, no "
+    "quote dissemination, no security recommendation, no DCM / "
+    "ECM execution, no portfolio-allocation decisions; market "
+    "conditions are synthetic context only."
 )
 
 CANONICAL_FORMAT_VERSION: str = "living_world_canonical.v1"
@@ -149,9 +154,13 @@ def _canonicalize_period(period: LivingReferencePeriodSummary) -> dict[str, Any]
     ``investor_escalation_candidate_ids`` /
     ``corporate_strategic_response_candidate_ids`` are included
     so the canonical view reflects the v1.10.x engagement /
-    strategic-response storage phases. Older
-    LivingReferencePeriodSummary instances without these fields
-    fall through to empty tuples via ``getattr`` defaults.
+    strategic-response storage phases.
+
+    v1.11.0 additive: ``market_condition_ids`` is included so the
+    canonical view reflects the v1.11.0 capital-market context
+    layer. Older LivingReferencePeriodSummary instances without
+    any of these fields fall through to empty tuples via
+    ``getattr`` defaults.
     """
     return {
         "period_id": period.period_id,
@@ -195,6 +204,9 @@ def _canonicalize_period(period: LivingReferencePeriodSummary) -> dict[str, Any]
         ),
         "corporate_strategic_response_candidate_ids": list(
             getattr(period, "corporate_strategic_response_candidate_ids", ())
+        ),
+        "market_condition_ids": list(
+            getattr(period, "market_condition_ids", ())
         ),
     }
 
@@ -401,6 +413,12 @@ def canonicalize_living_world_result(
         "stewardship_theme_count": len(
             getattr(result, "stewardship_theme_ids", ())
         ),
+        # v1.11.0 additive: setup-level capital-market context.
+        # Older result objects without this field fall through to
+        # ``[]`` via ``getattr``, keeping the canonical view
+        # backward compatible.
+        "market_ids": list(getattr(result, "market_ids", ())),
+        "market_count": len(getattr(result, "market_ids", ())),
         "ledger_record_count_before": result.ledger_record_count_before,
         "ledger_record_count_after": result.ledger_record_count_after,
         "created_record_count": result.created_record_count,

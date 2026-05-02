@@ -215,6 +215,7 @@ def count_expected_living_world_records(
     banks: int,
     periods: int,
     industries: int = 3,
+    markets: int = 5,
 ) -> int:
     """Returns the **total** record count across the entire
     multi-period run — i.e. the per-period formula multiplied
@@ -229,6 +230,7 @@ def count_expected_living_world_records(
         2 * firms                  corporate run + corporate signal
         firms                      firm pressure signal (v1.9.4)
         industries                 industry demand condition (v1.10.4)
+        markets                    capital-market condition (v1.11.0)
         2 * (investors + banks)    menu + selection
         investors * firms          valuation (v1.9.5)
         banks * firms              bank credit review note (v1.9.7)
@@ -238,14 +240,15 @@ def count_expected_living_world_records(
         2 * (investors + banks)    review_run + review_signal
 
     For the default fixture (3 firms, 2 investors, 2 banks,
-    3 industries, 4 periods) this is 55 records per period × 4
-    periods = 220.
+    3 industries, 5 markets, 4 periods) this is 60 records per
+    period × 4 periods = 240.
     """
     actors = investors + banks
     per_period = (
         2 * firms                  # corp run + corp signal
         + firms                    # pressure signal
         + industries               # industry demand condition (v1.10.4)
+        + markets                  # capital-market condition (v1.11.0)
         + 2 * actors               # menu + selection
         + investors * firms        # valuation
         + banks * firms            # credit review
@@ -298,12 +301,13 @@ def test_default_living_world_total_run_record_count_matches_formula():
     routines, profiles, attention configs, stewardship themes).
 
     Note on units: the budget pinned here is a **per-run total
-    across all four periods**, NOT a per-period count. At v1.10.5
-    the per-period count is 55 records (37 v1.9.x + 18 v1.10.5);
-    the per-run total is 55 × 4 = 220, plus up to 32 records of
-    one-off setup overhead (14 v1.9.x infra + 4 v1.10.5
-    stewardship themes + headroom), giving a tight total-run
-    window of [220, 252].
+    across all four periods**, NOT a per-period count. At v1.11.0
+    the per-period count is 60 records (37 v1.9.x + 18 v1.10.5
+    + 5 v1.11.0 capital-market); the per-run total is 60 × 4 = 240,
+    plus up to 32 records of one-off setup overhead (14 v1.9.x
+    infra + 4 v1.10.5 stewardship themes + headroom; v1.11.0 adds
+    no new setup records), giving a tight total-run window of
+    [240, 272].
     """
     k = _seed_kernel()
     r = run_living_reference_world(
@@ -524,9 +528,9 @@ def test_count_expected_living_world_records_matches_default_fixture():
         banks=len(_BANK_IDS),
         periods=len(_PERIOD_DATES),
     )
-    # Per docs/performance_boundary.md (v1.10.5):
-    # 4 × 55 = 220 records per run from the per-period formula.
-    assert total == 220
+    # Per docs/performance_boundary.md (v1.11.0):
+    # 4 × 60 = 240 records per run from the per-period formula.
+    assert total == 240
 
 
 def test_count_expected_living_world_records_scales_linearly_in_periods():

@@ -66,6 +66,7 @@ def _candidate(
     trigger_signal_ids: tuple[str, ...] = (),
     trigger_valuation_ids: tuple[str, ...] = (),
     trigger_industry_condition_ids: tuple[str, ...] = (),
+    trigger_market_condition_ids: tuple[str, ...] = (),
     next_review_date: str | None = None,
     metadata: dict | None = None,
 ) -> CorporateStrategicResponseCandidate:
@@ -85,6 +86,7 @@ def _candidate(
         trigger_signal_ids=trigger_signal_ids,
         trigger_valuation_ids=trigger_valuation_ids,
         trigger_industry_condition_ids=trigger_industry_condition_ids,
+        trigger_market_condition_ids=trigger_market_condition_ids,
         next_review_date=next_review_date,
         metadata=metadata or {},
     )
@@ -133,6 +135,7 @@ def test_response_rejects_empty_required_strings(kwargs):
         "trigger_signal_ids",
         "trigger_valuation_ids",
         "trigger_industry_condition_ids",
+        "trigger_market_condition_ids",
     ],
 )
 def test_response_rejects_empty_strings_in_tuple_fields(tuple_field):
@@ -190,6 +193,9 @@ def test_response_to_dict_round_trips_fields():
         trigger_industry_condition_ids=(
             "industry_condition:reference_manufacturing:2026Q1",
         ),
+        trigger_market_condition_ids=(
+            "market_condition:reference_rates_general:2026-03-31",
+        ),
         next_review_date="2026-08-01",
         metadata={"note": "synthetic"},
     )
@@ -212,6 +218,9 @@ def test_response_to_dict_round_trips_fields():
     assert out["trigger_industry_condition_ids"] == [
         "industry_condition:reference_manufacturing:2026Q1"
     ]
+    assert out["trigger_market_condition_ids"] == [
+        "market_condition:reference_rates_general:2026-03-31"
+    ]
     assert out["metadata"] == {"note": "synthetic"}
 
 
@@ -219,6 +228,12 @@ def test_response_default_trigger_industry_condition_ids_is_empty_tuple():
     """v1.10.4.1 added field is additive and defaults to ()."""
     c = _candidate()
     assert c.trigger_industry_condition_ids == ()
+
+
+def test_response_default_trigger_market_condition_ids_is_empty_tuple():
+    """v1.11.0 added field is additive and defaults to ()."""
+    c = _candidate()
+    assert c.trigger_market_condition_ids == ()
 
 
 def test_response_metadata_is_independent_copy():
@@ -505,6 +520,66 @@ def test_list_by_industry_condition_does_not_match_signal_slot():
     )
 
 
+def test_list_response_by_market_condition():
+    """v1.11.0: type-correct cross-reference filter for v1.11.0
+    market-condition ids."""
+    book = StrategicResponseCandidateBook()
+    book.add_candidate(
+        _candidate(
+            response_candidate_id="resp:cited",
+            trigger_market_condition_ids=(
+                "market_condition:rates",
+                "market_condition:credit",
+            ),
+        )
+    )
+    book.add_candidate(
+        _candidate(
+            response_candidate_id="resp:credit_only",
+            trigger_market_condition_ids=("market_condition:credit",),
+        )
+    )
+    book.add_candidate(
+        _candidate(
+            response_candidate_id="resp:none",
+            trigger_market_condition_ids=(),
+        )
+    )
+    assert tuple(
+        c.response_candidate_id
+        for c in book.list_by_market_condition("market_condition:rates")
+    ) == ("resp:cited",)
+    assert sorted(
+        c.response_candidate_id
+        for c in book.list_by_market_condition("market_condition:credit")
+    ) == ["resp:cited", "resp:credit_only"]
+    assert (
+        book.list_by_market_condition("market_condition:missing") == ()
+    )
+
+
+def test_list_by_market_condition_does_not_match_other_slots():
+    """A market-condition id sitting in any other trigger slot
+    must NOT be surfaced by list_by_market_condition. Field-level
+    disambiguation is what v1.11.0 buys."""
+    book = StrategicResponseCandidateBook()
+    book.add_candidate(
+        _candidate(
+            response_candidate_id="resp:in_signal_slot",
+            trigger_signal_ids=("market_condition:rates",),
+        )
+    )
+    book.add_candidate(
+        _candidate(
+            response_candidate_id="resp:in_industry_slot",
+            trigger_industry_condition_ids=("market_condition:rates",),
+        )
+    )
+    assert (
+        book.list_by_market_condition("market_condition:rates") == ()
+    )
+
+
 def test_list_response_by_date_filters_exactly():
     book = StrategicResponseCandidateBook()
     book.add_candidate(
@@ -550,6 +625,9 @@ def test_response_can_reference_unresolved_trigger_ids():
         trigger_valuation_ids=("valuation:not-in-valuation-book",),
         trigger_industry_condition_ids=(
             "industry_condition:not-in-industry-book",
+        ),
+        trigger_market_condition_ids=(
+            "market_condition:not-in-market-book",
         ),
     )
     book.add_candidate(c)
@@ -632,6 +710,9 @@ def test_add_response_payload_carries_full_field_set():
             trigger_industry_condition_ids=(
                 "industry_condition:reference_manufacturing:2026Q1",
             ),
+            trigger_market_condition_ids=(
+                "market_condition:reference_rates_general:2026-03-31",
+            ),
             next_review_date="2026-08-01",
         )
     )
@@ -662,6 +743,9 @@ def test_add_response_payload_carries_full_field_set():
     )
     assert tuple(payload["trigger_industry_condition_ids"]) == (
         "industry_condition:reference_manufacturing:2026Q1",
+    )
+    assert tuple(payload["trigger_market_condition_ids"]) == (
+        "market_condition:reference_rates_general:2026-03-31",
     )
 
 
@@ -825,6 +909,8 @@ def test_response_book_does_not_mutate_other_kernel_books():
         "stewardship": kernel.stewardship.snapshot(),
         "engagement": kernel.engagement.snapshot(),
         "escalations": kernel.escalations.snapshot(),
+        "industry_conditions": kernel.industry_conditions.snapshot(),
+        "market_conditions": kernel.market_conditions.snapshot(),
     }
 
     kernel.strategic_responses.add_candidate(
@@ -860,6 +946,9 @@ def test_response_book_does_not_mutate_other_kernel_books():
     kernel.strategic_responses.list_by_industry_condition(
         "industry_condition:does-not-exist"
     )
+    kernel.strategic_responses.list_by_market_condition(
+        "market_condition:does-not-exist"
+    )
     kernel.strategic_responses.list_by_date("2026-05-01")
     kernel.strategic_responses.snapshot()
 
@@ -883,6 +972,14 @@ def test_response_book_does_not_mutate_other_kernel_books():
     assert kernel.stewardship.snapshot() == snaps_before["stewardship"]
     assert kernel.engagement.snapshot() == snaps_before["engagement"]
     assert kernel.escalations.snapshot() == snaps_before["escalations"]
+    assert (
+        kernel.industry_conditions.snapshot()
+        == snaps_before["industry_conditions"]
+    )
+    assert (
+        kernel.market_conditions.snapshot()
+        == snaps_before["market_conditions"]
+    )
 
 
 # ---------------------------------------------------------------------------
