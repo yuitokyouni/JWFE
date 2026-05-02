@@ -80,6 +80,7 @@ class RecordType(str, Enum):
     MARKET_ENVIRONMENT_STATE_ADDED = "market_environment_state_added"
     ATTENTION_STATE_CREATED = "attention_state_created"
     ATTENTION_FEEDBACK_RECORDED = "attention_feedback_recorded"
+    SETTLEMENT_ACCOUNT_REGISTERED = "settlement_account_registered"
     STATE_SNAPSHOT_CREATED = "state_snapshot_created"
     WARNING = "warning"
     ERROR = "error"

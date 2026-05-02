@@ -7,6 +7,7 @@ from typing import Iterator
 
 from world.attention import AttentionBook
 from world.attention_feedback import AttentionFeedbackBook
+from world.settlement_accounts import SettlementAccountBook
 from world.balance_sheet import BalanceSheetProjector
 from world.clock import Clock
 from world.constraints import ConstraintBook, ConstraintEvaluator
@@ -103,6 +104,9 @@ class WorldKernel:
     attention_feedback: AttentionFeedbackBook = field(
         default_factory=AttentionFeedbackBook
     )
+    settlement_accounts: SettlementAccountBook = field(
+        default_factory=SettlementAccountBook
+    )
     routine_engine: RoutineEngine | None = None
     observation_menu_builder: ObservationMenuBuilder | None = None
     # v1.12.3 — read-only evidence resolution service. Stateless;
@@ -139,6 +143,7 @@ class WorldKernel:
             self.firm_financial_states,
             self.investor_intents,
             self.attention_feedback,
+            self.settlement_accounts,
         ):
             if book.ledger is None:
                 book.ledger = self.ledger

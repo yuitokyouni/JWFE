@@ -8182,3 +8182,26 @@ The freeze does three things the underlying milestones cannot do on their own:
 | v2.0 | Japan public-data calibration design gate | Not started |
 
 The test count, per-period record count, per-run window, and `living_world_digest` are **unchanged** from v1.12.9 — §92 is docs-only and ships no code, no record, no test, no fixture. The full v1.12 narrative is in §80 → §91; the reader-facing single-page summary is [`v1_12_endogenous_attention_loop_summary.md`](v1_12_endogenous_attention_loop_summary.md).
+
+## 93. v1.13.1 SettlementAccountBook — generic synthetic settlement-account storage
+
+§93 ships the first concrete code milestone in the v1.13 generic central-bank settlement infrastructure sequence (the v1.13.0 design note in §87 was docs-only). v1.13.1 ships **storage only**: an append-only `SettlementAccountBook` that holds immutable `SettlementAccountRecord` instances naming synthetic settlement accounts at a generic settlement system. There is **no real balance, no central-bank accounting, no real payment processing, no real-system mapping, no Japan calibration**. The book emits exactly one ledger record per `add_account` call (`RecordType.SETTLEMENT_ACCOUNT_REGISTERED`) and refuses to mutate any other source-of-truth book in the kernel.
+
+### 93.1 What v1.13.1 ships
+
+- `world/settlement_accounts.py` (new) — `SettlementAccountRecord` (immutable dataclass with 9 required string fields + optional `closed_date` + free-form `metadata`), `SettlementAccountBook` (append-only store with `add_account` / `get_account` / `list_accounts` / `list_by_owner` / `list_by_account_type` / `list_by_status` / `list_active_as_of` / `snapshot`), errors `DuplicateSettlementAccountError` / `UnknownSettlementAccountError`, plus an `is_active_as_of` instance method on the record.
+- `world/ledger.py` — new `RecordType.SETTLEMENT_ACCOUNT_REGISTERED` (event type `settlement_account_registered`).
+- `world/kernel.py` — wires `WorldKernel.settlement_accounts: SettlementAccountBook`.
+- `tests/test_settlement_accounts.py` (new) — 34 tests covering field validation, ISO-date coercion, `closed_date < opened_date` rejection, immutability, `to_dict` round-trip, anti-fields on dataclass + ledger payload, every list / filter method, `list_active_as_of` semantics, snapshot determinism, ledger emission, kernel wiring, no-mutation against every other source-of-truth book in the kernel, plus a jurisdiction-neutral identifier scan over both module and test file.
+
+### 93.2 Anti-fields and anti-claims (binding)
+
+The record carries **no** `balance`, `available_credit`, `pending_settlement_amount`, `interest_accrued`, `debit_limit`, `credit_line`, `cash_balance`, `reserve_balance`, `required_reserve`, `policy_rate`, `order`, `trade`, `recommendation`, `investment_advice`, `forecast_value`, `actual_value`, `real_data_value`, or `behavior_probability` field. Tests pin the absence on the dataclass field set and on the ledger payload key set.
+
+The book emits **only** `RecordType.SETTLEMENT_ACCOUNT_REGISTERED` records and refuses to mutate any other source-of-truth book in the kernel. v1.13.1 does **not** process payments, calculate balances, accrue interest, enforce reserves, settle trades, deliver securities, calibrate haircuts, or apply any Japan-specific rule. Real-system identifiers (any real RTGS or large-value payment system name) never appear in any public-FWE record; the public / private boundary is in §87 and `public_private_boundary.md`.
+
+### 93.3 Performance boundary
+
+v1.13.1 is storage-only and not yet wired into the orchestrator. Per-period record count, per-run window, and `living_world_digest` are **unchanged** from v1.12.last. The orchestrator integration arrives at v1.13.5.
+
+The test count moves from `2751 / 2751` (v1.12.last) to `2785 / 2785` (v1.13.1) — `+34` tests in the new `tests/test_settlement_accounts.py`.
