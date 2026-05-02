@@ -7824,3 +7824,76 @@ Until that sub-milestone, the v1.9.7 bank credit review phase remains on the v1.
 | v2.0 Japan public-data calibration design gate | — | Not started |
 
 The test count moves from `2580 / 2580` (v1.12.5) to `2602 / 2602` (v1.12.6) — `+22` tests, all in `tests/test_reference_bank_credit_review_lite.py` (taking that file from 29 to 51 tests). The per-period record count, per-run window, and `living_world_digest` are unchanged from v1.12.4 / v1.12.5 because the orchestrator continues to call the pre-existing helper (the new helper is exercised by tests only). With v1.12.6 shipped, attention is now load-bearing for **three mechanism-level use cases**: investor intent (§85), valuation lite (§86), and bank credit review lite (§88).
+
+## 89. v1.12.7 Attention-conditioned mechanism integration — making the living-world demo attention-conditioned end-to-end
+
+§89 is the **orchestrator-integration milestone** that closes the v1.12.4 / v1.12.5 / v1.12.6 sequence. Through v1.12.6 attention was load-bearing for **investor intent only** in the living-world demo; valuation lite (§86) and bank credit review lite (§88) shipped as *helper-level + tests*, with the orchestrator still calling the pre-existing v1.9.5 / v1.9.7 helpers. v1.12.7 switches the orchestrator's per-period valuation phase and per-period bank credit review phase to call the v1.12.5 / v1.12.6 attention-conditioned helpers, so the default living reference world demo now uses the v1.12.3 `EvidenceResolver` substrate for **three mechanisms end-to-end**: investor intent (since v1.12.4), valuation lite (new in v1.12.7), and bank credit review lite (new in v1.12.7).
+
+This is still **review-only synthetic behaviour**, not a trade, lending decision, rating, PD/LGD/EAD, pricing, underwriting, covenant action, or recommendation. Every v1.9.5 / v1.9.7 anti-claim flag is preserved bit-for-bit on every produced record; v1.12.7 changes only **how the evidence those mechanisms consume is resolved** — it now flows through the v1.12.3 attention bottleneck for every mechanism, not just investor intent.
+
+### 89.1 Why this exists
+
+Through v1.12.6 the v1.9.5 / v1.9.7 helpers in the living-world orchestrator received the same evidence id tuples for every (investor, firm) and (bank, firm) pair regardless of which actor was being run. The actor's `SelectedObservationSet` flowed in as one of the kwargs but did not condition the helper's read set. This left the living-world digest, the markdown report, and the manifest summary describing a world where every actor "saw" the same evidence by construction.
+
+§89 closes that gap by making the orchestrator's valuation phase and bank credit review phase route evidence through the v1.12.3 substrate, exactly like the v1.12.4 investor-intent phase already does. The headline claim becomes: *the same target firm in the same period can produce different valuation audit shapes for different investors and different credit-review audit shapes for different banks, because they each selected (and the orchestrator each cited) different evidence.*
+
+### 89.2 What v1.12.7 ships
+
+- `world/reference_living_world.py` — orchestrator's per-period valuation phase switches from `run_reference_valuation_refresh_lite(...)` to `run_attention_conditioned_valuation_refresh_lite(...)`. Each call passes the investor's `SelectedObservationSet` plus the documented transitional explicit-id kwargs covering pressure signals, corporate signals, the firm's latent state (v1.12.0), the period's market readout (v1.11.1), and the period's market environment state (v1.12.2). The v1.9.5 anti-claim metadata flags `no_price_movement` / `no_investment_advice` / `synthetic_only` are preserved on every produced `ValuationRecord` bit-for-bit.
+- `world/reference_living_world.py` — orchestrator's per-period bank credit review phase switches from `run_reference_bank_credit_review_lite(...)` to `run_attention_conditioned_bank_credit_review_lite(...)`. Each call passes the bank's `SelectedObservationSet` plus the documented transitional explicit-id kwargs covering pressure signals, corporate signals, every valuation on the firm in the period, the firm's latent state, the period's market readout, and the period's market environment state. The v1.9.7 anti-claim metadata flags (`no_lending_decision` / `no_covenant_enforcement` / `no_contract_mutation` / `no_constraint_mutation` / `no_default_declaration` / `no_internal_rating` / `no_probability_of_default` / `synthetic_only`) are preserved on every produced `bank_credit_review_note` signal bit-for-bit.
+- `tests/test_living_reference_world.py` — `+11` v1.12.7 integration tests pinning the new audit shape:
+  - every orchestrator-produced valuation carries the four v1.12.5 attention-metadata keys (`attention_conditioned`, `context_frame_id`, `context_frame_status`, `context_frame_confidence`) plus the three v1.9.5 anti-claim flags;
+  - every orchestrator-produced bank credit review signal carries the v1.12.6 watch label, the four context-frame metadata keys, and every one of the eight v1.9.7 anti-claim flags;
+  - each valuation's `context_frame_id` references its valuer (one frame per investor on a date, not one frame per firm);
+  - each credit review signal's `context_frame_id` references its bank;
+  - the integrated v1.12.7 sweep emits no forbidden ledger payload key (no `order` / `trade` / `rebalance` / `target_price` / `expected_return` / `recommendation` / `investment_advice` / `lending_decision` / `loan_approved` / `covenant_breached` / `default_declared` / `internal_rating` / `rating_grade` / `probability_of_default` / `pd` / `lgd` / `ead` / `loan_pricing` / `interest_rate` / `underwriting_decision` / `approval_status` / `loan_terms`);
+  - no forbidden event types appear in the run (no `order_submitted` / `price_updated` / `contract_*` / `ownership_*` / `institution_action_recorded` / `firm_state_added`);
+  - canonical replay deterministic across two fresh runs;
+  - the new v1.12.7 default-fixture `living_world_digest` is **pinned** in a regression test; any future silent change to the orchestrator path or to the v1.12.5 / v1.12.6 helpers fails loudly;
+  - the v1.12.1 / v1.12.4 constrained-regime divergence is preserved (every intent → `risk_flag_watch` or `deepen_due_diligence`);
+  - the constrained regime now also produces **at least one non-routine bank-credit-review watch label** across the run, proving that the bank's resolved frame drives classification through the orchestrator path;
+  - the v1.9.1 trace report continues to render the integrated ledger slice without raising.
+
+### 89.3 Performance boundary (binding)
+
+Per-period record count: **unchanged** from v1.12.4 / v1.12.5 / v1.12.6 (71). Per-run record window: **unchanged** (`[284, 316]`). v1.12.7 introduces no new ledger record type and no new per-period state — the orchestrator continues to emit the same number of records per period; the new helpers enrich the existing records' `payload` and `metadata` fields rather than adding records.
+
+### 89.4 Living-world digest (expected change)
+
+The default-fixture `living_world_digest` **does** move from `d6b25704014c3f19da330f534d5f8266ce8a9b73b9ee8da378b19c4691cb5dfe` (v1.12.4 → v1.12.6, where the orchestrator still called the pre-existing helpers) to `2c748aa6e37b679d9d52984e7f2c252d434e6a2192f7fa58b71866e59f54b709` (v1.12.7, where the orchestrator routes valuation + bank credit review evidence through the v1.12.3 substrate). The shift is intentional and documented: the new helpers stamp `attention_conditioned` / `context_frame_id` / `context_frame_status` / `context_frame_confidence` / `resolved_buckets_present` / `restrictive_market_resolved` / `risk_off_environment_resolved` keys on the produced `ValuationRecord.metadata` (which flows into `valuation_added` ledger payloads), and the bank-credit-review helper additionally stamps a `watch_label` / `resolved_evidence_buckets` audit on the produced `bank_credit_review_note` signal's `payload` (which flows into `signal_added` ledger payloads).
+
+Two fresh v1.12.7 runs continue to produce byte-identical canonical views; only the cross-version digest moves. A test pins the new digest verbatim.
+
+### 89.5 Anti-fields and anti-claims (binding)
+
+v1.12.7 introduces:
+
+- a switch in the orchestrator's valuation phase: `run_reference_valuation_refresh_lite` → `run_attention_conditioned_valuation_refresh_lite`;
+- a switch in the orchestrator's bank credit review phase: `run_reference_bank_credit_review_lite` → `run_attention_conditioned_bank_credit_review_lite`;
+- transitional explicit-id kwargs in both phases for evidence not yet surfaced through the v1.8.x menu builder (firm states, market environment states, market readouts, valuations, corporate signals, pressure signals);
+- no new ledger event types — the orchestrator continues to emit only the existing event types;
+- no new `ValuationRecord` field; no new `InformationSignal` field; no new bucket on `ActorContextFrame`.
+
+The full anti-claim set is preserved:
+
+- **Does not** introduce trading, price formation, lending decisions, loan origination, underwriting, covenant enforcement, contract mutation, default declaration, internal rating, probability of default, LGD/EAD, credit pricing, target price, expected return, security recommendation, investment advice, portfolio allocation, target weight, or any execution-class behaviour.
+- **Does not** introduce real data ingestion or Japan-specific calibration.
+- **Does not** dispatch to an LLM agent or any external solver. The frame is the *substrate* a future LLM-agent valuer / reviewer can read; v1.12.7 is not itself an LLM call.
+- **Does not** drop the existing `run_reference_valuation_refresh_lite(...)` or `run_reference_bank_credit_review_lite(...)` helpers; both pre-existing helpers continue to ship and existing v1.9.5 / v1.9.7 tests against them continue to pass.
+
+### 89.6 Position in the v1.12 sequence
+
+| Milestone | Scope | Status |
+| --- | --- | --- |
+| v1.12.0 → v1.12.2 (firm state / investor intent / market environment) | Code (§80 → §82). | Shipped |
+| v1.12.3 EvidenceResolver / ActorContextFrame | Code (§83). | Shipped |
+| v1.x Valuation Protocol — Comps Purpose Separation | Docs-only (§84). Advanced-actor-only. | Shipped |
+| v1.12.4 Attention-conditioned investor intent | Code (§85). First mechanism-level use of attention; orchestrator wired. | Shipped |
+| v1.12.5 Attention-conditioned valuation lite | Code (§86). Helper-level + tests; orchestrator deferred to §89. | Shipped |
+| v1.13.0 Generic central bank settlement infrastructure design | Docs-only (§87). Jurisdiction-neutral substrate vocabulary. | Shipped |
+| v1.12.6 Attention-conditioned bank credit review lite | Code (§88). Helper-level + tests; orchestrator deferred to §89. | Shipped |
+| **v1.12.7 Attention-conditioned mechanism integration** | Code (§89). Orchestrator wires the v1.12.5 / v1.12.6 helpers. | **Shipped** |
+| v1.12.last Next-period attention feedback (anticipated) | Code. | Planned |
+| v2.0 Japan public-data calibration design gate | — | Not started |
+
+The test count moves from `2602 / 2602` (v1.12.6) to `2613 / 2613` (v1.12.7) — `+11` integration tests, all in `tests/test_living_reference_world.py`. The per-period record count and per-run window are unchanged from v1.12.4 / v1.12.5 / v1.12.6. The default-fixture `living_world_digest` moves from `d6b25704...` (v1.12.4 → v1.12.6) to `2c748aa6e37b679d9d52984e7f2c252d434e6a2192f7fa58b71866e59f54b709` (v1.12.7) by design; the new value is pinned in a regression test. With v1.12.7 shipped, attention is load-bearing **end-to-end** in the default living-world demo for investor intent (§85), valuation lite (§89), and bank credit review lite (§89).

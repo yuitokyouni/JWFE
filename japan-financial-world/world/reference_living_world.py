@@ -114,7 +114,7 @@ from world.reference_reviews import (
 )
 from world.reference_bank_credit_review_lite import (
     BankCreditReviewLiteResult,
-    run_reference_bank_credit_review_lite,
+    run_attention_conditioned_bank_credit_review_lite,
 )
 from world.reference_firm_pressure import (
     FirmPressureMechanismResult,
@@ -128,7 +128,7 @@ from world.reference_routines import (
 )
 from world.reference_valuation_refresh_lite import (
     ValuationRefreshLiteResult,
-    run_reference_valuation_refresh_lite,
+    run_attention_conditioned_valuation_refresh_lite,
 )
 
 
@@ -1420,6 +1420,21 @@ def run_living_reference_world(
         # out of scope for v1.9.6 (a future stakeholder-pressure
         # milestone may extend it).
         # ------------------------------------------------------------------
+        # v1.12.7 — orchestrator wires the v1.12.5
+        # attention-conditioned valuation helper. Each (investor,
+        # firm) pair routes evidence through the v1.12.3
+        # `EvidenceResolver` substrate by calling
+        # ``run_attention_conditioned_valuation_refresh_lite``. The
+        # investor's `SelectedObservationSet` is the attention
+        # surface; transitional explicit-id kwargs cover firm
+        # states, market environment states, market readouts,
+        # corporate signals, and pressure signals which the
+        # v1.8.x menu builder does not yet surface through the
+        # menu / selection pipeline. The v1.9.5 anti-claim metadata
+        # (`no_price_movement` / `no_investment_advice` /
+        # `synthetic_only`) is preserved bit-for-bit on every
+        # produced record.
+        # ------------------------------------------------------------------
         valuation_ids: list[str] = []
         valuation_mechanism_run_ids: list[str] = []
         baselines = dict(firm_baseline_values or {})
@@ -1444,15 +1459,33 @@ def run_living_reference_world(
                     f"req:valuation_refresh_lite:{investor_id}:"
                     f"{firm_id}:{iso_date}"
                 )
+                firm_state_for_pair = firm_state_id_by_firm.get(firm_id)
                 valuation_result: ValuationRefreshLiteResult = (
-                    run_reference_valuation_refresh_lite(
+                    run_attention_conditioned_valuation_refresh_lite(
                         kernel,
                         firm_id=firm_id,
                         valuer_id=investor_id,
                         as_of_date=iso_date,
-                        pressure_signal_ids=(pressure_signal_by_firm[firm_id],),
-                        corporate_signal_ids=(corp_signal_by_firm[firm_id],),
-                        selected_observation_set_ids=(investor_selection_id,),
+                        selected_observation_set_ids=(
+                            investor_selection_id,
+                        ),
+                        explicit_pressure_signal_ids=(
+                            pressure_signal_by_firm[firm_id],
+                        ),
+                        explicit_corporate_signal_ids=(
+                            corp_signal_by_firm[firm_id],
+                        ),
+                        explicit_firm_state_ids=(
+                            (firm_state_for_pair,)
+                            if firm_state_for_pair
+                            else ()
+                        ),
+                        explicit_market_readout_ids=tuple(
+                            capital_market_readout_ids
+                        ),
+                        explicit_market_environment_state_ids=tuple(
+                            market_environment_state_ids
+                        ),
                         baseline_value=baseline,
                         valuation_id=valuation_id,
                         request_id=valuation_request_id,
@@ -1487,6 +1520,21 @@ def run_living_reference_world(
         # consider a sparser policy (e.g., the bank only reviews
         # firms in its declared exposure scope).
         # ------------------------------------------------------------------
+        # v1.12.7 — orchestrator wires the v1.12.6
+        # attention-conditioned bank credit review helper. Each
+        # (bank, firm) pair routes evidence through the v1.12.3
+        # `EvidenceResolver` substrate by calling
+        # ``run_attention_conditioned_bank_credit_review_lite``.
+        # The bank's `SelectedObservationSet` is the attention
+        # surface; transitional explicit-id kwargs cover firm
+        # states, market environment states, market readouts,
+        # valuations, and corporate / pressure signals. Every
+        # v1.9.7 boundary anti-claim is preserved bit-for-bit
+        # on every produced ``bank_credit_review_note`` signal:
+        # `no_lending_decision` / `no_covenant_enforcement` /
+        # `no_contract_mutation` / `no_constraint_mutation` /
+        # `no_default_declaration` / `no_internal_rating` /
+        # `no_probability_of_default` / `synthetic_only`.
         bank_credit_review_signal_ids: list[str] = []
         bank_credit_review_mechanism_run_ids: list[str] = []
 
@@ -1502,21 +1550,33 @@ def run_living_reference_world(
                     # ``valuation:reference_lite:<inv>:<firm>:<date>``
                     if f":{firm_id}:" in vid
                 )
+                firm_state_for_pair = firm_state_id_by_firm.get(firm_id)
                 review_result: BankCreditReviewLiteResult = (
-                    run_reference_bank_credit_review_lite(
+                    run_attention_conditioned_bank_credit_review_lite(
                         kernel,
                         bank_id=bank_id,
                         firm_id=firm_id,
                         as_of_date=iso_date,
-                        pressure_signal_ids=(
-                            pressure_signal_by_firm[firm_id],
-                        ),
-                        valuation_ids=firm_valuation_ids,
-                        corporate_signal_ids=(
-                            corp_signal_by_firm[firm_id],
-                        ),
                         selected_observation_set_ids=(
                             bank_selection_id,
+                        ),
+                        explicit_pressure_signal_ids=(
+                            pressure_signal_by_firm[firm_id],
+                        ),
+                        explicit_corporate_signal_ids=(
+                            corp_signal_by_firm[firm_id],
+                        ),
+                        explicit_valuation_ids=firm_valuation_ids,
+                        explicit_firm_state_ids=(
+                            (firm_state_for_pair,)
+                            if firm_state_for_pair
+                            else ()
+                        ),
+                        explicit_market_readout_ids=tuple(
+                            capital_market_readout_ids
+                        ),
+                        explicit_market_environment_state_ids=tuple(
+                            market_environment_state_ids
                         ),
                     )
                 )

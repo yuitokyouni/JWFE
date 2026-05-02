@@ -1,24 +1,22 @@
 # Test Inventory
 
-Snapshot of the test suite at **v1.12.6** (`Attention-conditioned
-bank credit review lite` — extends the v1.12.4 / v1.12.5
-attention-bottleneck pattern to the v1.9.7 bank-credit-review-lite
-mechanism: a new
-`run_attention_conditioned_bank_credit_review_lite(...)` helper
-ships alongside the existing v1.9.7 helper, routes evidence
-through the v1.12.3 `EvidenceResolver` substrate, and produces
-synthetic `bank_credit_review_note` signals whose deterministic
-**watch label** — `information_gap_review` / `liquidity_watch` /
-`refinancing_watch` / `market_access_watch` / `collateral_watch`
-/ `heightened_review` / `routine_monitoring` — is conditioned on
-what the *bank actually selected*; the headline divergence test
-pins *three banks → three distinct (watch_label, status) audit
-shapes on the same borrower and same period*; helper-level +
-tests only — the orchestrator continues to call the pre-existing
-v1.9.7 helper, so the per-run record-count window and
-`living_world_digest` remain unchanged from v1.12.4):
-`2602 / 2602 passing` (444 v0 + 188 v1.0-v1.7 frozen reference +
-1970 post-v1.7 additions covering reference demo, replay, manifest,
+Snapshot of the test suite at **v1.12.7** (`Attention-conditioned
+mechanism integration` — orchestrator-level milestone that closes
+the v1.12.4 → v1.12.6 sequence: the per-period valuation phase
+and per-period bank credit review phase in
+`world/reference_living_world.py` switch from the pre-existing
+v1.9.5 / v1.9.7 helpers to the v1.12.5 / v1.12.6
+attention-conditioned helpers, so the default living reference
+world demo now uses the v1.12.3 `EvidenceResolver` substrate for
+**three mechanisms end-to-end** — investor intent (since v1.12.4),
+valuation lite (new in v1.12.7), and bank credit review lite
+(new in v1.12.7); per-period record count and per-run window
+unchanged from v1.12.4–v1.12.6; default-fixture
+`living_world_digest` moves from `d6b25704...` to
+`2c748aa6e37b679d9d52984e7f2c252d434e6a2192f7fa58b71866e59f54b709`
+by design — pinned in a regression test):
+`2613 / 2613 passing` (444 v0 + 188 v1.0-v1.7 frozen reference +
+1981 post-v1.7 additions covering reference demo, replay, manifest,
 catalog-shape, experiment harness, renamed WorldID tests,
 interactions, routines, attention, routine engine, the corporate
 quarterly reporting routine, the world-variable storage layer, the
@@ -461,10 +459,10 @@ no-mutation guarantee.
   mechanism only *adds* one new credit review note plus its
   audit `mechanism_run`).
 
-## Living-world mechanism integration (v1.9.6 + v1.9.7)
+## Living-world mechanism integration (v1.9.6 + v1.9.7 + v1.12.7)
 
 - `test_living_reference_world.py` (+9 v1.9.6 tests, +7 v1.9.7
-  tests, total 43) — v1.9.6 wires v1.9.4 firm-pressure-assessment
+  tests, +11 v1.12.7 tests, total 132) — v1.9.6 wires v1.9.4 firm-pressure-assessment
   and v1.9.5 valuation-refresh-lite into the multi-period sweep;
   v1.9.7 adds a third phase between valuation and reviews that
   runs `BankCreditReviewLiteAdapter` once per (bank, firm) per
@@ -503,6 +501,61 @@ no-mutation guarantee.
   v1.9.4 mechanism produces non-zero output during the sweep,
   and the bank's selected observation sets are routed into the
   v1.9.7 evidence.
+
+  v1.12.7 (`+11`) — the orchestrator-integration milestone that
+  closes the v1.12.4 → v1.12.6 sequence. The per-period valuation
+  phase and the per-period bank credit review phase in
+  `world/reference_living_world.py` switch from the pre-existing
+  v1.9.5 / v1.9.7 helpers to the v1.12.5 / v1.12.6
+  attention-conditioned helpers. The default living reference
+  world demo now uses the v1.12.3 `EvidenceResolver` substrate
+  for **three mechanisms end-to-end**: investor intent (since
+  v1.12.4), valuation lite (new in v1.12.7), and bank credit
+  review lite (new in v1.12.7). Tests pin: every
+  orchestrator-produced valuation carries the four v1.12.5
+  attention-metadata keys (`attention_conditioned`,
+  `context_frame_id`, `context_frame_status`,
+  `context_frame_confidence`) plus the three v1.9.5 anti-claim
+  flags (`no_price_movement` / `no_investment_advice` /
+  `synthetic_only`); every orchestrator-produced bank credit
+  review signal carries the v1.12.6 watch label
+  (`information_gap_review` / `liquidity_watch` /
+  `refinancing_watch` / `market_access_watch` / `collateral_watch`
+  / `heightened_review` / `routine_monitoring`), the four
+  context-frame metadata keys, and every one of the eight v1.9.7
+  anti-claim flags (`no_lending_decision` /
+  `no_covenant_enforcement` / `no_contract_mutation` /
+  `no_constraint_mutation` / `no_default_declaration` /
+  `no_internal_rating` / `no_probability_of_default` /
+  `synthetic_only`); each valuation's `context_frame_id`
+  references its valuer (one frame per investor on a date, not
+  one frame per firm); each credit review signal's
+  `context_frame_id` references its bank; the integrated v1.12.7
+  sweep emits no forbidden ledger payload key (no `order` /
+  `trade` / `rebalance` / `target_price` / `expected_return` /
+  `recommendation` / `investment_advice` / `lending_decision` /
+  `loan_approved` / `covenant_breached` / `default_declared` /
+  `internal_rating` / `rating_grade` / `probability_of_default` /
+  `pd` / `lgd` / `ead` / `loan_pricing` / `interest_rate` /
+  `underwriting_decision` / `approval_status` / `loan_terms`)
+  and no forbidden event types; canonical replay deterministic
+  across two fresh runs; the new v1.12.7 default-fixture
+  `living_world_digest` is **pinned** in a regression test so
+  any future silent change to the orchestrator path or to the
+  v1.12.5 / v1.12.6 helpers fails loudly; the v1.12.1 / v1.12.4
+  constrained-regime divergence is preserved (every intent →
+  `risk_flag_watch` or `deepen_due_diligence`); the constrained
+  regime now also produces at least one non-routine
+  bank-credit-review watch label across the run, proving the
+  bank's resolved frame drives classification through the
+  orchestrator path; the v1.9.1 trace report continues to render
+  the integrated ledger slice without raising. The default-fixture
+  `living_world_digest` moves from `d6b25704...` (v1.12.4 →
+  v1.12.6, where the orchestrator still called the pre-existing
+  helpers) to
+  `2c748aa6e37b679d9d52984e7f2c252d434e6a2192f7fa58b71866e59f54b709`
+  (v1.12.7) by design. Per-period record count and per-run window
+  unchanged from v1.12.4 / v1.12.5 / v1.12.6.
 
   v1.12.6 (`+22`) — the new
   `run_attention_conditioned_bank_credit_review_lite(...)` helper
@@ -1322,8 +1375,8 @@ no-mutation guarantee.
 | -------------------------------- | ----- | ----- |
 | v0                               | 35    | 444   |
 | v1.0–v1.7 frozen reference       | 7     | 188   |
-| post-v1.7 (v1.7-public-rc1+ / v1.8.x / v1.9.0 / v1.9.1-prep / v1.9.1 / v1.9.2 / v1.9.3 / v1.9.3.1 / CLI argv pin / v1.9.4 / v1.9.5 / v1.9.6 / v1.9.7 / v1.9.8 / v1.10.1 / v1.10.2 / v1.10.3 / v1.10.4 / v1.10.4.1 / v1.10.5 / v1.11.0 / v1.11.1 / v1.11.2 / v1.12.0 / v1.12.1 / v1.12.2 / v1.12.3 / v1.12.4 / v1.12.5 / v1.12.6) | 39 | 1970 |
-| **Total**                        | **81**| **2602** |
+| post-v1.7 (v1.7-public-rc1+ / v1.8.x / v1.9.0 / v1.9.1-prep / v1.9.1 / v1.9.2 / v1.9.3 / v1.9.3.1 / CLI argv pin / v1.9.4 / v1.9.5 / v1.9.6 / v1.9.7 / v1.9.8 / v1.10.1 / v1.10.2 / v1.10.3 / v1.10.4 / v1.10.4.1 / v1.10.5 / v1.11.0 / v1.11.1 / v1.11.2 / v1.12.0 / v1.12.1 / v1.12.2 / v1.12.3 / v1.12.4 / v1.12.5 / v1.12.6 / v1.12.7) | 39 | 1981 |
+| **Total**                        | **81**| **2613** |
 
 ## Auditing for jurisdiction-neutral identifiers
 

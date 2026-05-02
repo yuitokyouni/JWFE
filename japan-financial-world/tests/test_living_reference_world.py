@@ -2380,6 +2380,301 @@ def test_v1_12_4_constrained_regime_still_yields_risk_or_due_diligence():
 
 
 # ---------------------------------------------------------------------------
+# v1.12.7 — orchestrator-level attention-conditioned valuation +
+# bank credit review wiring
+# ---------------------------------------------------------------------------
+
+
+def test_v1_12_7_orchestrator_valuation_carries_context_frame_metadata():
+    """Every valuation the orchestrator produces must carry the
+    four v1.12.5 attention-metadata keys stamped by the new
+    helper."""
+    k = _seed_kernel()
+    r = _run_default(k)
+    for ps in r.per_period_summaries:
+        for vid in ps.valuation_ids:
+            rec = k.valuations.get_valuation(vid)
+            assert rec.metadata.get("attention_conditioned") is True
+            assert rec.metadata.get("context_frame_id"), (
+                f"valuation {vid!r} missing context_frame_id"
+            )
+            assert rec.metadata.get("context_frame_status") in {
+                "resolved",
+                "partially_resolved",
+                "empty",
+            }
+            assert isinstance(
+                rec.metadata.get("context_frame_confidence"),
+                (int, float),
+            )
+            # v1.9.5 anti-claim flags must remain bit-for-bit.
+            assert rec.metadata.get("no_price_movement") is True
+            assert rec.metadata.get("no_investment_advice") is True
+            assert rec.metadata.get("synthetic_only") is True
+
+
+def test_v1_12_7_orchestrator_credit_review_carries_watch_label():
+    """Every bank credit review signal the orchestrator produces
+    must carry the v1.12.6 watch_label + four context-frame
+    metadata keys, and preserve the eight v1.9.7 boundary
+    anti-claim flags bit-for-bit."""
+    from world.reference_bank_credit_review_lite import (
+        ALL_WATCH_LABELS,
+    )
+
+    k = _seed_kernel()
+    r = _run_default(k)
+    for ps in r.per_period_summaries:
+        for sid in ps.bank_credit_review_signal_ids:
+            sig = k.signals.get_signal(sid)
+            assert sig.metadata.get("attention_conditioned") is True
+            assert sig.metadata.get("context_frame_id"), (
+                f"signal {sid!r} missing context_frame_id"
+            )
+            assert sig.metadata.get("context_frame_status") in {
+                "resolved",
+                "partially_resolved",
+                "empty",
+            }
+            assert isinstance(
+                sig.metadata.get("context_frame_confidence"),
+                (int, float),
+            )
+            assert sig.payload.get("watch_label") in ALL_WATCH_LABELS
+            for flag in (
+                "no_lending_decision",
+                "no_covenant_enforcement",
+                "no_contract_mutation",
+                "no_constraint_mutation",
+                "no_default_declaration",
+                "no_internal_rating",
+                "no_probability_of_default",
+                "synthetic_only",
+            ):
+                assert sig.metadata.get(flag) is True
+
+
+def test_v1_12_7_valuation_carries_investor_specific_selection_id():
+    """The orchestrator passes each investor's own
+    `SelectedObservationSet` to the v1.12.5 valuation helper.
+    The produced valuation's `metadata["context_frame_id"]` must
+    therefore reference the valuer's actor id."""
+    k = _seed_kernel()
+    r = _run_default(k)
+    for ps in r.per_period_summaries:
+        for vid in ps.valuation_ids:
+            rec = k.valuations.get_valuation(vid)
+            cfid = rec.metadata.get("context_frame_id", "")
+            assert rec.valuer_id in cfid
+
+
+def test_v1_12_7_credit_review_carries_bank_specific_selection_id():
+    """The orchestrator passes each bank's own
+    `SelectedObservationSet` to the v1.12.6 credit review
+    helper. The produced signal's
+    `metadata["context_frame_id"]` must therefore reference the
+    bank's actor id (the `source_id` on the signal)."""
+    k = _seed_kernel()
+    r = _run_default(k)
+    for ps in r.per_period_summaries:
+        for sid in ps.bank_credit_review_signal_ids:
+            sig = k.signals.get_signal(sid)
+            cfid = sig.metadata.get("context_frame_id", "")
+            assert sig.source_id in cfid
+
+
+def test_v1_12_7_no_forbidden_payload_keys_in_orchestrator_run():
+    """Across the entire integrated v1.12.7 run, no ledger
+    payload may carry any forbidden trading / lending /
+    rating / advice key."""
+    k = _seed_kernel()
+    r = _run_default(k)
+    forbidden_keys = {
+        "order",
+        "order_id",
+        "trade",
+        "buy",
+        "sell",
+        "rebalance",
+        "target_weight",
+        "overweight",
+        "underweight",
+        "expected_return",
+        "target_price",
+        "recommendation",
+        "investment_advice",
+        "portfolio_allocation",
+        "execution",
+        "lending_decision",
+        "loan_approved",
+        "loan_rejected",
+        "covenant_breached",
+        "covenant_enforced",
+        "contract_amended",
+        "constraint_changed",
+        "default_declared",
+        "internal_rating",
+        "rating_grade",
+        "probability_of_default",
+        "pd",
+        "lgd",
+        "ead",
+        "loan_pricing",
+        "credit_pricing",
+        "interest_rate",
+        "underwriting_decision",
+        "approval_status",
+        "loan_terms",
+    }
+    for rec in k.ledger.records[
+        r.ledger_record_count_before : r.ledger_record_count_after
+    ]:
+        leaked = set(rec.payload.keys()) & forbidden_keys
+        assert not leaked, (
+            f"v1.12.7 demo record {rec.object_id!r} ({rec.event_type}) "
+            f"leaks forbidden payload keys: {sorted(leaked)}"
+        )
+
+
+def test_v1_12_7_no_forbidden_event_types():
+    k = _seed_kernel()
+    r = _run_default(k)
+    forbidden_event_types = {
+        "order_submitted",
+        "price_updated",
+        "contract_created",
+        "contract_status_updated",
+        "contract_covenant_breached",
+        "ownership_position_added",
+        "ownership_transferred",
+        "institution_action_recorded",
+        "firm_state_added",
+    }
+    seen = {
+        rec.event_type
+        for rec in k.ledger.records[
+            r.ledger_record_count_before : r.ledger_record_count_after
+        ]
+    }
+    assert seen.isdisjoint(forbidden_event_types), (
+        "v1.12.7 integrated sweep emitted forbidden event types: "
+        f"{sorted(seen & forbidden_event_types)}"
+    )
+
+
+def test_v1_12_7_canonical_replay_deterministic():
+    """v1.12.7 changes the canonical-view bytes (new metadata),
+    but two fresh runs of the same fixture must still produce
+    byte-identical canonical views and digests."""
+    from examples.reference_world.living_world_replay import (
+        canonicalize_living_world_result,
+        living_world_digest,
+    )
+
+    k1 = _seed_kernel()
+    r1 = _run_default(k1)
+    k2 = _seed_kernel()
+    r2 = _run_default(k2)
+    can1 = canonicalize_living_world_result(k1, r1)
+    can2 = canonicalize_living_world_result(k2, r2)
+    assert can1 == can2
+    assert living_world_digest(k1, r1) == living_world_digest(k2, r2)
+
+
+def test_v1_12_7_living_world_digest_pinned():
+    """Pin the new v1.12.7 living_world_digest so any future
+    silent change to the orchestrator path or to the v1.12.5 /
+    v1.12.6 helpers fails loudly."""
+    from examples.reference_world.living_world_replay import (
+        living_world_digest,
+    )
+
+    k = _seed_kernel()
+    r = _run_default(k)
+    expected = (
+        "e5c46a3cffae7d887bd07ace2068f529a788e00540ab4fe2e7a9171eca7788db"
+    )
+    assert living_world_digest(k, r) == expected, (
+        "v1.12.7 living_world_digest moved unexpectedly. If the "
+        "shift is intentional, update the pinned value here AND "
+        "in docs/world_model.md and docs/test_inventory.md."
+    )
+
+
+def test_v1_12_7_constrained_regime_still_diverges():
+    """The v1.12.1 / v1.12.4 regime-divergence behaviour must
+    survive the v1.12.7 orchestrator switch — the constrained
+    regime still produces non-routine investor intents."""
+    k = _seed_kernel()
+    r = run_living_reference_world(
+        k,
+        firm_ids=_FIRM_IDS,
+        investor_ids=_INVESTOR_IDS,
+        bank_ids=_BANK_IDS,
+        period_dates=_PERIOD_DATES,
+        market_regime="constrained",
+    )
+    intent_directions: set[str] = set()
+    for ps in r.per_period_summaries:
+        for iid in ps.investor_intent_ids:
+            rec = k.investor_intents.get_intent(iid)
+            intent_directions.add(rec.intent_direction)
+    assert intent_directions
+    assert intent_directions.issubset(
+        {"risk_flag_watch", "deepen_due_diligence"}
+    )
+
+
+def test_v1_12_7_constrained_regime_shifts_credit_review_watch_label():
+    """Under the constrained market regime the orchestrator's
+    bank credit reviews should produce at least one non-routine
+    watch label (anything except routine_monitoring), proving
+    that the bank's resolved frame actually drives the
+    classification through the orchestrator path."""
+    from world.reference_bank_credit_review_lite import (
+        WATCH_LABEL_ROUTINE_MONITORING,
+    )
+
+    k = _seed_kernel()
+    r = run_living_reference_world(
+        k,
+        firm_ids=_FIRM_IDS,
+        investor_ids=_INVESTOR_IDS,
+        bank_ids=_BANK_IDS,
+        period_dates=_PERIOD_DATES,
+        market_regime="constrained",
+    )
+    seen_labels: set[str] = set()
+    for ps in r.per_period_summaries:
+        for sid in ps.bank_credit_review_signal_ids:
+            sig = k.signals.get_signal(sid)
+            seen_labels.add(sig.payload["watch_label"])
+    assert seen_labels
+    # Under the constrained regime at least one non-routine
+    # label must fire across the run.
+    assert seen_labels - {WATCH_LABEL_ROUTINE_MONITORING}
+
+
+def test_v1_12_7_markdown_report_renders_without_error():
+    """The v1.9.1 trace report must continue to render the
+    integrated v1.12.7 ledger slice without raising."""
+    from world.living_world_report import (
+        build_living_world_trace_report,
+        render_living_world_markdown,
+    )
+
+    k = _seed_kernel()
+    r = _run_default(k)
+    report = build_living_world_trace_report(k, r)
+    md = render_living_world_markdown(report)
+    assert isinstance(md, str)
+    assert len(md) > 0
+    # Spot-check that the integrated v1.12.4 investor-intent
+    # section still renders.
+    assert "## Investor intent" in md
+
+
+# ---------------------------------------------------------------------------
 # v1.12.2 — market environment state
 # ---------------------------------------------------------------------------
 
