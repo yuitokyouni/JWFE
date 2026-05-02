@@ -230,8 +230,8 @@ in well under a second, and are deterministic across invocations.
 | v1.9.8        | Performance Boundary / Sparse Traversal Discipline (docs + tests pinning loop shapes; no new behaviour) | Shipped |
 | **v1.9.last** | **Public Prototype Freeze** (synthetic-only, CLI-first, deterministic, explainability-first; living reference world as the headline artifact) | **Shipped** |
 | v1.10.0       | Universal Engagement / Strategic Response Consolidation (docs-only design naming the engagement / response layer; signal-only, jurisdiction-neutral; no code, no test count change) | Shipped |
-| **v1.10.1**   | **Stewardship theme signal** (`StewardshipThemeRecord` + `StewardshipBook` + ledger `STEWARDSHIP_THEME_ADDED` + kernel wiring + 58 tests; storage / audit only) | **Shipped (1684 tests)** |
-| v1.10.2       | Portfolio-company dialogue record (dialogue book + record shape; metadata-only, no verbatim contents) | Planned |
+| v1.10.1       | Stewardship theme signal (`StewardshipThemeRecord` + `StewardshipBook` + ledger `STEWARDSHIP_THEME_ADDED` + kernel wiring + 58 tests; storage / audit only) | Shipped |
+| **v1.10.2**   | **Portfolio-company dialogue record** (`PortfolioCompanyDialogueRecord` + `DialogueBook` + ledger `PORTFOLIO_COMPANY_DIALOGUE_RECORDED` + kernel wiring + 53 tests; engagement metadata storage / audit only — no transcript, content, notes, minutes, attendees, verbatim, or paraphrase fields) | **Shipped (1737 tests)** |
 | v1.10.3       | Investor escalation candidate + corporate strategic response candidate (two `MechanismAdapter` implementations satisfying the v1.9.3 / v1.9.3.1 contract) | Planned |
 | v1.10.4       | Optional industry demand condition signal (context signal book) | Optional |
 | v1.10.5       | Living-world integration (wires v1.10.1–v1.10.3 into the multi-period sweep behind a v1.10-scoped fixture, separate from the v1.9.last default fixture) | Planned |
@@ -505,7 +505,7 @@ Start here:
 
 **Tests:**
 - [docs/test_inventory.md](japan-financial-world/docs/test_inventory.md)
-  — 1684 tests grouped by component (444 v0 + 188 v1.0–v1.7 + 1052 post-v1.7)
+  — 1737 tests grouped by component (444 v0 + 188 v1.0–v1.7 + 1105 post-v1.7)
 
 **Long-form / original ambition (kept for reference):**
 - [docs/architecture.md](japan-financial-world/docs/architecture.md) —
@@ -543,8 +543,8 @@ From the `japan-financial-world` directory:
 python -m pytest -q
 ```
 
-Expected: `1684 passed` at the latest commit (444 v0 + 188 v1
-frozen reference + 1052 post-v1.7 additions covering the reference
+Expected: `1737 passed` at the latest commit (444 v0 + 188 v1
+frozen reference + 1105 post-v1.7 additions covering the reference
 demo, replay, manifest, catalog-shape, experiment harness, the
 v1.8.x endogenous-activity stack — interactions, routines,
 attention, variable / exposure layers, the menu builder, the
@@ -557,8 +557,10 @@ pressure assessment mechanism, the v1.9.5 reference valuation
 refresh lite mechanism, the v1.9.6 integration of those two
 mechanisms into the multi-period sweep, the v1.9.7 reference
 bank credit review lite mechanism integrated into the same sweep,
-and the v1.9.8 performance-boundary / sparse-traversal discipline
-tests pinning the loop shapes of that sweep).
+the v1.9.8 performance-boundary / sparse-traversal discipline tests
+pinning the loop shapes of that sweep, the v1.10.1 stewardship
+theme signal storage / audit layer, and the v1.10.2
+portfolio-company dialogue record metadata storage / audit layer).
 
 To run only v0 tests, exclude the v1 test files; to run only v1 tests:
 

@@ -6135,12 +6135,91 @@ A `StewardshipThemeRecord` and the `StewardshipBook` storing it are jurisdiction
 | --- | --- | --- |
 | v1.9.last Public Prototype Freeze | Docs-only (§69). | Shipped |
 | v1.10.0 Universal Engagement / Strategic Response Consolidation | Docs-only (§70). | Shipped |
-| **v1.10.1 Stewardship theme signal** | Code (§71). | **Shipped** |
-| v1.10.2 Portfolio-company dialogue record | Code. | Planned |
+| v1.10.1 Stewardship theme signal | Code (§71). | Shipped |
+| **v1.10.2 Portfolio-company dialogue record** | Code (§72). | **Shipped** |
 | v1.10.3 Investor escalation candidate + corporate strategic response candidate | Code. | Planned |
 | v1.10.4 Optional industry demand condition signal | Code. | Optional |
 | v1.10.5 Living-world integration | Code. | Planned |
 | v1.10.last Public engagement layer freeze | Docs-only. | Planned |
 | v2.0 Japan public-data calibration design gate | — | Not started |
 
-The test count moves from `1626 / 1626` (v1.10.0) to `1684 / 1684` (v1.10.1) — the 58 tests in `tests/test_stewardship.py`. The CLI surface, the default fixture, the per-period flow, the reproducibility surface, and the performance boundary of v1.9.last are all preserved unchanged.
+The test count moves from `1626 / 1626` (v1.10.0) to `1684 / 1684` (v1.10.1) — the 58 tests in `tests/test_stewardship.py` — and to `1737 / 1737` (v1.10.2) with the 53 tests in `tests/test_engagement.py`. The CLI surface, the default fixture, the per-period flow, the reproducibility surface, and the performance boundary of v1.9.last are all preserved unchanged.
+
+## 72. v1.10.2 Portfolio-company dialogue record — engagement metadata storage
+
+§72 lands the second concrete primitive of the v1.10 engagement / strategic-response layer named in §70 and in `docs/v1_10_universal_engagement_and_response_design.md`. Like v1.10.1 (§71), the deliverable is **storage and audit only** — an immutable record shape and an append-only book — with one additional discipline that v1.10.2 makes binding: the record carries *engagement metadata only* and never a transcript, content, notes, minutes, attendees, or other verbatim / paraphrased dialogue body. The runtime, the per-period flow of v1.9, and every existing mechanism are unchanged. The v1.10 hard boundary (§70.3) and the meta-abstraction deferral rule (§70.4) continue to hold without modification.
+
+### 72.1 What v1.10.2 names
+
+A *portfolio-company dialogue record* is structured metadata for a single engagement touchpoint between an investor / asset owner / steward (the *initiator*) and a portfolio company / firm (the *counterparty*). It records *that* a contact happened on a given date, *which* themes (and, optionally, signals / valuations / pressure-assessment signals) it referenced, *what* generic outcome label the steward attached to it, and *what* generic next-step label the steward attached to it.
+
+A dialogue record is **not** the dialogue itself. It does not carry verbatim or paraphrased contents, meeting notes, attendee lists, non-public company information, named-client material, or expert-interview content — those remain restricted under `docs/public_private_boundary.md` and never appear in public FWE. By itself, a dialogue record does not vote, does not file proxies, does not execute any AGM / EGM action, does not escalate (escalation candidates are a separate v1.10.3 primitive), does not produce any corporate-response candidate (also v1.10.3), does not recommend any investment / divestment / weight change, does not trade, does not change ownership, does not move any price, does not form any forecast or behavior probability, and does not mutate any other source-of-truth book in the kernel.
+
+### 72.2 What v1.10.2 ships
+
+- `world/engagement.py` — `PortfolioCompanyDialogueRecord` (immutable dataclass) and `DialogueBook` (append-only store).
+- `world/ledger.py` — `RecordType.PORTFOLIO_COMPANY_DIALOGUE_RECORDED`, emitted exactly once per `add_dialogue` call.
+- `world/kernel.py` — `engagement: DialogueBook` wired in `WorldKernel.__post_init__` with the same ledger / clock injection pattern every other source-of-truth book uses (sibling to `kernel.stewardship`).
+- `tests/test_engagement.py` — 53 tests covering field validation, immutability, duplicate rejection, unknown-id lookup, every list / filter (`list_dialogues`, `list_by_initiator`, `list_by_counterparty`, `list_by_theme`, `list_by_status`, `list_by_dialogue_type`, `list_by_date`), deterministic snapshots, ledger emission of the new record type, kernel wiring, the no-mutation guarantee against every other source-of-truth book (including v1.10.1's `StewardshipBook`), the no-action invariant, an explicit assertion that no transcript / content / notes / minutes / attendees / verbatim / paraphrase / body field exists on the record or in the ledger payload, an explicit assertion that no action-class record (`order_submitted`, `price_updated`, `contract_*`, `ownership_*`, `institution_action_recorded`) is emitted by `add_dialogue`, and a jurisdiction-neutral identifier scan over both the new module and the test file.
+
+### 72.3 Record shape
+
+`PortfolioCompanyDialogueRecord` is a frozen dataclass. All required strings reject empty values; tuple fields normalize to `tuple[str, ...]` and reject empty entries; cross-references are stored as data and not validated against any other book (per the v0/v1 cross-reference rule already used by `world/attention.py`, `world/routines.py`, and `world/stewardship.py`).
+
+- `dialogue_id` — stable, unique-within-book id.
+- `initiator_id`, `initiator_type` — investor / steward / asset owner identification (free-form strings).
+- `counterparty_id`, `counterparty_type` — portfolio company / firm identification (free-form strings).
+- `as_of_date` — required ISO `YYYY-MM-DD` date for the engagement contact.
+- `dialogue_type` — controlled-vocabulary tag (`"private_meeting"`, `"public_statement"`, `"private_letter"`, `"questionnaire_response"`, `"information_request"`, `"follow_up_meeting"`, …); not enforced.
+- `status` — small free-form tag (`"draft"` / `"logged"` / `"awaiting_response"` / `"resolved"` / `"closed"`).
+- `outcome_label` — small free-form tag describing the generic outcome class the steward attached to the contact (`"acknowledged"` / `"partial_response"` / `"no_response"` / `"information_received"` / `"position_unchanged"`, …). **Never** a forecast and **never** a calibrated probability.
+- `next_step_label` — small free-form tag describing the generic follow-up class the steward attached to the contact (`"no_action"` / `"continue_monitoring"` / `"follow_up_meeting"` / `"escalation_candidate"` / `"close_engagement"`, …). The label is metadata only — it does **not** by itself trigger any escalation, voting, trading, or corporate-response mechanism.
+- `visibility` — free-form generic visibility tag (`"public"` / `"internal_only"` / `"restricted"`); recorded so downstream JFWE Public / JFWE Proprietary boundaries and downstream filtering can rely on it. Not enforced as a runtime gate in v1.10.2.
+- `theme_ids` — tuple of stewardship-theme ids referenced by the dialogue; cross-references are stored as data and not validated against `StewardshipBook`.
+- `related_signal_ids` — tuple of signal ids referenced by the dialogue; not validated against `SignalBook`.
+- `related_valuation_ids` — tuple of valuation ids referenced by the dialogue; not validated against `ValuationBook`.
+- `related_pressure_signal_ids` — tuple of v1.9.4 firm operating-pressure assessment signal ids referenced by the dialogue. Recorded as a separate slot from `related_signal_ids` so the audit trace can distinguish ordinary information signals from pressure assessments without re-parsing the signal payloads.
+- `metadata` — free-form mapping for provenance, parameters, and steward notes. Must not carry verbatim or paraphrased dialogue contents, meeting notes, attendee lists, non-public company information, named-client material, or expert-interview content.
+
+### 72.4 Anti-fields (binding)
+
+The record deliberately has **no** `transcript`, `content`, `contents`, `notes`, `minutes`, `attendees`, `attendee_list`, `verbatim`, `paraphrase`, `paraphrased`, or `body` field. This is enforced by an explicit test (`test_dialogue_record_has_no_transcript_or_content_field`) that introspects the dataclass field set and a parallel test (`test_add_dialogue_ledger_payload_carries_no_transcript_or_content_keys`) that introspects the ledger payload key set. A future v1.10.x milestone that introduces such a field would by construction trip these tests.
+
+### 72.5 Ledger emission
+
+Every successful `add_dialogue` call emits exactly one ledger record of type `PORTFOLIO_COMPANY_DIALOGUE_RECORDED`, with `object_id = dialogue_id`, `source = initiator_id`, `target = counterparty_id`, `agent_id = initiator_id`, `space_id = "engagement"`, `visibility = dialogue.visibility`, and a payload that mirrors the record fields (excluding `metadata`). A duplicate `add_dialogue` call raises `DuplicateDialogueError` and emits **no** additional ledger record. A book without a ledger accepts adds silently. No other ledger record type is emitted by the book — the no-action invariant is asserted explicitly in the test suite, and the no-action-class assertion enumerates `order_submitted`, `price_updated`, `contract_created`, `contract_status_updated`, `contract_covenant_breached`, `ownership_position_added`, `ownership_transferred`, and `institution_action_recorded` as forbidden output types.
+
+### 72.6 Kernel wiring
+
+`WorldKernel` exposes `kernel.engagement: DialogueBook`. The book is constructed via `field(default_factory=DialogueBook)` and joined to the kernel's ledger and clock in `__post_init__` alongside every other source-of-truth book. The book does not register tasks, does not subscribe to events, and does not participate in `tick()` / `run()` — it is a passive append-only store, mirroring the v1.8.5 `AttentionBook` and v1.10.1 `StewardshipBook` discipline.
+
+### 72.7 No-behavior boundary (binding)
+
+A `PortfolioCompanyDialogueRecord` and the `DialogueBook` storing it are jurisdiction-neutral, signal-only, behavior-free, and content-free. v1.10.2 does **not**:
+
+- introduce voting, proxy voting, engagement execution, escalation, corporate-response generation, investment recommendation, trading, price formation, real data ingestion, Japan calibration, jurisdiction-specific stewardship codes, or source-specific behavior probabilities;
+- store dialogue transcripts, verbatim or paraphrased meeting notes, attendee lists, or any non-public company information — see §72.4 (anti-fields, binding) and `docs/public_private_boundary.md`;
+- mutate any other source-of-truth book (the no-mutation test asserts this against ownership, contracts, prices, constraints, signals, valuations, institutions, external_processes, relationships, interactions, routines, attention, variables, exposures, and stewardship);
+- enforce membership of `dialogue_type`, `status`, `outcome_label`, `next_step_label`, `visibility`, `initiator_type`, or `counterparty_type` against any controlled vocabulary — the recommended labels are illustrative;
+- emit any ledger record other than `PORTFOLIO_COMPANY_DIALOGUE_RECORDED` from a bare `add_dialogue` call.
+
+### 72.8 What v1.10.2 does not decide
+
+- The `MechanismAdapter` shape for `investor_escalation_candidate` and `corporate_strategic_response_candidate` (v1.10.3). v1.10.2 records the data inputs those mechanisms will read; it does not name the mechanisms themselves.
+- Whether `industry_demand_condition_signal` ships (v1.10.4).
+- Which review routines emit which records (v1.10.5).
+- Any fixture extension to the v1.9.last default living-world demo. v1.10.x demo additions land behind v1.10-scoped fixtures, separate from the v1.9.last default.
+
+### 72.9 Position in the v1.10 sequence
+
+| Milestone | Scope | Status |
+| --- | --- | --- |
+| v1.9.last Public Prototype Freeze | Docs-only (§69). | Shipped |
+| v1.10.0 Universal Engagement / Strategic Response Consolidation | Docs-only (§70). | Shipped |
+| v1.10.1 Stewardship theme signal | Code (§71). | Shipped |
+| **v1.10.2 Portfolio-company dialogue record** | Code (§72). | **Shipped** |
+| v1.10.3 Investor escalation candidate + corporate strategic response candidate | Code. | Planned |
+| v1.10.4 Optional industry demand condition signal | Code. | Optional |
+| v1.10.5 Living-world integration | Code. | Planned |
+| v1.10.last Public engagement layer freeze | Docs-only. | Planned |
+| v2.0 Japan public-data calibration design gate | — | Not started |

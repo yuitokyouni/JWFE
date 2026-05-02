@@ -1,11 +1,11 @@
 # Test Inventory
 
-Snapshot of the test suite at **v1.10.1** (`Stewardship theme
-signal` — first concrete code milestone of the v1.10 engagement /
-response layer): `1684 / 1684 passing` (444 v0 + 188 v1.0-v1.7
-frozen reference + 1052 post-v1.7 additions covering reference
-demo, replay, manifest, catalog-shape, experiment harness,
-renamed WorldID tests, interactions, routines, attention,
+Snapshot of the test suite at **v1.10.2** (`Portfolio-company
+dialogue record` — second concrete code milestone of the v1.10
+engagement / response layer): `1737 / 1737 passing` (444 v0 + 188
+v1.0-v1.7 frozen reference + 1105 post-v1.7 additions covering
+reference demo, replay, manifest, catalog-shape, experiment
+harness, renamed WorldID tests, interactions, routines, attention,
 routine engine, the corporate quarterly reporting routine, the
 world-variable storage layer, the exposure / dependency storage
 layer, the observation-menu builder join service, the
@@ -16,8 +16,9 @@ v1.9.1-prep report contract, the v1.9.1 living world trace
 report, the v1.9.2 living-world replay-determinism + manifest
 helpers, the v1.9.3 mechanism interface contract, the v1.9.3.1
 hardening, the CLI argv-isolation pin, the v1.9.4 firm
-operating pressure assessment mechanism, and the v1.10.1
-stewardship theme signal storage / audit layer).
+operating pressure assessment mechanism, the v1.10.1 stewardship
+theme signal storage / audit layer, and the v1.10.2
+portfolio-company dialogue record metadata storage / audit layer).
 
 This inventory is grouped by what each component verifies. The numbers in
 parentheses are test counts per file. Run the full suite with:
@@ -1110,7 +1111,8 @@ no-mutation guarantee.
 | Living-world integration (v1.9.7 — added in test_living_reference_world.py) | 0 | 7 |
 | Performance boundary (v1.9.8)           | 1     | 10    |
 | Stewardship theme signal (v1.10.1)      | 1     | 58    |
-| **post-v1.7 subtotal**                  | **30**| **1052** |
+| Portfolio-company dialogue record (v1.10.2) | 1 | 53    |
+| **post-v1.7 subtotal**                  | **31**| **1105** |
 
 ### v0 + v1 + post-v1.7 totals
 
@@ -1118,8 +1120,8 @@ no-mutation guarantee.
 | -------------------------------- | ----- | ----- |
 | v0                               | 35    | 444   |
 | v1.0–v1.7 frozen reference       | 7     | 188   |
-| post-v1.7 (v1.7-public-rc1+ / v1.8.x / v1.9.0 / v1.9.1-prep / v1.9.1 / v1.9.2 / v1.9.3 / v1.9.3.1 / CLI argv pin / v1.9.4 / v1.9.5 / v1.9.6 / v1.9.7 / v1.9.8 / v1.10.1) | 30 | 1052 |
-| **Total**                        | **72**| **1684** |
+| post-v1.7 (v1.7-public-rc1+ / v1.8.x / v1.9.0 / v1.9.1-prep / v1.9.1 / v1.9.2 / v1.9.3 / v1.9.3.1 / CLI argv pin / v1.9.4 / v1.9.5 / v1.9.6 / v1.9.7 / v1.9.8 / v1.10.1 / v1.10.2) | 31 | 1105 |
+| **Total**                        | **73**| **1737** |
 
 ## Auditing for jurisdiction-neutral identifiers
 

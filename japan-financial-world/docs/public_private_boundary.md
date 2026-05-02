@@ -223,6 +223,37 @@ v1.10's public layer must continue to build, test, and run with the
 restricted layer absent. The forbidden-token word-boundary scan
 gating each commit is unchanged.
 
+### v1.10.2 — binding implementation of the dialogue-content rule
+
+v1.10.2 ships the public-FWE `PortfolioCompanyDialogueRecord` shape
+(see `world/engagement.py`). The implementation makes the
+dialogue-content rule binding rather than aspirational:
+
+- The dataclass deliberately has **no** `transcript`, `content`,
+  `contents`, `notes`, `minutes`, `attendees`, `attendee_list`,
+  `verbatim`, `paraphrase`, `paraphrased`, or `body` field.
+- The ledger payload mirrors the record fields and likewise carries
+  none of the above keys.
+- A test (`test_dialogue_record_has_no_transcript_or_content_field`)
+  introspects the dataclass field set against the forbidden list,
+  and a parallel test
+  (`test_add_dialogue_ledger_payload_carries_no_transcript_or_content_keys`)
+  introspects the ledger payload key set. A future v1.10.x or
+  later milestone that introduces such a field would by
+  construction trip these tests.
+- The recommended outcome / next-step labels are illustrative
+  controlled-vocabulary tags, never calibrated probabilities; the
+  book does not enforce membership of any tag against any list, so
+  no jurisdiction-specific code can leak in via tag enforcement.
+- The `visibility` field is recorded so that downstream JFWE Public
+  / JFWE Proprietary boundaries can rely on it, but v1.10.2 itself
+  does **not** use it as a runtime gate — it is metadata only.
+
+If a future milestone needs to attach actual dialogue contents, that
+attachment lives in JFWE Proprietary (v3 territory), in a separate
+private repository, with access controls — never in this public
+repository, even synthetically.
+
 ## What this document does not decide
 
 - The specific access-control model for JFWE Proprietary (a v3

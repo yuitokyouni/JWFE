@@ -50,8 +50,8 @@ the milestone sequence.
 | --- | --- | --- |
 | v1.9.last Public Prototype Freeze | Docs-only (§69 of `world_model.md`). | Shipped |
 | v1.10.0 Universal Engagement / Strategic Response Consolidation | Docs-only — this document + `world_model.md` §70 + boundary updates. | Shipped |
-| **v1.10.1 Stewardship theme signal** | **Code. `StewardshipThemeRecord` + `StewardshipBook` + ledger `STEWARDSHIP_THEME_ADDED` + kernel wiring + 58 tests.** | **Shipped** |
-| v1.10.2 Portfolio-company dialogue record | Code. Concrete dialogue book + record shape. | Planned |
+| v1.10.1 Stewardship theme signal | Code. `StewardshipThemeRecord` + `StewardshipBook` + ledger `STEWARDSHIP_THEME_ADDED` + kernel wiring + 58 tests. | Shipped |
+| **v1.10.2 Portfolio-company dialogue record** | **Code. `PortfolioCompanyDialogueRecord` + `DialogueBook` + ledger `PORTFOLIO_COMPANY_DIALOGUE_RECORDED` + kernel wiring + 53 tests.** | **Shipped** |
 | v1.10.3 Investor escalation candidate + corporate strategic response candidate | Code. Two concrete `candidate`-shaped records. | Planned |
 | v1.10.4 Optional industry demand context | Code. Optional context-signal shape. | Optional |
 | v1.10.5 Living-world integration | Code. Wires v1.10.1–v1.10.3 into the multi-period sweep. | Planned |
@@ -511,6 +511,88 @@ read it without rewriting the storage layer:
 v1.10.1 adds 58 tests. The total test count moves from
 `1626 / 1626` (v1.10.0) to `1684 / 1684` (v1.10.1).
 
+## v1.10.2 — what shipped
+
+v1.10.2 lands the second concrete primitive of the v1.10 layer: a
+storage-and-audit shape for *portfolio-company dialogue records*.
+The ship is deliberately narrow; everything outside the storage
+layer (review routines, attention integration, escalation /
+corporate-response candidates, living-world integration) stays out
+of v1.10.2 and lands at later milestones in the sequence.
+
+**What v1.10.2 adds**
+
+- `world/engagement.py` — the immutable
+  `PortfolioCompanyDialogueRecord` dataclass and the append-only
+  `DialogueBook` store with `add_dialogue`, `get_dialogue`,
+  `list_dialogues`, `list_by_initiator`, `list_by_counterparty`,
+  `list_by_theme`, `list_by_status`, `list_by_dialogue_type`,
+  `list_by_date`, and `snapshot`.
+- `world/ledger.py` — a new
+  `RecordType.PORTFOLIO_COMPANY_DIALOGUE_RECORDED` enum value,
+  emitted exactly once per `add_dialogue` call.
+- `world/kernel.py` — wires `engagement: DialogueBook` in
+  `WorldKernel`, sibling to `kernel.stewardship`, with the same
+  ledger / clock injection pattern used by every other v0/v1
+  source-of-truth book.
+- `tests/test_engagement.py` — 53 tests covering field validation,
+  immutability, duplicate rejection, unknown-id lookup, every
+  list / filter (`list_dialogues`, `list_by_initiator`,
+  `list_by_counterparty`, `list_by_theme`, `list_by_status`,
+  `list_by_dialogue_type`, `list_by_date`), deterministic snapshots,
+  ledger emission of the new record type, kernel wiring, the
+  no-mutation guarantee against every other source-of-truth book in
+  the kernel (including v1.10.1's `StewardshipBook`), the no-action
+  invariant (a bare `add_dialogue` emits exactly one
+  `PORTFOLIO_COMPANY_DIALOGUE_RECORDED` record and nothing else),
+  an explicit assertion that no transcript / content / notes /
+  minutes / attendees / verbatim / paraphrase / body field exists
+  on the record or in the ledger payload, an explicit assertion
+  that no action-class record (`order_submitted`, `price_updated`,
+  `contract_*`, `ownership_*`, `institution_action_recorded`) is
+  emitted by `add_dialogue`, plain-id cross-reference acceptance
+  (themes / signals / valuations / pressure-assessment signals are
+  stored as data and not validated against any other book), and a
+  jurisdiction-neutral identifier scan over both the new module
+  and the test file itself.
+
+**What v1.10.2 does not add**
+
+The v1.10 hard boundary is binding. v1.10.2 does **not** add
+voting, proxy voting, engagement execution, escalation, corporate
+response, investment recommendation, trading, price formation, real
+data ingestion, Japan calibration, jurisdiction-specific stewardship
+codes, source-specific behavior probabilities, or any new mechanism.
+A dialogue record is dialogue-metadata storage only.
+
+The record is also **content-free** by binding rule: it carries no
+transcript, content, contents, notes, minutes, attendees,
+attendee_list, verbatim, paraphrase, paraphrased, or body field —
+verbatim and paraphrased dialogue contents, meeting notes, attendee
+lists, non-public company information, named-client material, and
+expert-interview content are restricted artifacts under
+`docs/public_private_boundary.md` and never appear in public FWE.
+
+**Future hooks**
+
+A `PortfolioCompanyDialogueRecord` is shaped so that later
+milestones can read it without rewriting the storage layer:
+
+- v1.10.3 `investor_escalation_candidate` will read sequences of
+  dialogue records (typically those with `next_step_label =
+  "escalation_candidate"`) as part of its evidence bundle.
+- v1.10.3 `corporate_strategic_response_candidate` will read
+  dialogue records on the firm side as part of its evidence
+  bundle.
+- v1.10.5 living-world integration will wire a review routine that
+  consults `list_by_counterparty` and `list_by_date` to decide which
+  dialogues are in scope for a given simulation date.
+
+**Test count**
+
+v1.10.2 adds 53 tests. The total test count moves from
+`1684 / 1684` (v1.10.1) to `1737 / 1737` (v1.10.2).
+
 ## v1.10 milestone sequence
 
 1. **v1.10.0 — Universal Engagement / Strategic Response
@@ -520,10 +602,12 @@ v1.10.1 adds 58 tests. The total test count moves from
 2. **v1.10.1 — `stewardship_theme_signal`.** Shipped. First concrete
    record shape + minimal book + ledger record type + kernel wiring.
    Tests exercise the no-behavior boundary explicitly.
-3. **v1.10.2 — `portfolio_company_dialogue_record`.** Dialogue book
-   + record shape + a review-routine emission path that reads
-   v1.10.1's theme signals. Tests exercise that the dialogue record
-   never carries verbatim or paraphrased contents.
+3. **v1.10.2 — `portfolio_company_dialogue_record`.** Shipped.
+   Dialogue book + record shape + ledger record type + kernel
+   wiring. Tests assert (binding) that the dialogue record never
+   carries verbatim or paraphrased contents and that the book emits
+   no action-class record. The review-routine emission path itself
+   lands at v1.10.5 (living-world integration), not v1.10.2.
 4. **v1.10.3 — `investor_escalation_candidate` +
    `corporate_strategic_response_candidate`.** Two `MechanismAdapter`
    implementations satisfying the v1.9.3 / v1.9.3.1 contract,
