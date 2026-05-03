@@ -9352,3 +9352,41 @@ No order submission. No buy / sell labels. No order book. No matching. No execut
 ### 119.3 Forward pointer
 
 v1.17.last freezes the inspection layer. The next roadmap candidates remain v1.18 (scenario library / exogenous event templates), v2.0 (Japan public calibration in private JFWE only), and a future-price-formation gate that **stays out of scope** until v1.17 / v1.18 make the v1.16 loop's causal structure operationally legible.
+
+## 120. v1.17.1 Temporal Display Series
+
+§120 ships the first concrete code milestone of the v1.17 inspection layer: a **standalone display-only module** at `world/display_timeline.py`. The module introduces five immutable dataclasses, one append-only book, and two deterministic helpers — none of which registers with `WorldKernel`, writes to the ledger, or mutates any source-of-truth book. v1.17.1 makes a deterministic monthly / daily-like display axis available to the UI / report layer; it does **not** introduce a higher-frequency simulation clock and does **not** create any new economic decision.
+
+### 120.1 What `world/display_timeline.py` ships
+
+- **Closed-set vocabularies** (frozensets pinned at module scope, validated at every record's `__post_init__`):
+  - `FREQUENCY_LABELS` = `{quarterly, monthly, daily_like, unknown}`
+  - `INTERPOLATION_LABELS` = `{step, linear, hold_forward, event_weighted, unknown}`
+  - `ANNOTATION_TYPE_LABELS` = `{market_environment_change, attention_shift, market_pressure_change, financing_constraint, causal_checkpoint, synthetic_event, unknown}`
+  - `SEVERITY_LABELS` = `{low, medium, high, unknown}`
+  - `STATUS_LABELS` = `{draft, active, stale, superseded, archived, unknown}`
+  - `VISIBILITY_LABELS` = `{internal_only, shared_internal, external_audit}`
+  - `FORBIDDEN_DISPLAY_NAMES` = the v1.17.0 binding forbidden list (`market_price` / `predicted_index` / `predicted_path` / `expected_return` / `target_price` / `forecast_path` / `forecast_index` / `real_price_series` / `actual_price` / `quoted_price` / `last_trade` / `nav` / `index_value` / `benchmark_value` / `valuation_target` / `investment_recommendation` / `price_prediction`). Disjoint from every other vocabulary by construction.
+- **Five immutable dataclasses**: `ReportingCalendar`, `ReferenceTimelineSeries`, `SyntheticDisplayPath`, `EventAnnotationRecord`, `CausalTimelineAnnotation`. Each rejects bool / out-of-range numeric values and produces byte-identical `to_dict` across two calls.
+- **`DisplayTimelineBook`** — a standalone append-only store with `add_*` / `get_*` / `list_*` / `list_paths_by_calendar` / `list_annotations_by_date` / `snapshot`. It is **not** registered with `WorldKernel` in v1.17.1; it carries no `ledger` or `clock` attribute; it never writes to the ledger.
+- **Deterministic helpers**:
+  - `build_reporting_calendar(...)` — generates `date_points` from `(start_date, end_date, frequency_label)` using a quarter-end-anchored stepping rule (so a chain of monthly steps starting at a month-end stays month-end with no day-of-month drift through short months). For `quarterly` with explicit `source_period_dates`, the helper uses those dates verbatim as `date_points`. For `unknown`, returns an empty tuple.
+  - `build_synthetic_display_path(...)` — renders a `SyntheticDisplayPath` on the calendar's `date_points` axis from cited `anchor_period_dates` / `anchor_values` using one of three deterministic interpolation kernels (`linear` / `step` / `hold_forward`); `event_weighted` and `unknown` fall back to `hold_forward` in v1.17.1 (the kernel hook is reserved for v1.17.3). Anchors are sorted by date before interpolation, so the same set of pairs in any order produces the same path.
+
+### 120.2 Why `DisplayTimelineBook` is standalone
+
+The book is **standalone** in v1.17.1 — not registered with `WorldKernel`, not given a `ledger` or `clock` attribute, and not iterated by any kernel snapshot routine. The reason is the binding constraint in the v1.17.0 design: display objects are renderings of existing records, not new economic facts. Wiring the book into the kernel would expose two ways to accidentally promote a display object into the canonical view that the integration-test `living_world_digest` is computed over. Keeping the book standalone makes that promotion impossible by construction. v1.17.4 will revisit whether the workbench polish needs a registered book; if it does, the design will pin the registration carefully so the digest still does not move.
+
+### 120.3 Anti-claims
+
+This is **rendering, not market behaviour**. v1.17.1 does **not** introduce: orders / order book / matching / execution / clearing / settlement / quote dissemination / price formation / `PriceBook` mutation / target prices / expected returns / recommendations / portfolio allocations / forecast paths / predicted indices / real price series / real-data ingestion / Japan calibration / LLM execution / stochastic behaviour probabilities / learned models / new economic source-of-truth records. The module imports no source-of-truth book (regression-pinned by a text scan), takes no kernel argument on its helpers, and has no current-date or randomness dependency. `display_values` are synthetic ordinals in `[0.0, 1.0]` — never prices, returns, or NAV.
+
+### 120.4 Performance boundary
+
+The integration-test `living_world_digest` is **unchanged** at **`f93bdf3f4203c20d4a58e956160b0bb1004dcdecf0648a92cc961401b705897c`** (v1.16.last / v1.17.0 / v1.17.1). The display module does not register with `WorldKernel`, writes nothing to the ledger, and is read only when the report / UI explicitly imports it. A dedicated test (`tests/test_display_timeline.py::test_default_living_world_run_does_not_create_display_records`) computes the digest before and after exercising the v1.17.1 helpers and pins both values equal.
+
+The test count moves from `4033 / 4033` (v1.16.last) to `4099 / 4099` (v1.17.1) — `+66` tests in the new `tests/test_display_timeline.py` covering the closed-set vocabularies, the hard naming boundary disjointness, deterministic date-points generation per frequency, interpolation correctness across linear / step / hold_forward / event_weighted, immutability of every record type, `to_dict` round-trip determinism, book add / get / list semantics including duplicate / unknown errors, no-source-of-truth-book imports text scan, no-`PriceBook`-mutation, no-`living_world_digest`-move trip-wire, and jurisdiction-neutral scan over both module and test text.
+
+### 120.5 Forward pointer
+
+v1.17.2 lands the first concrete report rendering — `RegimeComparisonPanel` and side-by-side markdown panels for the v1.11.2 regime presets (`constructive` / `selective` / `constrained` / `tightening`). v1.17.3 lands `EventAnnotationRecord` + `CausalTimelineAnnotation` walking the v1.16 closed-loop citations. v1.17.4 polishes the workbench prototype. v1.17.last freezes the inspection layer (docs-only).

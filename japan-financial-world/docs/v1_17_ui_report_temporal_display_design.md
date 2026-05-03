@@ -248,8 +248,8 @@ construction — neither set leaks into the other.
 
 | Milestone   | What                                                                                                                                                                   | Status                  |
 | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
-| **v1.17.0** | **UI / Report / Temporal Display design (this document)** — three-concept separation; safe object vocabulary; hard naming boundary; per-milestone roadmap; success condition | **Shipped (docs-only)** |
-| v1.17.1     | `world/display.py` (or equivalent) — `ReferenceTimelineSeries`, `SyntheticDisplayPath`, `ReportingCalendar`; deterministic helper that expands a quarterly run onto a monthly / daily-like axis (display-only); unit tests for closed-set kinds, immutability, no-runtime-book-mutation, jurisdiction-neutral scan, forbidden-name scan | Planned                 |
+| v1.17.0     | UI / Report / Temporal Display design (this document) — three-concept separation; safe object vocabulary; hard naming boundary; per-milestone roadmap; success condition | Shipped (docs-only)     |
+| **v1.17.1** | **`world/display_timeline.py`** — `ReportingCalendar`, `ReferenceTimelineSeries`, `SyntheticDisplayPath`, `EventAnnotationRecord`, `CausalTimelineAnnotation` immutable dataclasses + `DisplayTimelineBook` (standalone — not registered with `WorldKernel` in v1.17.1) + deterministic helpers `build_reporting_calendar(...)` and `build_synthetic_display_path(...)` (linear / step / hold_forward / event_weighted (defers to v1.17.3) interpolation kernels; quarter-end-anchored monthly / daily_like expansion; same inputs → byte-identical `to_dict`); +66 unit tests covering closed-set vocabularies, hard naming boundary disjointness, deterministic date-points generation, interpolation correctness, immutability, `to_dict` round-trip, book add/get/list semantics, no-source-of-truth-book imports, no-PriceBook-mutation, no-`living_world_digest`-move, jurisdiction-neutral scan over both module and test text | **Shipped**             |
 | v1.17.2     | `RegimeComparisonPanel` and a small markdown-report extension that renders side-by-side panels for the v1.11.2 regime presets (`constructive` / `selective` / `constrained` / `tightening`); attention focus / market intent / pressure / financing constraint compared per period | Planned                 |
 | v1.17.3     | `EventAnnotationRecord` + `CausalTimelineAnnotation`; deterministic helper that walks the v1.16 closed loop's plain-id citations and emits annotations + causal links; unit tests pin that every annotation cites a reachable record | Planned                 |
 | v1.17.4     | UI workbench polish — wire the v1.17.1 / v1.17.2 / v1.17.3 outputs into [`examples/ui/fwe_workbench_mockup.html`](../examples/ui/fwe_workbench_mockup.html); add the §6 page-level views; cross-tab click-through; "what changed" diff strip on Attention; jurisdiction-neutral scan over the rendered HTML | Planned                 |
@@ -412,9 +412,14 @@ no LLM execution, no stochastic behaviour probabilities, no
 learned model) are preserved bit-for-bit through v1.17.0 →
 v1.17.last.
 
-## 9. Performance boundary at v1.17.0
+## 9. Performance boundary at v1.17.0 / v1.17.1
 
-v1.17.0 is docs-only. **Nothing changes**:
+v1.17.0 was docs-only. v1.17.1 is a standalone display module
+that does not register with `WorldKernel`, does not write to
+any ledger, and does not mutate any source-of-truth book.
+**Per-period record count, per-run window, default sweep
+total, and `living_world_digest` are all unchanged** from
+v1.16.last:
 
 - per-period record count: **108 / 110** (unchanged from
   v1.16.last);
@@ -422,15 +427,16 @@ v1.17.0 is docs-only. **Nothing changes**:
 - default 4-period sweep total: **460 records** (unchanged);
 - integration-test `living_world_digest`:
   **`f93bdf3f4203c20d4a58e956160b0bb1004dcdecf0648a92cc961401b705897c`**
-  (unchanged);
-- pytest count: **4033 / 4033** passing (unchanged).
+  (unchanged — pinned by
+  `tests/test_display_timeline.py::test_default_living_world_run_does_not_create_display_records`);
+- pytest count: **4099 / 4099** passing — up from 4033 / 4033
+  at v1.16.last. The +66 tests are all in
+  `tests/test_display_timeline.py`.
 
-v1.17.1 → v1.17.4 are display-layer additions; their tests will
-**not** change `living_world_digest` because the display layer
-runs *after* the per-period sweep and never writes to any kernel
-book. v1.17.1 will pin this with a dedicated
-`test_v1_17_1_display_helper_does_not_mutate_kernel`-shaped
-trip-wire.
+v1.17.2 → v1.17.4 are display-layer additions; their tests
+will **not** change `living_world_digest` because the display
+layer runs *after* the per-period sweep and never writes to
+any kernel book.
 
 ## 10. What v1.18+ does next
 
