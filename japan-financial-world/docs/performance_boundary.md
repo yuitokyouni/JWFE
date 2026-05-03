@@ -46,7 +46,7 @@ This milestone records the loop shapes so that:
 3. Anyone reviewing the v1.9 freeze surface can see, in one
    place, what the engine is and is not doing.
 
-## Current loop shapes (v1.14.5)
+## Current loop shapes (v1.15.5)
 
 The following table describes the loop shape of each phase
 inside `world/reference_living_world.run_living_reference_world`.
@@ -84,7 +84,10 @@ count (currently 2–3 each).
 | Funding option candidate (v1.14.5)                       | `O(P × F × 2)`                            | 4 × 3 × 2 = 24 options |
 | Capital structure review candidate (v1.14.5)             | `O(P × F)`                                | 4 × 3 = 12 reviews     |
 | Corporate financing path (v1.14.5)                       | `O(P × F)`                                | 4 × 3 = 12 paths       |
-| Reporting / replay / manifest                            | `O(R)` over emitted ledger records        | ~408 records           |
+| Investor market intent (v1.15.5)                         | `O(P × I × F)`                            | 4 × 2 × 3 = 24 intents |
+| Aggregated market interest (v1.15.5)                     | `O(P × F)`                                | 4 × 3 = 12 aggregated  |
+| Indicative market pressure (v1.15.5)                     | `O(P × F)`                                | 4 × 3 = 12 pressure    |
+| Reporting / replay / manifest                            | `O(R)` over emitted ledger records        | ~460 records           |
 
 Per-period record-count breakdown (default fixture, v1.13.last):
 
@@ -110,13 +113,17 @@ F                      corporate financing need (v1.14.5)            =  3
 2 × F                  funding option candidate (v1.14.5)            =  6
 F                      capital structure review candidate (v1.14.5)  =  3
 F                      corporate financing path (v1.14.5)            =  3
-                                                            total   = 96  (period 0)
+I × F                  investor market intent (v1.15.5)              =  6
+F                      aggregated market interest (v1.15.5)          =  3
+F                      indicative market pressure (v1.15.5)          =  3
+                                                            total   =108  (period 0)
 + (I + B) memory selections from period 1+ (budgeted)             ≈ +2  (period 1+)
-                                                            total   = 98  (period 1+)
-× 4 periods (period 0: 96; periods 1–3: 98)                        = 390
+                                                            total   =110  (period 1+)
+× 4 periods (period 0: 108; periods 1–3: 110)                      = 438
 + ~14 one-off setup (interactions, routines, profiles)
 +   4 one-off setup (stewardship themes, v1.10.5)
-                                                          ≈ ~408 records
++   4 one-off setup (v1.15.5: 1 venue + F = 3 securities)
+                                                          ≈ ~460 records
 ```
 
 The v1.13 generic settlement substrate (v1.13.1 settlement
@@ -139,6 +146,21 @@ loop). Storage / audit / graph-linking only — no execution, no
 loan approval, no security issuance, no underwriting, no
 syndication, no pricing, no recommendation, no real leverage /
 D/E / WACC.
+
+The v1.15 securities-market-intent chain (v1.15.1 listed
+securities + venues, v1.15.2 investor market intents, v1.15.3
+aggregated market interest, v1.15.4 indicative market pressure)
+was storage / helper-only through v1.15.4. **v1.15.5 is the first
+living-world integration** — the four layers are now on the
+per-period path: 1 venue + `F` securities at setup, then per
+period `I × F` investor market intents + `F` aggregated-interest
+records + `F` indicative-pressure records (12 records per period
+in the default fixture; bounded by `P × I × F + 2 × P × F`,
+never `P × I × F × venue` or `P × I × F × option`). Storage /
+aggregation only — no order submission, no order book, no
+matching, no execution, no clearing, no settlement, no quote
+dissemination, no bid / ask, no price update, no `PriceBook`
+mutation, no target price, no expected return, no recommendation.
 
 Of the loops above:
 
@@ -313,6 +335,28 @@ v1.12.2 add no new setup records).
 If any of those pins fails, the demo has either grown the
 fixture (intentional but undocumented) or gained a hidden
 quadratic loop (unintended).
+
+## v1.15.5 update pins
+
+v1.15.5 puts the v1.15 securities-market-intent chain on the
+per-period sweep. On the default 4-period fixture (3 firms, 2
+investors, 2 banks):
+
+- per-period record count: **108** (period 0) / **110** (periods 1+),
+  up from 96 / 98 at v1.14.5,
+- per-run window: **`[432, 480]`**, up from `[384, 432]`,
+- default 4-period sweep total: **460 records**,
+- integration-test `living_world_digest`:
+  **`041686b0c69eea751cb24e3e3e5b4ac25e56a8ae20d4b1bd40a41dc5303403a5`**
+  (moved at v1.15.5 by design; unchanged through v1.15.1 →
+  v1.15.4),
+- pytest count: **3863 / 3863** passing.
+
+Loop-shape constraints: the v1.15.5 chain stays bounded at
+`P × I × F + 2 × P × F` per run — no `P × I × F × venue` or
+`P × I × F × option` dense loop. The investor-market-intent
+phase is the only `I × F` layer added; aggregated-interest and
+indicative-pressure are both `P × F` per layer.
 
 ## v1.14.last freeze pins
 

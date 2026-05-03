@@ -288,6 +288,15 @@ def _canonicalize_period(period: LivingReferencePeriodSummary) -> dict[str, Any]
         "corporate_financing_path_ids": list(
             getattr(period, "corporate_financing_path_ids", ())
         ),
+        "investor_market_intent_ids": list(
+            getattr(period, "investor_market_intent_ids", ())
+        ),
+        "aggregated_market_interest_ids": list(
+            getattr(period, "aggregated_market_interest_ids", ())
+        ),
+        "indicative_market_pressure_ids": list(
+            getattr(period, "indicative_market_pressure_ids", ())
+        ),
     }
 
 
@@ -499,6 +508,18 @@ def canonicalize_living_world_result(
         # backward compatible.
         "market_ids": list(getattr(result, "market_ids", ())),
         "market_count": len(getattr(result, "market_ids", ())),
+        # v1.15.5 additive: setup-level securities-market context.
+        # Older result objects without these fields fall through to
+        # ``[]`` via ``getattr``, keeping the canonical view
+        # backward compatible.
+        "listed_security_ids": list(
+            getattr(result, "listed_security_ids", ())
+        ),
+        "listed_security_count": len(
+            getattr(result, "listed_security_ids", ())
+        ),
+        "market_venue_ids": list(getattr(result, "market_venue_ids", ())),
+        "market_venue_count": len(getattr(result, "market_venue_ids", ())),
         "ledger_record_count_before": result.ledger_record_count_before,
         "ledger_record_count_after": result.ledger_record_count_after,
         "created_record_count": result.created_record_count,

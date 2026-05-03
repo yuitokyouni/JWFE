@@ -282,8 +282,8 @@ once the v1.15 storage modules have shipped.
 | v1.15.1     | `world/securities.py` — `ListedSecurityRecord` + `MarketVenueRecord` + `SecurityMarketBook`| Shipped                 |
 | v1.15.2     | `world/market_intents.py` — `InvestorMarketIntentRecord` + `InvestorMarketIntentBook` + safe-label enforcement | Shipped                 |
 | v1.15.3     | `world/market_interest.py` — `AggregatedMarketInterestRecord` + `AggregatedMarketInterestBook` + `build_aggregated_market_interest` deterministic helper | Shipped                 |
-| **v1.15.4** | **`world/market_pressure.py`** — **`IndicativeMarketPressureRecord` + `IndicativeMarketPressureBook` + `build_indicative_market_pressure` deterministic helper (reuses v1.14.3 `MARKET_ACCESS_LABELS`)** | **Shipped**             |
-| v1.15.5     | Living-world integration — per-period venue × security aggregation; digest moves by design | Planned                 |
+| v1.15.4     | `world/market_pressure.py` — `IndicativeMarketPressureRecord` + `IndicativeMarketPressureBook` + `build_indicative_market_pressure` deterministic helper (reuses v1.14.3 `MARKET_ACCESS_LABELS`) | Shipped                 |
+| **v1.15.5** | **Living-world integration** — per-period `I × F` market intents + `F` aggregated-interest + `F` indicative-pressure records; setup adds 1 venue + `F` listed securities; `living_world_digest` moves to **`041686b0c69eea751cb24e3e3e5b4ac25e56a8ae20d4b1bd40a41dc5303403a5`**; per-run window **`[432, 480]`**; +14 integration tests | **Shipped**             |
 | v1.15.6     | v1.14 feedback wiring — `CapitalStructureReviewCandidate` and `CorporateFinancingPathRecord` cite `IndicativeMarketPressureRecord` ids; `build_corporate_financing_path` gains an optional pressure-evidence kwarg | Planned                 |
 | v1.15.last  | Securities market intent aggregation freeze (docs-only)                                    | Planned                 |
 

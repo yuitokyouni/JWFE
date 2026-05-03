@@ -2629,10 +2629,10 @@ def test_v1_12_9_living_world_digest_pinned():
     k = _seed_kernel()
     r = _run_default(k)
     expected = (
-        "3df73fd4f152c16d1188f5c15b69bdc8a5cd6061b637ea35af671e86c6fa2d71"
+        "041686b0c69eea751cb24e3e3e5b4ac25e56a8ae20d4b1bd40a41dc5303403a5"
     )
     assert living_world_digest(k, r) == expected, (
-        "v1.14.5 living_world_digest moved unexpectedly. If the "
+        "v1.15.5 living_world_digest moved unexpectedly. If the "
         "shift is intentional, update the pinned value here AND "
         "in docs/world_model.md and docs/test_inventory.md."
     )
@@ -3655,6 +3655,254 @@ def test_v1_14_5_financing_record_ids_are_synthetic_only():
         candidates.extend(ps.capital_structure_review_candidate_ids)
         candidates.extend(ps.corporate_financing_path_ids)
     assert candidates, "no financing ids emitted"
+    forbidden = (
+        "toyota", "mufg", "smbc", "mizuho", "boj", "fsa", "jpx",
+        "gpif", "tse", "nikkei", "topix", "sony", "nyse",
+    )
+    for id_str in candidates:
+        lower = id_str.lower()
+        for token in forbidden:
+            assert search(rf"\b{escape(token)}\b", lower) is None, (
+                f"forbidden token {token!r} appears in id {id_str!r}"
+            )
+
+
+# ---------------------------------------------------------------------------
+# v1.15.5 — Living-world securities market intent chain integration
+# ---------------------------------------------------------------------------
+
+
+def test_v1_15_5_setup_registers_one_venue_and_one_security_per_firm():
+    k = _seed_kernel()
+    r = _run_default(k)
+    assert r.market_venue_ids == ("venue:reference_exchange_a",)
+    assert len(r.listed_security_ids) == len(_FIRM_IDS)
+    for firm_id in _FIRM_IDS:
+        expected_id = f"security:{firm_id}:equity:line_1"
+        assert expected_id in r.listed_security_ids
+
+
+def test_v1_15_5_each_period_has_one_market_intent_per_investor_security_pair():
+    """One ``InvestorMarketIntentRecord`` per (investor, security)
+    per period — bounded by ``P × I × F``."""
+    k = _seed_kernel()
+    r = _run_default(k)
+    expected_per_period = len(_INVESTOR_IDS) * len(_FIRM_IDS)
+    for ps in r.per_period_summaries:
+        assert len(ps.investor_market_intent_ids) == expected_per_period
+    total = sum(
+        len(ps.investor_market_intent_ids) for ps in r.per_period_summaries
+    )
+    assert total == len(_PERIOD_DATES) * expected_per_period
+
+
+def test_v1_15_5_each_period_has_one_aggregated_per_security():
+    k = _seed_kernel()
+    r = _run_default(k)
+    for ps in r.per_period_summaries:
+        assert len(ps.aggregated_market_interest_ids) == len(_FIRM_IDS)
+
+
+def test_v1_15_5_each_period_has_one_pressure_per_security():
+    k = _seed_kernel()
+    r = _run_default(k)
+    for ps in r.per_period_summaries:
+        assert len(ps.indicative_market_pressure_ids) == len(_FIRM_IDS)
+
+
+def test_v1_15_5_market_intents_cite_security_and_venue():
+    """Every emitted market intent names a security id and a
+    venue id in its evidence slots."""
+    k = _seed_kernel()
+    r = _run_default(k)
+    expected_security_ids = set(r.listed_security_ids)
+    for ps in r.per_period_summaries:
+        for mid in ps.investor_market_intent_ids:
+            rec = k.investor_market_intents.get_intent(mid)
+            assert rec.evidence_security_ids
+            assert set(rec.evidence_security_ids) <= expected_security_ids
+            assert rec.evidence_venue_ids == ("venue:reference_exchange_a",)
+            assert rec.security_id in expected_security_ids
+
+
+def test_v1_15_5_aggregated_interest_cites_market_intents():
+    k = _seed_kernel()
+    r = _run_default(k)
+    for ps in r.per_period_summaries:
+        period_intents = set(ps.investor_market_intent_ids)
+        for aid in ps.aggregated_market_interest_ids:
+            rec = k.aggregated_market_interest.get_record(aid)
+            # Every cited source id should be in the period's intent set.
+            assert set(rec.source_market_intent_ids) <= period_intents
+            assert len(rec.source_market_intent_ids) > 0
+
+
+def test_v1_15_5_indicative_pressure_cites_aggregated_interest():
+    k = _seed_kernel()
+    r = _run_default(k)
+    for ps in r.per_period_summaries:
+        period_aggregated = set(ps.aggregated_market_interest_ids)
+        for pid in ps.indicative_market_pressure_ids:
+            rec = k.indicative_market_pressure.get_record(pid)
+            assert set(rec.source_aggregated_interest_ids) <= period_aggregated
+            assert len(rec.source_aggregated_interest_ids) > 0
+
+
+def test_v1_15_5_does_not_mutate_pricebook():
+    """v1.15.5 explicitly does NOT mutate the PriceBook even
+    though it integrates a securities-market chain."""
+    k = _seed_kernel()
+    prices_before = k.prices.snapshot()
+    _run_default(k)
+    assert k.prices.snapshot() == prices_before
+
+
+def test_v1_15_5_no_forbidden_event_types_appear():
+    """v1.15.5 must NOT emit any execution / order / trade / quote /
+    clearing / settlement event."""
+    from world.ledger import RecordType
+
+    k = _seed_kernel()
+    _run_default(k)
+    forbidden = {
+        RecordType.ORDER_SUBMITTED,
+        RecordType.PRICE_UPDATED,
+        RecordType.CONTRACT_CREATED,
+        RecordType.CONTRACT_STATUS_UPDATED,
+        RecordType.CONTRACT_COVENANT_BREACHED,
+        RecordType.OWNERSHIP_TRANSFERRED,
+    }
+    seen = {r.record_type for r in k.ledger.records}
+    leaked = seen & forbidden
+    assert not leaked
+
+    forbidden_names = {
+        "trade_executed",
+        "quote_disseminated",
+        "clearing_completed",
+        "settlement_completed",
+    }
+    seen_names = {r.record_type.value for r in k.ledger.records}
+    assert not (seen_names & forbidden_names)
+
+
+def test_v1_15_5_no_forbidden_payload_keys_in_chain_records():
+    k = _seed_kernel()
+    _run_default(k)
+    forbidden = {
+        "buy",
+        "sell",
+        "order",
+        "order_id",
+        "trade",
+        "trade_id",
+        "bid",
+        "ask",
+        "quote",
+        "price",
+        "market_price",
+        "indicative_price",
+        "target_price",
+        "expected_return",
+        "execution",
+        "clearing",
+        "settlement",
+        "target_weight",
+        "overweight",
+        "underweight",
+        "recommendation",
+        "investment_advice",
+        "real_data_value",
+    }
+    chain_event_types = {
+        "listed_security_registered",
+        "market_venue_registered",
+        "investor_market_intent_recorded",
+        "aggregated_market_interest_recorded",
+        "indicative_market_pressure_recorded",
+    }
+    payloads = [
+        record.payload
+        for record in k.ledger.records
+        if record.record_type.value in chain_event_types
+    ]
+    assert payloads, "no v1.15.5 chain records emitted"
+    for payload in payloads:
+        leaked = set(payload.keys()) & forbidden
+        assert not leaked, (
+            "v1.15.5 chain payload must not include anti-field keys; "
+            f"leaked: {sorted(leaked)}"
+        )
+
+
+def test_v1_15_5_two_runs_produce_byte_identical_canonical_view():
+    from examples.reference_world.living_world_replay import (
+        canonicalize_living_world_result,
+        living_world_digest,
+    )
+
+    k1 = _seed_kernel()
+    r1 = _run_default(k1)
+    k2 = _seed_kernel()
+    r2 = _run_default(k2)
+    can1 = canonicalize_living_world_result(k1, r1)
+    can2 = canonicalize_living_world_result(k2, r2)
+    assert can1 == can2
+    assert living_world_digest(k1, r1) == living_world_digest(k2, r2)
+
+
+def test_v1_15_5_canonical_view_carries_chain_id_tuples():
+    from examples.reference_world.living_world_replay import (
+        canonicalize_living_world_result,
+    )
+
+    k = _seed_kernel()
+    r = _run_default(k)
+    can = canonicalize_living_world_result(k, r)
+    assert can["listed_security_count"] == len(_FIRM_IDS)
+    assert can["market_venue_count"] == 1
+    for ps in can["per_period_summaries"]:
+        for field_name in (
+            "investor_market_intent_ids",
+            "aggregated_market_interest_ids",
+            "indicative_market_pressure_ids",
+        ):
+            assert field_name in ps, field_name
+            assert len(ps[field_name]) > 0
+
+
+def test_v1_15_5_markdown_report_includes_securities_market_intent_section():
+    from world.living_world_report import (
+        build_living_world_trace_report,
+        render_living_world_markdown,
+    )
+
+    k = _seed_kernel()
+    r = _run_default(k)
+    report = build_living_world_trace_report(k, r)
+    md = render_living_world_markdown(report)
+    assert "## Securities market intent" in md
+    md_lower = md.lower()
+    assert (
+        "market interest aggregation, not market trading" in md_lower
+        or "no order book" in md_lower
+        or "no pricebook mutation" in md_lower
+    )
+
+
+def test_v1_15_5_chain_record_ids_are_synthetic_only():
+    from re import escape, search
+
+    k = _seed_kernel()
+    r = _run_default(k)
+    candidates: list[str] = []
+    candidates.extend(r.listed_security_ids)
+    candidates.extend(r.market_venue_ids)
+    for ps in r.per_period_summaries:
+        candidates.extend(ps.investor_market_intent_ids)
+        candidates.extend(ps.aggregated_market_interest_ids)
+        candidates.extend(ps.indicative_market_pressure_ids)
+    assert candidates, "no chain ids emitted"
     forbidden = (
         "toyota", "mufg", "smbc", "mizuho", "boj", "fsa", "jpx",
         "gpif", "tse", "nikkei", "topix", "sony", "nyse",

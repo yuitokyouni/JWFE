@@ -285,6 +285,27 @@ class LivingWorldPeriodReport:
     financing_path_constraint_counts: tuple[tuple[str, int], ...] = field(
         default_factory=tuple
     )
+    # v1.15.5 additive: per-period securities market intent chain
+    # counts + four histograms (intent direction across investor
+    # market intents, net-interest across aggregated records,
+    # market-access across pressure records, financing-relevance
+    # across pressure records). Used by the Markdown renderer's
+    # "## Securities market intent" section.
+    investor_market_intent_count: int = 0
+    aggregated_market_interest_count: int = 0
+    indicative_market_pressure_count: int = 0
+    market_intent_direction_counts: tuple[tuple[str, int], ...] = field(
+        default_factory=tuple
+    )
+    aggregated_net_interest_counts: tuple[tuple[str, int], ...] = field(
+        default_factory=tuple
+    )
+    market_pressure_market_access_counts: tuple[tuple[str, int], ...] = field(
+        default_factory=tuple
+    )
+    market_pressure_financing_relevance_counts: tuple[
+        tuple[str, int], ...
+    ] = field(default_factory=tuple)
     # v1.11.1 additive: per-period banker-readable labels lifted
     # from the period's CapitalMarketReadoutRecord (if any). When
     # the period has no readout, the labels default to empty
@@ -334,6 +355,9 @@ class LivingWorldPeriodReport:
             "funding_option_candidate_count",
             "capital_structure_review_candidate_count",
             "corporate_financing_path_count",
+            "investor_market_intent_count",
+            "aggregated_market_interest_count",
+            "indicative_market_pressure_count",
         ):
             value = getattr(self, name)
             if not isinstance(value, int) or value < 0:
@@ -453,6 +477,10 @@ class LivingWorldPeriodReport:
             "capital_structure_market_access_counts",
             "financing_path_coherence_counts",
             "financing_path_constraint_counts",
+            "market_intent_direction_counts",
+            "aggregated_net_interest_counts",
+            "market_pressure_market_access_counts",
+            "market_pressure_financing_relevance_counts",
         ):
             normalized_histogram: list[tuple[str, int]] = []
             for entry in getattr(self, histogram_field_name):
@@ -571,6 +599,29 @@ class LivingWorldPeriodReport:
             "financing_path_constraint_counts": [
                 [label, count]
                 for label, count in self.financing_path_constraint_counts
+            ],
+            "investor_market_intent_count": self.investor_market_intent_count,
+            "aggregated_market_interest_count": (
+                self.aggregated_market_interest_count
+            ),
+            "indicative_market_pressure_count": (
+                self.indicative_market_pressure_count
+            ),
+            "market_intent_direction_counts": [
+                [label, count]
+                for label, count in self.market_intent_direction_counts
+            ],
+            "aggregated_net_interest_counts": [
+                [label, count]
+                for label, count in self.aggregated_net_interest_counts
+            ],
+            "market_pressure_market_access_counts": [
+                [label, count]
+                for label, count in self.market_pressure_market_access_counts
+            ],
+            "market_pressure_financing_relevance_counts": [
+                [label, count]
+                for label, count in self.market_pressure_financing_relevance_counts
             ],
             "rates_tone": self.rates_tone,
             "credit_tone": self.credit_tone,
@@ -1115,6 +1166,7 @@ def _build_period_report(
             **_extract_market_environment_summary(kernel, period),
             **_extract_attention_feedback_summary(kernel, period),
             **_extract_corporate_financing_summary(kernel, period),
+            **_extract_securities_market_intent_summary(kernel, period),
             record_type_counts=period_record_type_counts,
             warnings=tuple(period_warnings),
             metadata={
@@ -1264,6 +1316,94 @@ def _extract_corporate_financing_summary(
         ),
         "financing_path_constraint_counts": tuple(
             sorted(constraint_counts.items())
+        ),
+    }
+
+
+def _extract_securities_market_intent_summary(
+    kernel: Any, period: LivingReferencePeriodSummary
+) -> dict[str, Any]:
+    """v1.15.5 — read the period's securities-market-intent
+    chain records (investor market intents / aggregated market
+    interest / indicative market pressure) and return per-record
+    counts plus four sorted histograms (intent direction across
+    investor market intents, aggregated net interest, pressure
+    market_access, pressure financing_relevance). When the
+    period has no chain records the histograms are empty and the
+    renderer skips the section."""
+    intent_ids = getattr(period, "investor_market_intent_ids", ())
+    aggregated_ids = getattr(period, "aggregated_market_interest_ids", ())
+    pressure_ids = getattr(period, "indicative_market_pressure_ids", ())
+
+    if not intent_ids and not aggregated_ids and not pressure_ids:
+        return {
+            "investor_market_intent_count": 0,
+            "aggregated_market_interest_count": 0,
+            "indicative_market_pressure_count": 0,
+            "market_intent_direction_counts": (),
+            "aggregated_net_interest_counts": (),
+            "market_pressure_market_access_counts": (),
+            "market_pressure_financing_relevance_counts": (),
+        }
+
+    direction_counts: dict[str, int] = {}
+    intent_book = getattr(kernel, "investor_market_intents", None)
+    if intent_book is not None:
+        for iid in intent_ids:
+            try:
+                rec = intent_book.get_intent(iid)
+            except Exception:
+                continue
+            direction_counts[rec.intent_direction_label] = (
+                direction_counts.get(rec.intent_direction_label, 0) + 1
+            )
+
+    net_interest_counts: dict[str, int] = {}
+    interest_book = getattr(kernel, "aggregated_market_interest", None)
+    if interest_book is not None:
+        for aid in aggregated_ids:
+            try:
+                rec = interest_book.get_record(aid)
+            except Exception:
+                continue
+            net_interest_counts[rec.net_interest_label] = (
+                net_interest_counts.get(rec.net_interest_label, 0) + 1
+            )
+
+    market_access_counts: dict[str, int] = {}
+    financing_relevance_counts: dict[str, int] = {}
+    pressure_book = getattr(kernel, "indicative_market_pressure", None)
+    if pressure_book is not None:
+        for pid in pressure_ids:
+            try:
+                rec = pressure_book.get_record(pid)
+            except Exception:
+                continue
+            market_access_counts[rec.market_access_label] = (
+                market_access_counts.get(rec.market_access_label, 0) + 1
+            )
+            financing_relevance_counts[rec.financing_relevance_label] = (
+                financing_relevance_counts.get(
+                    rec.financing_relevance_label, 0
+                )
+                + 1
+            )
+
+    return {
+        "investor_market_intent_count": len(intent_ids),
+        "aggregated_market_interest_count": len(aggregated_ids),
+        "indicative_market_pressure_count": len(pressure_ids),
+        "market_intent_direction_counts": tuple(
+            sorted(direction_counts.items())
+        ),
+        "aggregated_net_interest_counts": tuple(
+            sorted(net_interest_counts.items())
+        ),
+        "market_pressure_market_access_counts": tuple(
+            sorted(market_access_counts.items())
+        ),
+        "market_pressure_financing_relevance_counts": tuple(
+            sorted(financing_relevance_counts.items())
         ),
     }
 
@@ -1960,6 +2100,68 @@ def render_living_world_markdown(report: LivingWorldTraceReport) -> str:
             "/ offering price, no optimal capital structure "
             "decision, no real leverage / D/E / WACC, no "
             "investment recommendation, no Japan calibration."
+        )
+        lines.append("")
+
+    # v1.15.5 — securities market intent section. One row per
+    # period; columns count investor market intents / aggregated
+    # market interest / indicative market pressure and carry
+    # concise label histograms (intent direction across investor
+    # records, aggregated net-interest, pressure market-access,
+    # pressure financing-relevance). Storage / aggregation only —
+    # never an order, trade, allocation, price, quote, clearing,
+    # settlement, or recommendation.
+    has_v1155_signal = any(
+        ps.get("investor_market_intent_count", 0) > 0
+        for ps in md["period_summaries"]
+    )
+    if has_v1155_signal:
+        lines.append("## Securities market intent")
+        lines.append("")
+        lines.append(
+            "| period | as_of_date | market_intents | aggregated | "
+            "pressure | intent direction histogram | net interest "
+            "histogram | market access histogram | financing "
+            "relevance histogram |"
+        )
+        lines.append(
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"
+        )
+        for ps in md["period_summaries"]:
+            if ps.get("investor_market_intent_count", 0) == 0:
+                continue
+
+            def _fmt(histogram: list[list[Any]] | tuple) -> str:
+                if not histogram:
+                    return "—"
+                return ", ".join(
+                    f"{label}={count}" for label, count in histogram
+                )
+
+            lines.append(
+                f"| `{ps['period_id']}` | `{ps['as_of_date']}` | "
+                f"{ps.get('investor_market_intent_count', 0)} | "
+                f"{ps.get('aggregated_market_interest_count', 0)} | "
+                f"{ps.get('indicative_market_pressure_count', 0)} | "
+                f"{_fmt(ps.get('market_intent_direction_counts', []))} | "
+                f"{_fmt(ps.get('aggregated_net_interest_counts', []))} | "
+                f"{_fmt(ps.get('market_pressure_market_access_counts', []))} | "
+                f"{_fmt(ps.get('market_pressure_financing_relevance_counts', []))} |"
+            )
+        lines.append("")
+        lines.append(
+            "> Securities market intent records aggregate "
+            "non-binding investor market interest into "
+            "venue/security-level interest counts and "
+            "security-level indicative pressure. **Market "
+            "interest aggregation, not market trading**: no "
+            "order submission, no order book, no order "
+            "imbalance, no buy / sell labels, no bid / ask, no "
+            "quote dissemination, no matching, no execution, no "
+            "clearing, no settlement, no price formation, no "
+            "PriceBook mutation, no target price, no expected "
+            "return, no recommendation, no investment advice, "
+            "no Japan calibration."
         )
         lines.append("")
 

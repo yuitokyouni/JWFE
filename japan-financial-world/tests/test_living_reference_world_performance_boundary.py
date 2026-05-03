@@ -251,12 +251,15 @@ def count_expected_living_world_records(
         2 * firms                              funding option candidate (v1.14.5)
         firms                                  capital structure review candidate (v1.14.5)
         firms                                  corporate financing path (v1.14.5)
+        investors * firms                      investor market intent (v1.15.5)
+        firms                                  aggregated market interest (v1.15.5)
+        firms                                  indicative market pressure (v1.15.5)
 
     For the default fixture (3 firms, 2 investors, 2 banks,
     3 industries, 5 markets, 1 readout/period, 1 environment
-    state/period, 4 periods) this is 96 records per period × 4
-    periods = 384 (v1.14.5 adds 5 × firms = 15 records per period
-    on top of the v1.13.5 baseline of 81).
+    state/period, 4 periods) this is 108 records per period × 4
+    periods = 432 (v1.15.5 adds investors × firms + 2 × firms = 12
+    records per period on top of the v1.14.5 baseline of 96).
 
     v1.12.8 also creates a *memory* SelectedObservationSet per
     actor from period 1 onwards (when the actor has a
@@ -291,6 +294,9 @@ def count_expected_living_world_records(
         + 2 * firms                            # funding option candidate (v1.14.5)
         + firms                                # capital structure review candidate (v1.14.5)
         + firms                                # corporate financing path (v1.14.5)
+        + investors * firms                    # investor market intent (v1.15.5)
+        + firms                                # aggregated market interest (v1.15.5)
+        + firms                                # indicative market pressure (v1.15.5)
     )
     return per_period * periods
 
@@ -337,25 +343,17 @@ def test_default_living_world_total_run_record_count_matches_formula():
 
     Note on units: the budget pinned here is a **per-run total
     across all four periods**, NOT a per-period count. At v1.12.2
-    the per-period count is 71 records (37 v1.9.x + 18 v1.10.5
-    + 5 v1.11.0 capital-market + 1 v1.11.1 capital-market readout
-    + 1 v1.12.2 market environment state + 3 v1.12.0 firm
-    financial latent state + 6 v1.12.1 investor intent); the
-    per-run total is 71 × 4 = 284, plus up to 32 records of
-    one-off setup overhead (14 v1.9.x infra + 4 v1.10.5
-    stewardship themes + headroom; v1.11.0 / v1.11.1 / v1.12.0 /
-    v1.12.1 / v1.12.2 add no new setup records). v1.12.8 adds
-    8 records per period (4 attention-state + feedback per
-    investor + 4 per bank) plus a residual 0–8 memory-selection
-    records per post-period (period 0 has none). v1.13.5 adds
-    ``banks`` interbank-liquidity records per period (2 in the
-    default fixture). v1.14.5 adds the corporate financing
-    chain: ``firms`` need + ``2 * firms`` options + ``firms``
-    capital-structure-review + ``firms`` financing-path records
-    per period (5 × firms = 15 in the default fixture). The
-    per-run minimum from the v1.14.5 formula is 384; the tight
-    upper window accommodates the residual + setup overhead
-    and lands at [384, 432].
+    the per-period count is 71 records; v1.12.8 adds 8 attention-
+    feedback records; v1.13.5 adds ``banks`` interbank-liquidity
+    records; v1.14.5 adds the corporate financing chain
+    (5 × firms per period); v1.15.5 adds the securities market
+    intent chain (``investors × firms`` market intents +
+    ``2 × firms`` aggregated-interest + indicative-pressure
+    records per period — 12 records per period in the default
+    fixture). The per-run minimum from the v1.15.5 formula is
+    432; the tight upper window accommodates the residual +
+    setup overhead (now including 1 venue + ``firms`` listed
+    securities = 4 setup records) and lands at [432, 480].
     """
     k = _seed_kernel()
     r = run_living_reference_world(
@@ -578,13 +576,14 @@ def test_count_expected_living_world_records_matches_default_fixture():
         banks=len(_BANK_IDS),
         periods=len(_PERIOD_DATES),
     )
-    # Per docs/performance_boundary.md (v1.14.5):
-    # 4 × 96 = 384 records per run from the per-period formula
-    # (v1.13.5 baseline 81 + v1.14.5's 15 corporate-financing
-    # records per period: 1 need + 2 options + 1 review + 1 path
-    # per firm × 3 firms = 15). Memory selections are
-    # period-dependent and not in the formula.
-    assert total == 384
+    # Per docs/performance_boundary.md (v1.15.5):
+    # 4 × 108 = 432 records per run from the per-period formula
+    # (v1.14.5 baseline 96 + v1.15.5's 12 securities-market-intent
+    # records per period: investors × firms = 6 market intents +
+    # firms = 3 aggregated-interest + firms = 3 indicative-pressure).
+    # Memory selections are period-dependent and not in the
+    # formula.
+    assert total == 432
 
 
 def test_count_expected_living_world_records_scales_linearly_in_periods():

@@ -160,6 +160,25 @@ from world.financing_paths import (
     DuplicateCorporateFinancingPathError,
     build_corporate_financing_path,
 )
+from world.securities import (
+    DuplicateListedSecurityError,
+    DuplicateMarketVenueError,
+    ListedSecurityRecord,
+    MarketVenueRecord,
+    SAFE_INTENT_LABELS,
+)
+from world.market_intents import (
+    DuplicateInvestorMarketIntentError,
+    InvestorMarketIntentRecord,
+)
+from world.market_interest import (
+    DuplicateAggregatedMarketInterestError,
+    build_aggregated_market_interest,
+)
+from world.market_pressure import (
+    DuplicateIndicativeMarketPressureError,
+    build_indicative_market_pressure,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -321,6 +340,22 @@ class LivingReferencePeriodSummary:
     corporate_financing_path_ids: tuple[str, ...] = field(
         default_factory=tuple
     )
+    # v1.15.5 additive: securities market intent chain.
+    # ``investor_market_intent_ids`` carries one entry per
+    # (investor, listed security) pair per period (default
+    # I × F = 6 per period); ``aggregated_market_interest_ids``
+    # carries one entry per security per period (default F = 3);
+    # ``indicative_market_pressure_ids`` carries one entry per
+    # security per period (default F = 3). Storage / aggregation
+    # only — never an order, trade, allocation, price, quote,
+    # clearing, settlement, or recommendation.
+    investor_market_intent_ids: tuple[str, ...] = field(default_factory=tuple)
+    aggregated_market_interest_ids: tuple[str, ...] = field(
+        default_factory=tuple
+    )
+    indicative_market_pressure_ids: tuple[str, ...] = field(
+        default_factory=tuple
+    )
     record_count_created: int = 0
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
@@ -362,6 +397,9 @@ class LivingReferencePeriodSummary:
             "funding_option_candidate_ids",
             "capital_structure_review_candidate_ids",
             "corporate_financing_path_ids",
+            "investor_market_intent_ids",
+            "aggregated_market_interest_ids",
+            "indicative_market_pressure_ids",
         ):
             value = tuple(getattr(self, tuple_field_name))
             for entry in value:
@@ -413,6 +451,13 @@ class LivingReferenceWorldResult:
     # market per period; the per-period tuple lives on
     # :class:`LivingReferencePeriodSummary`).
     market_ids: tuple[str, ...] = field(default_factory=tuple)
+    # v1.15.5 additive: setup-level securities-market context.
+    # The ``listed_security_ids`` tuple names the synthetic
+    # listed securities the run registered (one per firm by
+    # default); ``market_venue_ids`` names the venues. Both
+    # tuples are setup-once — they are not multiplied per period.
+    listed_security_ids: tuple[str, ...] = field(default_factory=tuple)
+    market_venue_ids: tuple[str, ...] = field(default_factory=tuple)
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -432,6 +477,8 @@ class LivingReferenceWorldResult:
             "industry_ids",
             "stewardship_theme_ids",
             "market_ids",
+            "listed_security_ids",
+            "market_venue_ids",
         ):
             value = tuple(getattr(self, tuple_field_name))
             for entry in value:
@@ -594,6 +641,35 @@ _CORPORATE_FINANCING_MARKET_ACCESS_BY_FIRM_INDEX: tuple[str, ...] = (
     "selective",
     "open",
 )
+
+
+# v1.15.5 — securities-market-intent setup defaults + rotation
+# tables. The default fixture registers one generic exchange-shaped
+# venue and one equity-like security per firm. The 4-cycle rotation
+# below assigns one of four safe `intent_direction_label` values to
+# each (period, investor, firm) tuple so the per-period histogram
+# stays non-trivial without ever using the forbidden trading verbs.
+_DEFAULT_PRIMARY_MARKET_VENUE_ID: str = "venue:reference_exchange_a"
+
+_SAFE_INTENT_DIRECTION_BY_ROTATION: tuple[str, ...] = (
+    "increase_interest",
+    "reduce_interest",
+    "hold_review",
+    "liquidity_watch",
+)
+
+_MARKET_INTENT_INTENSITY_BY_ROTATION: tuple[str, ...] = (
+    "moderate",
+    "elevated",
+    "low",
+    "moderate",
+)
+
+
+def _listed_security_id_for(firm_id: str) -> str:
+    """Default per-firm equity-like security id used by the
+    v1.15.5 securities-market-intent setup phase."""
+    return f"security:{firm_id}:equity:line_1"
 
 
 # v1.11.0 — default capital-market condition specs. Each entry is
@@ -1322,6 +1398,53 @@ def run_living_reference_world(
         theme_types=theme_types,
         effective_from=iso_dates[0],
     )
+
+    # ------------------------------------------------------------------
+    # v1.15.5 — securities-market surface setup. Register one
+    # generic exchange venue + one equity-like listed security per
+    # firm, once for the run (idempotent). Bounded:
+    # ``1 venue + F securities`` setup records on top of the v1.10.5
+    # / v1.13.5 setup overhead. Storage / surface only — never an
+    # order book, a quote stream, a match engine, or a fee schedule.
+    # ------------------------------------------------------------------
+    primary_market_venue_id = _DEFAULT_PRIMARY_MARKET_VENUE_ID
+    try:
+        kernel.security_market.add_venue(
+            MarketVenueRecord(
+                venue_id=primary_market_venue_id,
+                venue_type_label="exchange",
+                venue_role_label="listing_venue",
+                status="active",
+                visibility="public",
+                supported_security_type_labels=("equity",),
+                supported_intent_labels=tuple(sorted(SAFE_INTENT_LABELS)),
+            )
+        )
+    except DuplicateMarketVenueError:
+        pass
+
+    listed_security_id_by_firm: dict[str, str] = {}
+    for firm_id in firms:
+        security_id = _listed_security_id_for(firm_id)
+        try:
+            kernel.security_market.add_security(
+                ListedSecurityRecord(
+                    security_id=security_id,
+                    issuer_firm_id=firm_id,
+                    security_type_label="equity",
+                    listing_status_label="listed",
+                    primary_market_venue_id=primary_market_venue_id,
+                    currency_label="synthetic_currency_a",
+                    issue_profile_label="seasoned",
+                    liquidity_profile_label="moderate",
+                    investor_access_label="broad",
+                    status="active",
+                    visibility="public",
+                )
+            )
+        except DuplicateListedSecurityError:
+            pass
+        listed_security_id_by_firm[firm_id] = security_id
 
     firm_to_industry = _resolve_firm_industry_map(firms, firm_industry_map)
     # Deduplicated industry id list, sorted for determinism. Used
@@ -2516,6 +2639,161 @@ def run_living_reference_world(
                     f"corporate_financing_path:{firm_id}:{iso_date}"
                 )
 
+        # ------------------------------------------------------------------
+        # v1.15.5 — securities market intent chain phase.
+        #
+        # Per investor × listed security: emit one
+        # ``InvestorMarketIntentRecord`` (v1.15.2). Per listed
+        # security: build one ``AggregatedMarketInterestRecord``
+        # (v1.15.3) and one ``IndicativeMarketPressureRecord``
+        # (v1.15.4) via their deterministic helpers. Bounded by
+        # ``P × I × F + 2 × P × F``. No `P × I × F × venue` or
+        # `P × I × F × option_count` dense loop.
+        #
+        # Storage / aggregation only. There is **no order
+        # submission, no buy / sell labels, no order book, no
+        # matching, no execution, no clearing, no settlement, no
+        # quote dissemination, no bid / ask, no price update, no
+        # PriceBook mutation, no target price, no expected return,
+        # no recommendation, no portfolio allocation, no real
+        # exchange mechanics, no real data ingestion, no Japan
+        # calibration**.
+        #
+        # The synthesis uses safe-only labels — the forbidden
+        # trading verbs (``buy`` / ``sell`` / ``order`` /
+        # ``target_weight`` / ``overweight`` / ``underweight`` /
+        # ``execution``) are rejected by closed-set membership at
+        # construction.
+        # ------------------------------------------------------------------
+        investor_market_intent_ids: list[str] = []
+        market_intent_ids_by_security: dict[str, list[str]] = {
+            sid: [] for sid in listed_security_id_by_firm.values()
+        }
+
+        for inv_idx, investor_id in enumerate(investors):
+            for firm_idx, firm_id in enumerate(firms):
+                security_id = listed_security_id_by_firm.get(firm_id)
+                if security_id is None:
+                    continue
+                rotation = (
+                    period_idx + inv_idx + firm_idx
+                ) % len(_SAFE_INTENT_DIRECTION_BY_ROTATION)
+                intent_direction = _SAFE_INTENT_DIRECTION_BY_ROTATION[rotation]
+                intensity = _MARKET_INTENT_INTENSITY_BY_ROTATION[rotation]
+
+                # Filter upstream evidence to this (investor, firm)
+                # pair. Existing v1.12.1 / v1.9.5 ids embed both
+                # investor_id and firm_id substrings.
+                pair_intent_evidence = tuple(
+                    iid
+                    for iid in investor_intent_ids
+                    if f":{investor_id}:" in iid and f":{firm_id}:" in iid
+                )
+                pair_valuation_evidence = tuple(
+                    vid
+                    for vid in valuation_ids
+                    if f":{investor_id}:" in vid and f":{firm_id}:" in vid
+                )
+                firm_state_for_pair = firm_state_id_by_firm.get(firm_id)
+                firm_state_evidence = (
+                    (firm_state_for_pair,) if firm_state_for_pair else ()
+                )
+
+                market_intent_id = (
+                    f"market_intent:{investor_id}:{security_id}:{iso_date}"
+                )
+                try:
+                    kernel.investor_market_intents.add_intent(
+                        InvestorMarketIntentRecord(
+                            market_intent_id=market_intent_id,
+                            investor_id=investor_id,
+                            security_id=security_id,
+                            as_of_date=iso_date,
+                            intent_direction_label=intent_direction,
+                            intensity_label=intensity,
+                            horizon_label="near_term",
+                            status="active",
+                            visibility="internal_only",
+                            confidence=0.5,
+                            evidence_investor_intent_ids=(
+                                pair_intent_evidence
+                            ),
+                            evidence_valuation_ids=pair_valuation_evidence,
+                            evidence_market_environment_state_ids=(
+                                mes_ids_period
+                            ),
+                            evidence_firm_state_ids=firm_state_evidence,
+                            evidence_security_ids=(security_id,),
+                            evidence_venue_ids=(primary_market_venue_id,),
+                        )
+                    )
+                except DuplicateInvestorMarketIntentError:
+                    pass
+                investor_market_intent_ids.append(market_intent_id)
+                market_intent_ids_by_security.setdefault(
+                    security_id, []
+                ).append(market_intent_id)
+
+        # Aggregated market interest — one per listed security per
+        # period via the v1.15.3 helper. The helper reads only the
+        # cited investor-market-intent ids; mismatched and
+        # unresolved ids are recorded in metadata.
+        aggregated_market_interest_ids: list[str] = []
+        aggregated_id_by_security: dict[str, str] = {}
+        for firm_id in firms:
+            security_id = listed_security_id_by_firm.get(firm_id)
+            if security_id is None:
+                continue
+            intent_ids_for_security = tuple(
+                market_intent_ids_by_security.get(security_id, ())
+            )
+            try:
+                agg = build_aggregated_market_interest(
+                    kernel,
+                    venue_id=primary_market_venue_id,
+                    security_id=security_id,
+                    as_of_date=iso_date,
+                    source_market_intent_ids=intent_ids_for_security,
+                    source_market_environment_state_ids=mes_ids_period,
+                )
+                aggregated_id = agg.aggregated_interest_id
+            except DuplicateAggregatedMarketInterestError:
+                aggregated_id = (
+                    f"aggregated_market_interest:"
+                    f"{primary_market_venue_id}:{security_id}:{iso_date}"
+                )
+            aggregated_market_interest_ids.append(aggregated_id)
+            aggregated_id_by_security[security_id] = aggregated_id
+
+        # Indicative market pressure — one per listed security per
+        # period via the v1.15.4 helper. The helper does not mutate
+        # the PriceBook (pinned by a dedicated test in
+        # tests/test_market_pressure.py).
+        indicative_market_pressure_ids: list[str] = []
+        for firm_id in firms:
+            security_id = listed_security_id_by_firm.get(firm_id)
+            if security_id is None:
+                continue
+            agg_for_security = aggregated_id_by_security.get(security_id)
+            agg_refs = (agg_for_security,) if agg_for_security else ()
+            try:
+                pressure = build_indicative_market_pressure(
+                    kernel,
+                    security_id=security_id,
+                    as_of_date=iso_date,
+                    source_aggregated_interest_ids=agg_refs,
+                    source_market_environment_state_ids=mes_ids_period,
+                    source_security_ids=(security_id,),
+                    source_venue_ids=(primary_market_venue_id,),
+                )
+                indicative_market_pressure_ids.append(
+                    pressure.market_pressure_id
+                )
+            except DuplicateIndicativeMarketPressureError:
+                indicative_market_pressure_ids.append(
+                    f"indicative_market_pressure:{security_id}:{iso_date}"
+                )
+
         period_end_idx = len(kernel.ledger.records)
 
         period_summaries.append(
@@ -2588,6 +2866,13 @@ def run_living_reference_world(
                 corporate_financing_path_ids=tuple(
                     corporate_financing_path_ids
                 ),
+                investor_market_intent_ids=tuple(investor_market_intent_ids),
+                aggregated_market_interest_ids=tuple(
+                    aggregated_market_interest_ids
+                ),
+                indicative_market_pressure_ids=tuple(
+                    indicative_market_pressure_ids
+                ),
                 record_count_created=period_end_idx - period_start_idx,
                 metadata={
                     "period_index": period_idx,
@@ -2602,6 +2887,11 @@ def run_living_reference_world(
         kernel, since_index=ledger_count_before
     )
 
+    listed_security_ids = tuple(
+        sorted(listed_security_id_by_firm.values())
+    )
+    market_venue_ids = (primary_market_venue_id,)
+
     return LivingReferenceWorldResult(
         run_id=rid,
         period_count=len(iso_dates),
@@ -2615,5 +2905,7 @@ def run_living_reference_world(
         industry_ids=unique_industry_ids,
         stewardship_theme_ids=stewardship_theme_ids,
         market_ids=unique_market_ids,
+        listed_security_ids=listed_security_ids,
+        market_venue_ids=market_venue_ids,
         metadata=dict(metadata or {}),
     )

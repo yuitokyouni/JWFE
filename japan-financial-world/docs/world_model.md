@@ -8858,3 +8858,50 @@ The test count moves from `3731 / 3731` (v1.15.3) to `3849 / 3849` (v1.15.4) —
 ### 110.5 Forward pointer
 
 v1.15.4 closes the v1.15 storage / helper phase. The next milestone is **v1.15.5 living-world integration** — wires the four-layer chain (`SecurityMarketBook` → `InvestorMarketIntentBook` → `AggregatedMarketInterestBook` → `IndicativeMarketPressureBook`) into the per-period sweep so `living_world_manifest.v1` carries the market-interest aggregation alongside the existing record stream. The `living_world_digest` will move at v1.15.5 by design. **v1.15.6** then folds `IndicativeMarketPressureRecord` ids back into the v1.14.3 `CapitalStructureReviewCandidate` and the v1.14.4 `CorporateFinancingPathRecord` as additional citation slots (the `market_access_label` vocabulary alignment makes this composition mechanical). **v1.15.last** is the docs-only freeze.
+
+## 111. v1.15.5 Living-world securities market intent integration
+
+§111 ships the first living-world integration of the v1.15 securities-market-intent storage chain. v1.15.1 / v1.15.2 / v1.15.3 / v1.15.4 left `living_world_digest` byte-identical because they were storage / helper only; v1.15.5 puts the four layers on the per-period path so the chain shows up in the manifest, the markdown report, the canonical view, and the digest. The integration is **storage / aggregation only** — there is **no order submission, no buy / sell labels, no order book, no matching, no execution, no clearing, no settlement, no quote dissemination, no bid / ask, no price update, no `PriceBook` mutation, no target price, no expected return, no recommendation, no portfolio allocation, no real exchange mechanics, no real data ingestion, no Japan calibration**.
+
+### 111.1 What v1.15.5 ships
+
+A new securities market intent setup phase + per-period chain phase in `world/reference_living_world.py::run_living_reference_world` runs **after** the v1.14.5 corporate-financing chain phase and **before** the period summary is assembled.
+
+**Setup (run-once).** `1 venue + F securities` records:
+
+- One generic exchange-shaped `MarketVenueRecord` (`venue:reference_exchange_a`, `venue_type_label="exchange"`, `venue_role_label="listing_venue"`, `supported_security_type_labels=("equity",)`, `supported_intent_labels=` the full v1.15 `SAFE_INTENT_LABELS` set).
+- One equity-like `ListedSecurityRecord` per firm (`security:{firm_id}:equity:line_1`, `security_type_label="equity"`, `listing_status_label="listed"`, `liquidity_profile_label="moderate"`, `investor_access_label="broad"`, `currency_label="synthetic_currency_a"`).
+
+The setup ids are exposed on `LivingReferenceWorldResult.listed_security_ids` and `LivingReferenceWorldResult.market_venue_ids` (sorted; setup-once, not multiplied per period).
+
+**Per period (deterministic).** `I × F + 2 × F` records:
+
+- **`InvestorMarketIntentRecord`** per `(investor, listed security)` pair. `intent_direction_label` rotates by `(period_idx + investor_idx + firm_idx) % 4` over a four-element safe-label cycle (`increase_interest` / `reduce_interest` / `hold_review` / `liquidity_watch`); `intensity_label` rotates over `moderate / elevated / low / moderate`; `horizon_label = "near_term"`. Cites the `(investor, firm)` filtered investor-intent (v1.12.1) and valuation (v1.9.5) ids, the period's market-environment-state ids, the firm's financial-state id, the listed security id, and the venue id.
+- **`AggregatedMarketInterestRecord`** per listed security via `build_aggregated_market_interest`. Cites the period's market-intent ids on this security plus market-environment-state ids.
+- **`IndicativeMarketPressureRecord`** per listed security via `build_indicative_market_pressure`. Cites the period's aggregated-interest record on this security plus market-environment-state ids, security id, and venue id.
+
+`LivingReferencePeriodSummary` gains three new id-tuple fields (`investor_market_intent_ids` / `aggregated_market_interest_ids` / `indicative_market_pressure_ids`). The `living_world_replay` canonical view emits the same three id tuples per period plus the two setup-level tuples (`listed_security_ids`, `market_venue_ids`). The CLI per-period trace prints `market_intents= / aggregated_interest= / market_pressure=` counts, and the integrated-chain summary disclaimer is extended. The markdown report adds a `## Securities market intent` section with one row per period and four histograms (intent direction across investor records, aggregated net-interest, pressure market-access, pressure financing-relevance).
+
+### 111.2 Anti-claims
+
+The integration emits **only** five v1.15.x event types: `listed_security_registered`, `market_venue_registered`, `investor_market_intent_recorded`, `aggregated_market_interest_recorded`, `indicative_market_pressure_recorded`. Tests pin the absence of `order_submitted` / `trade_executed` / `price_updated` / `quote_disseminated` / `clearing_completed` / `settlement_completed` / `ownership_transferred` / `contract_*` over the default sweep.
+
+No v1.15 chain payload carries `buy`, `sell`, `order`, `order_id`, `trade`, `trade_id`, `bid`, `ask`, `quote`, `price`, `market_price`, `indicative_price`, `target_price`, `expected_return`, `execution`, `clearing`, `settlement`, `target_weight`, `overweight`, `underweight`, `recommendation`, `investment_advice`, or `real_data_value` field. Tests pin every key.
+
+A dedicated `test_v1_15_5_does_not_mutate_pricebook` test runs the full default sweep and asserts `kernel.prices.snapshot()` is byte-equal before and after. v1.15.5 is a *labels* layer, never a *price* layer.
+
+### 111.3 Performance boundary
+
+The per-period record count moves from `96` (v1.14.5) to `108` (v1.15.5) for the default fixture (3 firms, 2 investors): `96 + I × F + 2 × F = 96 + 6 + 6 = 108`. Per-run total moves from `[384, 432]` to `[432, 480]`. Setup overhead increases by 4 records (1 venue + 3 securities). The default 4-period sweep emits **460** records. The expected-record-count formula in `tests/test_living_reference_world_performance_boundary.py::count_expected_living_world_records` adds `I × F + 2 × F` per period; the helper-formula assertion now pins `total == 432`.
+
+### 111.4 Digest
+
+The integration-test `living_world_digest` moves from `3df73fd4f152c16d1188f5c15b69bdc8a5cd6061b637ea35af671e86c6fa2d71` (v1.14.5 — unchanged through v1.15.1 → v1.15.4 because those milestones were storage / helper only) to **`041686b0c69eea751cb24e3e3e5b4ac25e56a8ae20d4b1bd40a41dc5303403a5`** (v1.15.5) by design. The new ledger records, the three new id tuples on each period summary, and the two new setup-level id tuples flow into the canonical view's bytes.
+
+The test count moves from `3849 / 3849` (v1.15.4) to `3863 / 3863` (v1.15.5) — `+14` integration tests appended to `tests/test_living_reference_world.py` covering: setup shape (1 venue + F securities), per-period count shapes for all three chain layers, citation graph (intent → security + venue, aggregated → intents, pressure → aggregated), `PriceBook` no-mutation invariant, no forbidden ledger event types (with explicit name-based pin for `trade_executed` / `quote_disseminated` / `clearing_completed` / `settlement_completed`), no anti-field payload keys, replay determinism across two runs, canonical-view tuple presence (including `listed_security_count` and `market_venue_count`), markdown-section presence, and synthetic-only id scan.
+
+### 111.5 Forward pointer
+
+v1.15.5 ships the first living-world integration of the v1.15 chain. The next milestone is **v1.15.6** — folds `IndicativeMarketPressureRecord` ids back into the v1.14.3 `CapitalStructureReviewCandidate` and the v1.14.4 `CorporateFinancingPathRecord` as additional citation slots. The `market_access_label` vocabulary alignment (pinned by an `is`-identity test in v1.15.4) makes this composition mechanical: capital-structure review can read the pressure record's `market_access_label` directly and use it as additional evidence; the financing path's `build_corporate_financing_path` helper gains an optional pressure-evidence kwarg.
+
+**v1.15.last** is the docs-only freeze that pins the v1.15 surface as the first FWE milestone where the living world produces a securities-market-intent aggregation alongside the v1.12 attention loop and the v1.14 corporate-financing chain.
