@@ -91,6 +91,7 @@ class RecordType(str, Enum):
         "collateral_eligibility_signal_recorded"
     )
     CORPORATE_FINANCING_NEED_RECORDED = "corporate_financing_need_recorded"
+    FUNDING_OPTION_CANDIDATE_RECORDED = "funding_option_candidate_recorded"
     STATE_SNAPSHOT_CREATED = "state_snapshot_created"
     WARNING = "warning"
     ERROR = "error"

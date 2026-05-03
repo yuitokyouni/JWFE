@@ -8410,3 +8410,49 @@ The v1.12.6 watch-label classifier inputs are **unchanged**. The bank credit rev
 v1.13.6 is a substrate refactor — no new ledger records, no new orchestrator phase. Per-period record count, per-run window, and `living_world_digest` are **unchanged** from v1.13.5 / v1.13.last (`916e410d829bec0be26b92989fa2d5438b80637a5c56afd785e0b56cfbebb379`). The default-fixture replay remains byte-identical.
 
 The test count moves from `3052 / 3052` (v1.14.1) to `3066 / 3066` (v1.13.6) — `+14` tests appended to `tests/test_evidence_resolver.py` covering: bucket-constant presence, explicit-kwarg resolution, selection-prefix dispatch, unresolved-ref capture under default mode, strict-mode raise, no-mutation against `kernel.interbank_liquidity`, no-ledger-write, deterministic per-bucket order, dedup behavior, `to_dict` round-trip, anti-field absence with the new bucket present, the resolver-class-method wrapper, and an end-to-end bank-credit-review test confirming `frame.resolved_interbank_liquidity_state_ids` lands on the produced signal's payload + metadata while every v1.9.7 anti-claim flag (`no_lending_decision` / `no_internal_rating` / `no_probability_of_default` / `synthetic_only`) is preserved.
+
+## 101. v1.14.2 FundingOptionCandidate — generic synthetic financing-route storage
+
+§101 ships the second concrete code milestone in the v1.14 corporate-financing-intent sequence. v1.14.2 ships **storage only**: an append-only `FundingOptionCandidateBook` that holds immutable `FundingOptionCandidate` instances naming a *possible* financing route for a corporate financing need at a point in time. There is **no loan origination, no DCM execution, no ECM execution, no underwriting, no syndication, no security issuance, no bookbuilding, no allocation, no loan approval, no interest rate, no spread, no fee, no offering price, no calibrated take-up probability, no investment advice, no real data ingestion, no Japan calibration**.
+
+A `FundingOptionCandidate` represents a *possible* financing route built downstream of a `CorporateFinancingNeedRecord`. It is not executed financing, not an underwriting commitment, not a loan approval, not a securities issuance, and not a price.
+
+### 101.1 What v1.14.2 ships
+
+A new module `world/funding_options.py` containing:
+
+- `FundingOptionCandidate` (frozen dataclass) — fields: `funding_option_id`, `firm_id`, `as_of_date`, seven label fields drawn from closed sets (`option_type_label` / `instrument_class_label` / `maturity_band_label` / `seniority_label` / `accessibility_label` / `urgency_fit_label` / `market_fit_label`), `status`, `visibility`, `confidence` in `[0.0, 1.0]` (booleans rejected), six `source_*_ids` plain-id tuples (need ids, market environment state ids, interbank liquidity state ids, firm state ids, bank credit review signal ids, investor intent ids), `metadata`. Closed-set membership is **enforced** at construction.
+- `FundingOptionCandidateBook` (append-only) — `add_candidate` / `get_candidate` / `list_candidates` / `list_by_firm` / `list_by_option_type` / `list_by_instrument_class` / `list_by_accessibility` / `list_by_status` / `list_by_date` / `list_by_need` / `snapshot`.
+- New ledger record type `FUNDING_OPTION_CANDIDATE_RECORDED`, emitted exactly once per `add_candidate` call.
+- Wired into `WorldKernel.funding_options`.
+
+Closed-set label vocabulary (enforced):
+
+- `option_type_label` ∈ { `bank_loan_candidate`, `bond_issuance_candidate`, `equity_issuance_candidate`, `internal_cash_candidate`, `asset_sale_candidate`, `hybrid_security_candidate`, `unknown` }
+- `instrument_class_label` ∈ { `loan`, `bond`, `equity`, `internal_funding`, `asset_disposal`, `hybrid`, `unknown` }
+- `maturity_band_label` ∈ { `short_term`, `medium_term`, `long_term`, `perpetual_or_equity_like`, `unknown` }
+- `seniority_label` ∈ { `senior`, `subordinated`, `unsecured`, `secured`, `equity_like`, `not_applicable`, `unknown` }
+- `accessibility_label` ∈ { `accessible`, `selective`, `constrained`, `unavailable`, `unknown` }
+- `urgency_fit_label` ∈ { `immediate`, `near_term`, `medium_term`, `strategic`, `unknown` }
+- `market_fit_label` ∈ { `supportive`, `mixed`, `restrictive`, `unknown` }
+
+### 101.2 Anti-claims
+
+The record carries **no** `rate`, `spread`, `fee`, `coupon`, `coupon_rate`, `price`, `offering_price`, `allocation`, `underwriting`, `syndication`, `commitment`, `approval`, `executed`, `take_up_probability`, `expected_return`, `recommendation`, `investment_advice`, `real_data_value`, `amount`, `loan_amount`, `interest_rate`, `yield`, `policy_rate`, `interest`, `tenor_years`, `default_probability`, `behavior_probability`, `rating`, `internal_rating`, `pd`, `lgd`, `ead`, `decision_outcome`, `order`, `trade`, `forecast_value`, or `actual_value` field. Tests pin the absence on both the dataclass field set and the ledger payload key set. `confidence` is a synthetic ordering in `[0.0, 1.0]`, **never** a calibrated take-up probability.
+
+The book emits **only** `FUNDING_OPTION_CANDIDATE_RECORDED` records and refuses to mutate any other source-of-truth book — including `corporate_financing_needs`. Cross-references (need ids, market environment ids, interbank liquidity ids, etc.) are stored as plain ids and not validated against any other book per the v0/v1 cross-reference rule.
+
+### 101.3 Performance boundary
+
+v1.14.2 is storage-only and not yet wired into the orchestrator. Per-period record count, per-run window, and `living_world_digest` are **unchanged** from v1.13.last. The orchestrator integration is deferred until v1.14.5 along with the rest of the v1.14 sequence.
+
+The test count moves from `3066 / 3066` (v1.13.6) to `3165 / 3165` (v1.14.2) — `+99` tests in the new `tests/test_funding_options.py`.
+
+### 101.4 Forward pointer
+
+v1.14.2 turns one `CorporateFinancingNeedRecord` into a *set of possible financing routes*. It does not execute any of them. The next two storage milestones in the sequence are:
+
+- **v1.14.3 CapitalStructureReviewCandidate** — a downstream review record that reads a `FundingOptionCandidate` and posts a non-binding capital-structure-review posture (still no execution, no approval, no price).
+- **v1.14.4 cross-linking** — links the three v1.14 layers (need → option → review) by id, exposing the chain as a queryable subgraph on the ledger without introducing any execution path.
+
+Orchestrator wiring (per-period sweep, `living_world_digest` impact) lands at v1.14.5.
