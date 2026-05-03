@@ -1772,3 +1772,602 @@ def test_attention_feedback_module_contains_no_jurisdiction_specific_identifiers
     for token in _FORBIDDEN_TOKENS:
         pattern = rf"\b{re.escape(token)}\b"
         assert re.search(pattern, text) is None, token
+
+
+# ---------------------------------------------------------------------------
+# v1.16.3 — securities-market-pressure / financing-path attention feedback.
+#
+# The classifier helpers and the ``build_attention_feedback`` kwargs map
+# prior-period IndicativeMarketPressureRecord (v1.15.4) and
+# CorporateFinancingPathRecord (v1.14.4 / v1.15.6) labels to additional
+# fresh focus labels. These tests pin the closed-set vocabulary, the
+# rule firings, the unioning into the v1.12.8 fresh focus set, the
+# v1.12.9 budget / decay / saturation discipline, and the new
+# source-id slots / ledger payload keys.
+# ---------------------------------------------------------------------------
+
+
+def _pressure_record(
+    *,
+    market_pressure_id: str = "indicative_market_pressure:test:2026-03-31",
+    security_id: str = "security:firm:test:equity:line_1",
+    as_of_date: str = _AS_OF,
+    demand_pressure_label: str = "balanced",
+    liquidity_pressure_label: str = "normal",
+    volatility_pressure_label: str = "calm",
+    market_access_label: str = "open",
+    financing_relevance_label: str = "neutral_for_financing",
+    status: str = "active",
+):
+    from world.market_pressure import IndicativeMarketPressureRecord
+
+    return IndicativeMarketPressureRecord(
+        market_pressure_id=market_pressure_id,
+        security_id=security_id,
+        as_of_date=as_of_date,
+        demand_pressure_label=demand_pressure_label,
+        liquidity_pressure_label=liquidity_pressure_label,
+        volatility_pressure_label=volatility_pressure_label,
+        market_access_label=market_access_label,
+        financing_relevance_label=financing_relevance_label,
+        status=status,
+        visibility="internal_only",
+        confidence=0.5,
+    )
+
+
+def _financing_path_record(
+    *,
+    financing_path_id: str = "corporate_financing_path:firm:test:2026-03-31",
+    firm_id: str = "firm:test",
+    as_of_date: str = _AS_OF,
+    path_type_label: str = "mixed_path",
+    path_status_label: str = "under_review",
+    coherence_label: str = "coherent",
+    constraint_label: str = "no_obvious_constraint",
+    next_review_label: str = "monitor",
+    status: str = "active",
+):
+    from world.financing_paths import CorporateFinancingPathRecord
+
+    return CorporateFinancingPathRecord(
+        financing_path_id=financing_path_id,
+        firm_id=firm_id,
+        as_of_date=as_of_date,
+        path_type_label=path_type_label,
+        path_status_label=path_status_label,
+        coherence_label=coherence_label,
+        constraint_label=constraint_label,
+        next_review_label=next_review_label,
+        status=status,
+        visibility="internal_only",
+        confidence=0.5,
+    )
+
+
+def test_v1_16_3_new_focus_labels_in_closed_set():
+    from world.attention_feedback import (
+        FOCUS_LABEL_DILUTION,
+        FOCUS_LABEL_FINANCING,
+        FOCUS_LABEL_INFORMATION_GAP,
+        FOCUS_LABEL_MARKET_INTEREST,
+        FOCUS_LABEL_RISK,
+    )
+
+    new_labels = {
+        FOCUS_LABEL_RISK,
+        FOCUS_LABEL_FINANCING,
+        FOCUS_LABEL_DILUTION,
+        FOCUS_LABEL_MARKET_INTEREST,
+        FOCUS_LABEL_INFORMATION_GAP,
+    }
+    assert new_labels <= set(ALL_FOCUS_LABELS)
+    # Disjoint from forbidden trade-instruction verbs.
+    forbidden_verbs = {
+        "buy",
+        "sell",
+        "order",
+        "trade",
+        "execution",
+        "target_weight",
+        "overweight",
+        "underweight",
+        "recommendation",
+    }
+    assert not (new_labels & forbidden_verbs)
+
+
+def test_v1_16_3_new_trigger_labels_exist():
+    from world.attention_feedback import (
+        TRIGGER_FINANCING_PATH_OBSERVED,
+        TRIGGER_MARKET_PRESSURE_OBSERVED,
+    )
+
+    assert TRIGGER_MARKET_PRESSURE_OBSERVED == "market_pressure_observed"
+    assert TRIGGER_FINANCING_PATH_OBSERVED == "financing_path_observed"
+
+
+def test_v1_16_3_classify_market_pressure_focus_constrained_market_access():
+    from world.attention_feedback import (
+        FOCUS_LABEL_FUNDING,
+        FOCUS_LABEL_MARKET_ACCESS,
+        FOCUS_LABEL_RISK,
+        _classify_market_pressure_focus,
+    )
+
+    rec = _pressure_record(market_access_label="constrained")
+    focus, fired = _classify_market_pressure_focus(pressure_records=(rec,))
+    assert fired
+    assert {
+        FOCUS_LABEL_MARKET_ACCESS,
+        FOCUS_LABEL_FUNDING,
+        FOCUS_LABEL_RISK,
+    } <= focus
+
+
+def test_v1_16_3_classify_market_pressure_focus_closed_market_access():
+    from world.attention_feedback import (
+        FOCUS_LABEL_FUNDING,
+        FOCUS_LABEL_MARKET_ACCESS,
+        FOCUS_LABEL_RISK,
+        _classify_market_pressure_focus,
+    )
+
+    rec = _pressure_record(market_access_label="closed")
+    focus, _ = _classify_market_pressure_focus(pressure_records=(rec,))
+    assert {
+        FOCUS_LABEL_MARKET_ACCESS,
+        FOCUS_LABEL_FUNDING,
+        FOCUS_LABEL_RISK,
+    } <= focus
+
+
+def test_v1_16_3_classify_market_pressure_focus_adverse_for_market_access():
+    from world.attention_feedback import (
+        FOCUS_LABEL_FINANCING,
+        FOCUS_LABEL_MARKET_ACCESS,
+        FOCUS_LABEL_RISK,
+        _classify_market_pressure_focus,
+    )
+
+    rec = _pressure_record(
+        financing_relevance_label="adverse_for_market_access"
+    )
+    focus, _ = _classify_market_pressure_focus(pressure_records=(rec,))
+    assert {
+        FOCUS_LABEL_MARKET_ACCESS,
+        FOCUS_LABEL_FINANCING,
+        FOCUS_LABEL_RISK,
+    } <= focus
+
+
+def test_v1_16_3_classify_market_pressure_focus_caution_for_dilution():
+    from world.attention_feedback import (
+        FOCUS_LABEL_DILUTION,
+        FOCUS_LABEL_FINANCING,
+        FOCUS_LABEL_VALUATION,
+        _classify_market_pressure_focus,
+    )
+
+    rec = _pressure_record(financing_relevance_label="caution_for_dilution")
+    focus, _ = _classify_market_pressure_focus(pressure_records=(rec,))
+    assert {
+        FOCUS_LABEL_VALUATION,
+        FOCUS_LABEL_DILUTION,
+        FOCUS_LABEL_FINANCING,
+    } <= focus
+
+
+def test_v1_16_3_classify_market_pressure_focus_tight_liquidity():
+    from world.attention_feedback import (
+        FOCUS_LABEL_FUNDING,
+        FOCUS_LABEL_LIQUIDITY,
+        _classify_market_pressure_focus,
+    )
+
+    rec = _pressure_record(liquidity_pressure_label="tight")
+    focus, _ = _classify_market_pressure_focus(pressure_records=(rec,))
+    assert {FOCUS_LABEL_LIQUIDITY, FOCUS_LABEL_FUNDING} <= focus
+
+
+def test_v1_16_3_classify_market_pressure_focus_stressed_liquidity():
+    from world.attention_feedback import (
+        FOCUS_LABEL_FUNDING,
+        FOCUS_LABEL_LIQUIDITY,
+        _classify_market_pressure_focus,
+    )
+
+    rec = _pressure_record(liquidity_pressure_label="stressed")
+    focus, _ = _classify_market_pressure_focus(pressure_records=(rec,))
+    assert {FOCUS_LABEL_LIQUIDITY, FOCUS_LABEL_FUNDING} <= focus
+
+
+def test_v1_16_3_classify_market_pressure_focus_supportive_demand():
+    from world.attention_feedback import (
+        FOCUS_LABEL_MARKET_INTEREST,
+        FOCUS_LABEL_VALUATION,
+        _classify_market_pressure_focus,
+    )
+
+    rec = _pressure_record(demand_pressure_label="supportive")
+    focus, _ = _classify_market_pressure_focus(pressure_records=(rec,))
+    assert {FOCUS_LABEL_MARKET_INTEREST, FOCUS_LABEL_VALUATION} <= focus
+
+
+def test_v1_16_3_classify_market_pressure_focus_insufficient_observations():
+    from world.attention_feedback import (
+        FOCUS_LABEL_INFORMATION_GAP,
+        _classify_market_pressure_focus,
+    )
+
+    rec_demand = _pressure_record(
+        demand_pressure_label="insufficient_observations"
+    )
+    focus_demand, _ = _classify_market_pressure_focus(
+        pressure_records=(rec_demand,)
+    )
+    assert FOCUS_LABEL_INFORMATION_GAP in focus_demand
+
+    rec_financing = _pressure_record(
+        financing_relevance_label="insufficient_observations"
+    )
+    focus_financing, _ = _classify_market_pressure_focus(
+        pressure_records=(rec_financing,)
+    )
+    assert FOCUS_LABEL_INFORMATION_GAP in focus_financing
+
+
+def test_v1_16_3_classify_market_pressure_focus_balanced_does_not_fire():
+    from world.attention_feedback import _classify_market_pressure_focus
+
+    rec = _pressure_record()  # all defaults — balanced / normal / calm / open / neutral
+    focus, fired = _classify_market_pressure_focus(pressure_records=(rec,))
+    assert not fired
+    assert focus == set()
+
+
+def test_v1_16_3_classify_financing_path_focus_conflicting_evidence():
+    from world.attention_feedback import (
+        FOCUS_LABEL_FINANCING,
+        FOCUS_LABEL_INFORMATION_GAP,
+        _classify_financing_path_focus,
+    )
+
+    rec = _financing_path_record(coherence_label="conflicting_evidence")
+    focus, fired = _classify_financing_path_focus(path_records=(rec,))
+    assert fired
+    assert {
+        FOCUS_LABEL_INFORMATION_GAP,
+        FOCUS_LABEL_FINANCING,
+    } <= focus
+
+
+def test_v1_16_3_classify_financing_path_focus_market_access_constraint():
+    from world.attention_feedback import (
+        FOCUS_LABEL_FINANCING,
+        FOCUS_LABEL_MARKET_ACCESS,
+        _classify_financing_path_focus,
+    )
+
+    rec = _financing_path_record(constraint_label="market_access_constraint")
+    focus, _ = _classify_financing_path_focus(path_records=(rec,))
+    assert {FOCUS_LABEL_MARKET_ACCESS, FOCUS_LABEL_FINANCING} <= focus
+
+
+def test_v1_16_3_classify_financing_path_focus_compare_options():
+    from world.attention_feedback import (
+        FOCUS_LABEL_FINANCING,
+        FOCUS_LABEL_VALUATION,
+        _classify_financing_path_focus,
+    )
+
+    rec = _financing_path_record(next_review_label="compare_options")
+    focus, _ = _classify_financing_path_focus(path_records=(rec,))
+    assert {FOCUS_LABEL_FINANCING, FOCUS_LABEL_VALUATION} <= focus
+
+
+def test_v1_16_3_classify_financing_path_focus_coherent_does_not_fire():
+    from world.attention_feedback import _classify_financing_path_focus
+
+    rec = _financing_path_record()  # coherent / no_obvious_constraint / monitor
+    focus, fired = _classify_financing_path_focus(path_records=(rec,))
+    assert not fired
+    assert focus == set()
+
+
+def test_v1_16_3_actor_attention_state_carries_new_source_id_slots():
+    rec = ActorAttentionStateRecord(
+        attention_state_id="attention_state:test:2026-03-31",
+        actor_id="investor:test",
+        actor_type="investor",
+        as_of_date=_AS_OF,
+        status="active",
+        confidence=0.5,
+        max_selected_refs=5,
+        focus_labels=("memory",),
+        focus_weights={"memory": 0.5},
+        source_indicative_market_pressure_ids=(
+            "indicative_market_pressure:test:2026-03-31",
+        ),
+        source_corporate_financing_path_ids=(
+            "corporate_financing_path:firm:test:2026-03-31",
+        ),
+    )
+    assert rec.source_indicative_market_pressure_ids == (
+        "indicative_market_pressure:test:2026-03-31",
+    )
+    assert rec.source_corporate_financing_path_ids == (
+        "corporate_financing_path:firm:test:2026-03-31",
+    )
+    payload = rec.to_dict()
+    assert payload["source_indicative_market_pressure_ids"] == [
+        "indicative_market_pressure:test:2026-03-31"
+    ]
+    assert payload["source_corporate_financing_path_ids"] == [
+        "corporate_financing_path:firm:test:2026-03-31"
+    ]
+
+
+def test_v1_16_3_build_attention_feedback_records_pressure_path_source_ids():
+    """``build_attention_feedback`` must store the cited
+    pressure / path ids in the new source-id slots and in
+    ``AttentionFeedbackRecord.source_record_ids``."""
+    k = _kernel()
+    pressure = _pressure_record()
+    path = _financing_path_record()
+    k.indicative_market_pressure.add_record(pressure)
+    k.financing_paths.add_path(path)
+    fb = build_attention_feedback(
+        k,
+        actor_id=_ACTOR,
+        actor_type="investor",
+        as_of_date=_AS_OF,
+        indicative_market_pressure_ids=(pressure.market_pressure_id,),
+        corporate_financing_path_ids=(path.financing_path_id,),
+    )
+    assert fb.attention_state.source_indicative_market_pressure_ids == (
+        pressure.market_pressure_id,
+    )
+    assert fb.attention_state.source_corporate_financing_path_ids == (
+        path.financing_path_id,
+    )
+    assert pressure.market_pressure_id in fb.feedback.source_record_ids
+    assert path.financing_path_id in fb.feedback.source_record_ids
+
+
+def test_v1_16_3_build_attention_feedback_constrained_pressure_widens_focus():
+    """A cited ``constrained`` market-access pressure adds
+    ``market_access`` / ``funding`` / ``risk`` to the new
+    state's focus_labels."""
+    from world.attention_feedback import (
+        FOCUS_LABEL_FUNDING,
+        FOCUS_LABEL_MARKET_ACCESS,
+        FOCUS_LABEL_RISK,
+        TRIGGER_MARKET_PRESSURE_OBSERVED,
+    )
+
+    k = _kernel()
+    pressure = _pressure_record(market_access_label="constrained")
+    k.indicative_market_pressure.add_record(pressure)
+    fb = build_attention_feedback(
+        k,
+        actor_id=_ACTOR,
+        actor_type="investor",
+        as_of_date=_AS_OF,
+        indicative_market_pressure_ids=(pressure.market_pressure_id,),
+    )
+    focus = set(fb.attention_state.focus_labels)
+    assert {
+        FOCUS_LABEL_MARKET_ACCESS,
+        FOCUS_LABEL_FUNDING,
+        FOCUS_LABEL_RISK,
+    } <= focus
+    # No other v1.12.8 rule fired in this fixture, so the trigger
+    # label is the v1.16.3 one.
+    assert fb.feedback.trigger_label == TRIGGER_MARKET_PRESSURE_OBSERVED
+
+
+def test_v1_16_3_build_attention_feedback_adverse_financing_relevance():
+    from world.attention_feedback import (
+        FOCUS_LABEL_FINANCING,
+        FOCUS_LABEL_MARKET_ACCESS,
+        FOCUS_LABEL_RISK,
+    )
+
+    k = _kernel()
+    pressure = _pressure_record(
+        financing_relevance_label="adverse_for_market_access"
+    )
+    k.indicative_market_pressure.add_record(pressure)
+    fb = build_attention_feedback(
+        k,
+        actor_id=_ACTOR,
+        actor_type="investor",
+        as_of_date=_AS_OF,
+        indicative_market_pressure_ids=(pressure.market_pressure_id,),
+    )
+    focus = set(fb.attention_state.focus_labels)
+    assert {
+        FOCUS_LABEL_MARKET_ACCESS,
+        FOCUS_LABEL_FINANCING,
+        FOCUS_LABEL_RISK,
+    } <= focus
+
+
+def test_v1_16_3_build_attention_feedback_market_access_constraint_path():
+    from world.attention_feedback import (
+        FOCUS_LABEL_FINANCING,
+        FOCUS_LABEL_MARKET_ACCESS,
+        TRIGGER_FINANCING_PATH_OBSERVED,
+    )
+
+    k = _kernel()
+    path = _financing_path_record(
+        constraint_label="market_access_constraint"
+    )
+    k.financing_paths.add_path(path)
+    fb = build_attention_feedback(
+        k,
+        actor_id=_ACTOR,
+        actor_type="investor",
+        as_of_date=_AS_OF,
+        corporate_financing_path_ids=(path.financing_path_id,),
+    )
+    focus = set(fb.attention_state.focus_labels)
+    assert {FOCUS_LABEL_MARKET_ACCESS, FOCUS_LABEL_FINANCING} <= focus
+    assert fb.feedback.trigger_label == TRIGGER_FINANCING_PATH_OBSERVED
+
+
+def test_v1_16_3_build_attention_feedback_unresolved_pressure_id_tolerated():
+    """An unknown pressure id must be tolerated — no exception,
+    no widening (and no false trigger label)."""
+    from world.attention_feedback import TRIGGER_ROUTINE_OBSERVED
+
+    k = _kernel()
+    fb = build_attention_feedback(
+        k,
+        actor_id=_ACTOR,
+        actor_type="investor",
+        as_of_date=_AS_OF,
+        indicative_market_pressure_ids=("indicative_market_pressure:missing:2026-03-31",),
+    )
+    assert fb.feedback.trigger_label == TRIGGER_ROUTINE_OBSERVED
+    # The unresolved id is still recorded in the source slot — no
+    # global scan is required to fail-soft.
+    assert fb.attention_state.source_indicative_market_pressure_ids == (
+        "indicative_market_pressure:missing:2026-03-31",
+    )
+
+
+def test_v1_16_3_pressure_focus_passes_through_budget_decay():
+    """v1.16.3 success condition: market-pressure focus must
+    crowd out older focus when the v1.12.9 budget cap is
+    reached. Seed a prior attention state with the full
+    8-label saturation cap; then call ``build_attention_feedback``
+    with pressure-driven evidence at the next period — the new
+    state must (1) include the v1.16.3 pressure labels,
+    (2) cap at ``_MAX_FOCUS_LABELS``, (3) drop at least one of
+    the prior labels so the new pressure labels can fit."""
+    from world.attention_feedback import _MAX_FOCUS_LABELS
+
+    k = _kernel()
+
+    # Seed period-0 attention state at full saturation. Eight
+    # v1.12.8 labels are placed in the book directly so the next
+    # period's build call inherits them under decay.
+    prior_labels = (
+        "credit",
+        "dialogue",
+        "engagement",
+        "escalation",
+        "firm_state",
+        "liquidity",
+        "market_environment",
+        "stewardship",
+    )
+    prior_state = ActorAttentionStateRecord(
+        attention_state_id="attention_state:" + _ACTOR + ":2026-03-31",
+        actor_id=_ACTOR,
+        actor_type="investor",
+        as_of_date="2026-03-31",
+        status="active",
+        confidence=0.7,
+        max_selected_refs=8,
+        focus_labels=prior_labels,
+        focus_weights={lbl: 1.0 for lbl in prior_labels},
+        metadata={"focus_stale_counts": {lbl: 0 for lbl in prior_labels}},
+    )
+    k.attention_feedback.add_attention_state(prior_state)
+
+    # Period 1: cite a closed-market-access / stressed-liquidity
+    # / adverse-financing pressure record. The classifier adds
+    # ``market_access`` / ``funding`` / ``risk`` / ``financing``
+    # / ``liquidity`` pressure-driven labels (some overlap with
+    # the prior set).
+    pressure_p1 = _pressure_record(
+        market_pressure_id="indicative_market_pressure:test:2026-04-30",
+        as_of_date="2026-04-30",
+        market_access_label="closed",
+        liquidity_pressure_label="stressed",
+        financing_relevance_label="adverse_for_market_access",
+    )
+    k.indicative_market_pressure.add_record(pressure_p1)
+    fb_p1 = build_attention_feedback(
+        k,
+        actor_id=_ACTOR,
+        actor_type="investor",
+        as_of_date="2026-04-30",
+        indicative_market_pressure_ids=(pressure_p1.market_pressure_id,),
+    )
+    p1_focus = set(fb_p1.attention_state.focus_labels)
+    # Saturation cap holds.
+    assert len(p1_focus) <= _MAX_FOCUS_LABELS
+    # The pressure-driven fresh labels are present.
+    assert "market_access" in p1_focus
+    assert "funding" in p1_focus
+    assert "risk" in p1_focus
+    # Some prior-period labels were crowded out (the cap forced
+    # at least one drop), demonstrating crowd-out.
+    assert (set(prior_labels) - p1_focus), (
+        "expected at least one v1.12.8 prior label to be crowded "
+        "out by v1.16.3 pressure-driven fresh labels"
+    )
+
+
+def test_v1_16_3_pressure_focus_does_not_introduce_forbidden_keys():
+    forbidden = {
+        "buy",
+        "sell",
+        "order",
+        "order_id",
+        "trade",
+        "trade_id",
+        "bid",
+        "ask",
+        "quote",
+        "price",
+        "market_price",
+        "indicative_price",
+        "target_price",
+        "expected_return",
+        "execution",
+        "clearing",
+        "settlement",
+        "approved",
+        "selected_option",
+        "optimal_option",
+        "commitment",
+        "underwriting",
+        "syndication",
+        "allocation",
+        "pricing",
+        "interest_rate",
+        "spread",
+        "coupon",
+        "fee",
+        "offering_price",
+        "recommendation",
+        "investment_advice",
+        "real_data_value",
+    }
+    k = _kernel()
+    pressure = _pressure_record(market_access_label="constrained")
+    k.indicative_market_pressure.add_record(pressure)
+    path = _financing_path_record(
+        constraint_label="market_access_constraint"
+    )
+    k.financing_paths.add_path(path)
+    fb = build_attention_feedback(
+        k,
+        actor_id=_ACTOR,
+        actor_type="investor",
+        as_of_date=_AS_OF,
+        indicative_market_pressure_ids=(pressure.market_pressure_id,),
+        corporate_financing_path_ids=(path.financing_path_id,),
+    )
+    payload_text = repr(fb.attention_state.to_dict()).lower()
+    for key in forbidden:
+        assert (
+            f"'{key}'" not in payload_text and f'"{key}"' not in payload_text
+        ), key
+    assert not (set(fb.attention_state.focus_labels) & forbidden)

@@ -1529,6 +1529,22 @@ def run_living_reference_world(
     # ------------------------------------------------------------------
     period_summaries: list[LivingReferencePeriodSummary] = []
 
+    # v1.16.3 — closes the v1.12 attention-feedback loop with the
+    # v1.15 securities-market-pressure / financing-path loop. The
+    # per-period attention-feedback phase reads the *previous*
+    # period's ``IndicativeMarketPressureRecord`` ids and
+    # ``CorporateFinancingPathRecord`` ids; the deterministic
+    # mappings in :func:`world.attention_feedback._classify_market_pressure_focus`
+    # and :func:`world.attention_feedback._classify_financing_path_focus`
+    # add fresh focus labels (``risk`` / ``financing`` /
+    # ``dilution`` / ``market_interest`` / ``information_gap``)
+    # that influence next-period evidence selection and therefore
+    # next-period market-intent classification — without ever
+    # creating an order, trade, price update, financing approval,
+    # or recommendation.
+    prev_period_indicative_market_pressure_ids: tuple[str, ...] = ()
+    prev_period_corporate_financing_path_ids: tuple[str, ...] = ()
+
     for period_idx, iso_date in enumerate(iso_dates):
         period_id = f"period:{rid}:{iso_date}"
         period_start_idx = len(kernel.ledger.records)
@@ -2441,6 +2457,14 @@ def run_living_reference_world(
                 valuation_ids=inv_valuations,
                 dialogue_ids=inv_dialogues,
                 escalation_candidate_ids=inv_escalations,
+                # v1.16.3 — prior-period pressure / financing path
+                # citations close the v1.12 ↔ v1.15 attention loop.
+                indicative_market_pressure_ids=(
+                    prev_period_indicative_market_pressure_ids
+                ),
+                corporate_financing_path_ids=(
+                    prev_period_corporate_financing_path_ids
+                ),
             )
             investor_attention_state_ids.append(fb.attention_state_id)
             investor_attention_feedback_ids.append(fb.feedback_id)
@@ -2463,6 +2487,16 @@ def run_living_reference_world(
                     market_environment_state_ids
                 ),
                 firm_state_ids=tuple(firm_financial_state_ids),
+                # v1.16.3 — banks also widen attention on prior-
+                # period market pressure / financing path so the
+                # next-period bank credit review observes the same
+                # pressure-driven focus shifts as investors.
+                indicative_market_pressure_ids=(
+                    prev_period_indicative_market_pressure_ids
+                ),
+                corporate_financing_path_ids=(
+                    prev_period_corporate_financing_path_ids
+                ),
             )
             bank_attention_state_ids.append(fb.attention_state_id)
             bank_attention_feedback_ids.append(fb.feedback_id)
@@ -3087,6 +3121,17 @@ def run_living_reference_world(
                     "ledger_record_count_after": period_end_idx,
                 },
             )
+        )
+
+        # v1.16.3 — capture this period's pressure / financing
+        # path ids so the next period's attention-feedback phase
+        # can cite them. The variables are read at the *next*
+        # iteration's investor / bank attention-feedback build.
+        prev_period_indicative_market_pressure_ids = tuple(
+            indicative_market_pressure_ids
+        )
+        prev_period_corporate_financing_path_ids = tuple(
+            corporate_financing_path_ids
         )
 
     ledger_count_after = len(kernel.ledger.records)

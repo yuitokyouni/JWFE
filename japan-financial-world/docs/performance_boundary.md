@@ -336,6 +336,43 @@ If any of those pins fails, the demo has either grown the
 fixture (intentional but undocumented) or gained a hidden
 quadratic loop (unintended).
 
+## v1.16.3 update pins
+
+v1.16.3 closes the v1.12 endogenous-attention loop with the v1.15
+securities-market-pressure / corporate-financing-path loop. Each
+period-N+1 `ActorAttentionStateRecord` now carries two new
+plain-id source-tuple slots
+(`source_indicative_market_pressure_ids`,
+`source_corporate_financing_path_ids`), and a closed-set
+deterministic mapping
+(`world.attention_feedback._classify_market_pressure_focus`
++ `world.attention_feedback._classify_financing_path_focus`)
+widens `focus_labels` with five new closed-set tags (`risk` /
+`financing` / `dilution` / `market_interest` /
+`information_gap`) when prior-period pressure / path evidence
+fires the rules. **No new records** — slot additions and label
+unions only — so per-period record count, per-run window, and
+loop shapes are unchanged from v1.16.2. On the default 4-period
+fixture (3 firms, 2 investors, 2 banks):
+
+- per-period record count: **108** (period 0) / **110** (periods 1+),
+  unchanged from v1.16.2,
+- per-run window: **`[432, 480]`**, unchanged,
+- default 4-period sweep total: **460 records**, unchanged,
+- integration-test `living_world_digest` (v1.16.3):
+  **`f93bdf3f4203c20d4a58e956160b0bb1004dcdecf0648a92cc961401b705897c`**
+  (moved by design — same record cardinality, different
+  attention-state payload bytes per period 1+),
+- pytest count: **4033 / 4033** passing (+34 tests across
+  attention-feedback unit + living-world integration suites).
+
+The v1.12.9 attention-budget discipline (`per_dimension_budget`,
+`decay_horizon`, `saturation_policy`) is preserved bit-for-bit:
+v1.16.3 fresh focus labels are unioned into the v1.12.8 fresh set
+**before** decay / saturation runs, so the saturation cap can
+still drop stale prior focus to make room for new pressure-driven
+labels.
+
 ## v1.16.2 update pins
 
 v1.16.2 rewires the v1.15.5 living-world investor-market-intent

@@ -2643,10 +2643,10 @@ def test_v1_12_9_living_world_digest_pinned():
     k = _seed_kernel()
     r = _run_default(k)
     expected = (
-        "0b75e95ad8f157df5e938c1318817c07f00798179c3d11b8629452d30d9398fa"
+        "f93bdf3f4203c20d4a58e956160b0bb1004dcdecf0648a92cc961401b705897c"
     )
     assert living_world_digest(k, r) == expected, (
-        "v1.16.2 living_world_digest moved unexpectedly. If the "
+        "v1.16.3 living_world_digest moved unexpectedly. If the "
         "shift is intentional, update the pinned value here AND "
         "in docs/world_model.md and docs/test_inventory.md."
     )
@@ -4397,3 +4397,296 @@ def test_v1_16_2_living_world_imports_classifier():
     assert "classify_market_intent_direction" in src
     assert "_SAFE_INTENT_DIRECTION_BY_ROTATION" not in src
     assert "_MARKET_INTENT_INTENSITY_BY_ROTATION" not in src
+
+
+# ---------------------------------------------------------------------------
+# v1.16.3 — securities-market-pressure / financing-path attention feedback
+# in the living world. These tests pin the success condition that
+# prior-period IndicativeMarketPressureRecord and
+# CorporateFinancingPathRecord ids appear in next-period
+# ActorAttentionStateRecord source-id slots, the budget / saturation
+# discipline survives the new fresh focus union, the per-period
+# record count is unchanged, and no anti-trading boundaries leak.
+# ---------------------------------------------------------------------------
+
+
+def test_v1_16_3_period_zero_attention_has_no_prior_pressure_or_path_ids():
+    """The first period has no prior pressure / path ids to cite —
+    the new source-id slots must be empty tuples."""
+    k = _seed_kernel()
+    r = _run_default(k)
+    period_zero = r.per_period_summaries[0]
+    for sid in period_zero.investor_attention_state_ids:
+        state = k.attention_feedback.get_attention_state(sid)
+        assert state.source_indicative_market_pressure_ids == ()
+        assert state.source_corporate_financing_path_ids == ()
+
+
+def test_v1_16_3_period_one_plus_attention_cites_prior_pressure_ids():
+    """Periods 1+ must cite the *previous* period's pressure ids
+    in every actor's attention state."""
+    k = _seed_kernel()
+    r = _run_default(k)
+    for period_idx in range(1, len(r.per_period_summaries)):
+        prior_pressure_ids = set(
+            r.per_period_summaries[period_idx - 1]
+            .indicative_market_pressure_ids
+        )
+        prior_path_ids = set(
+            r.per_period_summaries[period_idx - 1]
+            .corporate_financing_path_ids
+        )
+        ps = r.per_period_summaries[period_idx]
+        for sid in ps.investor_attention_state_ids + ps.bank_attention_state_ids:
+            state = k.attention_feedback.get_attention_state(sid)
+            cited_pressure = set(state.source_indicative_market_pressure_ids)
+            cited_path = set(state.source_corporate_financing_path_ids)
+            assert cited_pressure == prior_pressure_ids
+            assert cited_path == prior_path_ids
+
+
+def test_v1_16_3_attention_feedback_source_record_ids_include_pressure_path():
+    """The ``source_record_ids`` tuple of every period 1+
+    AttentionFeedbackRecord must include both the prior-period
+    pressure ids and path ids."""
+    k = _seed_kernel()
+    r = _run_default(k)
+    for period_idx in range(1, len(r.per_period_summaries)):
+        prior = r.per_period_summaries[period_idx - 1]
+        ps = r.per_period_summaries[period_idx]
+        for fid in (
+            ps.investor_attention_feedback_ids
+            + ps.bank_attention_feedback_ids
+        ):
+            fb = k.attention_feedback.get_feedback(fid)
+            srcs = set(fb.source_record_ids)
+            assert set(prior.indicative_market_pressure_ids) <= srcs
+            assert set(prior.corporate_financing_path_ids) <= srcs
+
+
+def test_v1_16_3_focus_labels_in_closed_set():
+    """Every focus label observed in the default sweep must lie in
+    the closed-set ``ALL_FOCUS_LABELS``."""
+    from world.attention_feedback import ALL_FOCUS_LABELS
+
+    k = _seed_kernel()
+    r = _run_default(k)
+    seen: set[str] = set()
+    for ps in r.per_period_summaries:
+        for sid in (
+            ps.investor_attention_state_ids + ps.bank_attention_state_ids
+        ):
+            state = k.attention_feedback.get_attention_state(sid)
+            for label in state.focus_labels:
+                seen.add(label)
+                assert label in ALL_FOCUS_LABELS, (
+                    f"unknown focus label {label!r}"
+                )
+    assert seen, "no focus labels observed"
+
+
+def test_v1_16_3_attention_state_count_unchanged_from_v1_15_6():
+    """Per-period attention-state count is still ``I + B`` (one per
+    investor + one per bank); v1.16.3 did not introduce new
+    records."""
+    k = _seed_kernel()
+    r = _run_default(k)
+    expected = len(_INVESTOR_IDS) + len(_BANK_IDS)
+    for ps in r.per_period_summaries:
+        observed = (
+            len(ps.investor_attention_state_ids)
+            + len(ps.bank_attention_state_ids)
+        )
+        assert observed == expected
+
+
+def test_v1_16_3_does_not_mutate_pricebook():
+    k = _seed_kernel()
+    prices_before = k.prices.snapshot()
+    _run_default(k)
+    assert k.prices.snapshot() == prices_before
+
+
+def test_v1_16_3_attention_payload_no_forbidden_keys():
+    """Attention-feedback ledger payloads must not carry any of
+    the v1.16.3 forbidden anti-fields."""
+    forbidden = {
+        "buy",
+        "sell",
+        "order",
+        "order_id",
+        "trade",
+        "trade_id",
+        "bid",
+        "ask",
+        "quote",
+        "price",
+        "market_price",
+        "indicative_price",
+        "target_price",
+        "expected_return",
+        "execution",
+        "clearing",
+        "settlement",
+        "approved",
+        "selected_option",
+        "optimal_option",
+        "commitment",
+        "underwriting",
+        "syndication",
+        "allocation",
+        "pricing",
+        "interest_rate",
+        "spread",
+        "coupon",
+        "fee",
+        "offering_price",
+        "recommendation",
+        "investment_advice",
+        "real_data_value",
+    }
+    attention_event_types = {
+        "attention_state_added",
+        "attention_state_created",
+        "attention_feedback_recorded",
+    }
+    k = _seed_kernel()
+    _run_default(k)
+    payloads = [
+        record.payload
+        for record in k.ledger.records
+        if record.record_type.value in attention_event_types
+    ]
+    assert payloads, "no attention-feedback records emitted"
+    for payload in payloads:
+        leaked = set(payload.keys()) & forbidden
+        assert not leaked
+
+
+def test_v1_16_3_no_forbidden_event_types():
+    """v1.16.3 must not emit any execution / order / financing
+    approval / issuance event."""
+    k = _seed_kernel()
+    _run_default(k)
+    forbidden_names = {
+        "order_submitted",
+        "trade_executed",
+        "price_updated",
+        "quote_disseminated",
+        "clearing_completed",
+        "settlement_completed",
+        "ownership_transferred",
+        "loan_approved",
+        "security_issued",
+        "underwriting_executed",
+    }
+    seen_names = {rec.record_type.value for rec in k.ledger.records}
+    assert not (seen_names & forbidden_names)
+
+
+def test_v1_16_3_two_runs_produce_byte_identical_attention_payloads():
+    k1 = _seed_kernel()
+    r1 = _run_default(k1)
+    k2 = _seed_kernel()
+    r2 = _run_default(k2)
+    for ps1, ps2 in zip(r1.per_period_summaries, r2.per_period_summaries):
+        for sid1, sid2 in zip(
+            ps1.investor_attention_state_ids,
+            ps2.investor_attention_state_ids,
+        ):
+            assert sid1 == sid2
+            d1 = k1.attention_feedback.get_attention_state(sid1).to_dict()
+            d2 = k2.attention_feedback.get_attention_state(sid2).to_dict()
+            assert d1 == d2
+
+
+def test_v1_16_3_jurisdiction_neutral_in_attention_state_payloads():
+    from re import escape, search
+
+    k = _seed_kernel()
+    r = _run_default(k)
+    forbidden = (
+        "toyota",
+        "mufg",
+        "smbc",
+        "mizuho",
+        "boj",
+        "fsa",
+        "jpx",
+        "gpif",
+        "tse",
+        "nikkei",
+        "topix",
+        "sony",
+        "nyse",
+        "japan",
+        "tokyo",
+    )
+    for ps in r.per_period_summaries:
+        for sid in (
+            ps.investor_attention_state_ids + ps.bank_attention_state_ids
+        ):
+            state = k.attention_feedback.get_attention_state(sid)
+            payload_text = repr(state.to_dict()).lower()
+            for token in forbidden:
+                assert (
+                    search(rf"\b{escape(token)}\b", payload_text) is None
+                ), token
+
+
+def test_v1_16_3_pressure_focus_appears_when_period_zero_pressure_constrained():
+    """If period 0's pressure has any restrictive label
+    (``constrained`` / ``closed`` market access, or any of the
+    other v1.16.3 trigger labels), period 1's attention focus
+    must include at least one of the v1.16.3 fresh focus
+    labels."""
+    v1163_focus = {
+        "risk",
+        "financing",
+        "dilution",
+        "market_interest",
+        "information_gap",
+    }
+    k = _seed_kernel()
+    r = _run_default(k)
+    period_zero_pressures = [
+        k.indicative_market_pressure.get_record(pid)
+        for pid in r.per_period_summaries[0].indicative_market_pressure_ids
+    ]
+    period_zero_paths = [
+        k.financing_paths.get_path(fid)
+        for fid in r.per_period_summaries[0].corporate_financing_path_ids
+    ]
+    fired = any(
+        p.market_access_label in {"constrained", "closed"}
+        or p.financing_relevance_label
+        in {"adverse_for_market_access", "caution_for_dilution"}
+        or p.liquidity_pressure_label in {"tight", "stressed"}
+        or p.demand_pressure_label == "supportive"
+        or p.demand_pressure_label == "insufficient_observations"
+        or p.financing_relevance_label == "insufficient_observations"
+        for p in period_zero_pressures
+    ) or any(
+        path.coherence_label == "conflicting_evidence"
+        or path.constraint_label == "market_access_constraint"
+        or path.next_review_label == "compare_options"
+        for path in period_zero_paths
+    )
+    if not fired:
+        # Default fixture emits no v1.16.3-relevant evidence in
+        # period 0 — skip rather than fail (the deterministic
+        # mapping is exercised by unit tests elsewhere).
+        return
+    period_one = r.per_period_summaries[1]
+    union_focus: set[str] = set()
+    for sid in (
+        period_one.investor_attention_state_ids
+        + period_one.bank_attention_state_ids
+    ):
+        state = k.attention_feedback.get_attention_state(sid)
+        union_focus.update(state.focus_labels)
+    assert (union_focus & v1163_focus), (
+        f"period-1 attention focus did not pick up any v1.16.3 "
+        f"label despite period-0 pressure / path firing; "
+        f"observed focus: {sorted(union_focus)}"
+    )

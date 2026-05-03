@@ -9138,3 +9138,104 @@ The test count moves from `3983 / 3983` (v1.16.1) to `3999 / 3999` (v1.16.2) —
 ### 116.5 Forward pointer
 
 v1.16.3 closes the v1.12 → v1.15 attention loop: the next-period `ActorAttentionState.focus_labels` will be widened by the previous period's `IndicativeMarketPressureRecord` outcomes so attention shifts in response to market-interest pressure. v1.16.last freezes the layer (closed-set vocabulary lock + per-record budget pin + canonical-view byte-stability across all v1.16 milestones).
+
+## 117. v1.16.3 Securities-market pressure → next-period attention feedback
+
+§117 closes the v1.12 endogenous-attention loop with the v1.15 securities-market-pressure / corporate-financing-path loop. Before v1.16.3, the v1.12.8 attention-feedback rule set saw only the period's own intent / valuation / firm-state / market-environment / credit-review evidence; period-N market pressure and financing-path outcomes flowed back into the next period only indirectly (through the firm financial state's `market_access_pressure` and the market-environment `overall_market_access_label`). After v1.16.3, prior-period `IndicativeMarketPressureRecord` and `CorporateFinancingPathRecord` ids are cited directly on each next-period `ActorAttentionStateRecord`, and a closed-set deterministic mapping in `world.attention_feedback._classify_market_pressure_focus` / `world.attention_feedback._classify_financing_path_focus` widens the actor's `focus_labels` accordingly — closing the cross-period loop:
+
+```
+period N
+  attention focus
+      |
+      v
+  investor-market intent (v1.16.2 classifier reads attention focus + valuation
+                          + firm pressure + market environment + intent direction)
+      |
+      v
+  AggregatedMarketInterestRecord
+      |
+      v
+  IndicativeMarketPressureRecord  ──┐
+      |                              │
+      v                              │
+  CapitalStructureReviewCandidate    │
+      |                              │
+      v                              │
+  CorporateFinancingPathRecord ──────┤
+                                     │
+                                     ▼
+period N+1  ActorAttentionStateRecord
+              focus_labels widened by v1.16.3 mapping
+              source_indicative_market_pressure_ids,
+              source_corporate_financing_path_ids cite period-N records
+              ─→ next-period evidence selection
+              ─→ next-period market-intent classification differs
+                 because of evidence, not because of an index rotation
+```
+
+### 117.1 New closed-set focus labels (v1.16.3)
+
+Five new labels join the v1.12.8 closed set in `world.attention_feedback.ALL_FOCUS_LABELS`:
+
+| New label         | Fires for                                                                                          |
+| ----------------- | -------------------------------------------------------------------------------------------------- |
+| `risk`            | restrictive-pressure observations (`market_access_label ∈ {constrained, closed}`, `financing_relevance_label = adverse_for_market_access`) |
+| `financing`       | adverse / dilution-cautious / market-access-constraint / compare-options outcomes on the financing path or pressure record |
+| `dilution`        | `financing_relevance_label = caution_for_dilution`                                                 |
+| `market_interest` | `demand_pressure_label = supportive`                                                               |
+| `information_gap` | `coherence_label = conflicting_evidence` on the path or `insufficient_observations` on the pressure |
+
+Two new trigger labels — `market_pressure_observed` and `financing_path_observed` — appear on the resulting `AttentionFeedbackRecord.trigger_label` only if no higher-priority v1.12.8 trigger fired (the v1.12.8 priority-ordered rule set takes precedence). The new labels are **disjoint** from the forbidden trade-instruction verbs (`buy` / `sell` / `order` / `target_weight` / `overweight` / `underweight` / `execution`); the disjointness is pinned by a test.
+
+### 117.2 v1.16.3 mapping rules (deterministic, closed-set)
+
+`world.attention_feedback._classify_market_pressure_focus(...)` reads each cited `IndicativeMarketPressureRecord` and adds:
+
+| Trigger                                                                  | Adds focus labels                                  |
+| ------------------------------------------------------------------------ | -------------------------------------------------- |
+| `market_access_label ∈ {constrained, closed}`                            | `market_access`, `funding`, `risk`                  |
+| `financing_relevance_label = adverse_for_market_access`                  | `market_access`, `financing`, `risk`                |
+| `financing_relevance_label = caution_for_dilution`                       | `valuation`, `dilution`, `financing`                |
+| `liquidity_pressure_label ∈ {tight, stressed}`                            | `liquidity`, `funding`                              |
+| `demand_pressure_label = supportive`                                     | `market_interest`, `valuation`                      |
+| `demand_pressure_label = insufficient_observations` *or* same on `financing_relevance_label` *or* same on `status` | `information_gap` |
+
+`world.attention_feedback._classify_financing_path_focus(...)` reads each cited `CorporateFinancingPathRecord` and adds:
+
+| Trigger                                                  | Adds focus labels                                  |
+| -------------------------------------------------------- | -------------------------------------------------- |
+| `coherence_label = conflicting_evidence`                 | `information_gap`, `financing`                     |
+| `constraint_label = market_access_constraint`            | `market_access`, `financing`                       |
+| `next_review_label = compare_options`                    | `financing`, `valuation`                           |
+
+Both helpers are pure functions over the cited records; neither mutates any kernel book; neither calls into any global scan. Unresolved cited ids are tolerated (the helper silently skips). The classifier's output set is unioned into the v1.12.8 `fresh_focus_labels` **before** decay / saturation runs — the v1.12.9 `per_dimension_budget` / `decay_horizon` / `saturation_policy` discipline therefore holds bit-for-bit, and a dedicated test pins that v1.16.3 fresh focus can crowd out stale prior focus when the cap is reached.
+
+### 117.3 New source-id slots on `ActorAttentionStateRecord`
+
+Two new tuple slots are added to `ActorAttentionStateRecord` and serialised on every `to_dict` / ledger payload:
+
+- `source_indicative_market_pressure_ids` — the cited prior-period `IndicativeMarketPressureRecord` ids (typically the previous period's full set).
+- `source_corporate_financing_path_ids` — the cited prior-period `CorporateFinancingPathRecord` ids.
+
+`build_attention_feedback(...)` accepts two matching kwargs (`indicative_market_pressure_ids` and `corporate_financing_path_ids`); the orchestrator passes the previous period's ids on every period-N+1 call. Period 0 receives empty tuples (no prior period exists). The plain-id cross-references are unvalidated against the source-of-truth books at construction time — the v1.0 / v1.1 cross-reference rule.
+
+### 117.4 What did not change
+
+- **Per-period record count, per-run window, default-sweep total**. v1.16.3 emits **no new records**. Per-period count stays at `108 / 110`; per-run window stays at `[432, 480]`; default 4-period sweep stays at `460 records`. Two new fields on the existing `ActorAttentionStateRecord` change its serialised payload bytes but not its cardinality.
+- **PriceBook invariant**. The phase does not mutate the PriceBook; pinned by `tests/test_living_reference_world.py::test_v1_16_3_does_not_mutate_pricebook`.
+- **No new ledger event types**. Attention-state / attention-feedback events already exist (`attention_state_created`, `attention_feedback_recorded`); their payloads gain the two new tuple keys.
+- **Read scope**. `build_attention_feedback` still reads only cited ids; no new global scan.
+
+### 117.5 Anti-claims
+
+This is **next-period attention focus, not market trading**. v1.16.3 does **not** introduce: orders / order book / matching / execution / clearing / settlement / quote dissemination / bid / ask / price formation / `PriceBook` mutation / target prices / expected returns / recommendations / portfolio allocations / target weights / overweight / underweight / financing approval / loan approval / security issuance / underwriting / syndication / pricing / interest rates / spreads / coupons / fees / offering prices / real-data ingestion / Japan calibration / stochastic behaviour probabilities / LLM execution / new record types. The new focus labels are **synthetic, jurisdiction-neutral, audit-grade tags** — none is a calibrated risk metric, none is a regulator-recognised investment-decision input.
+
+### 117.6 Performance boundary
+
+The integration-test `living_world_digest` moves from `0b75e95ad8f157df5e938c1318817c07f00798179c3d11b8629452d30d9398fa` (v1.16.2) to **`f93bdf3f4203c20d4a58e956160b0bb1004dcdecf0648a92cc961401b705897c`** (v1.16.3) by design — `ActorAttentionStateRecord` payloads now carry the two new source-id tuple slots, and `focus_labels` widen on period-1+ states for actors whose prior-period pressure / path evidence triggers the v1.16.3 mapping. Number of records, per-period record count, and per-run window unchanged. The shift is pinned by `tests/test_living_reference_world.py::test_v1_12_9_living_world_digest_pinned` to detect any further accidental drift.
+
+The test count moves from `3999 / 3999` (v1.16.2) to `4033 / 4033` (v1.16.3) — `+34` tests across `tests/test_attention_feedback.py` (+23: closed-set vocabulary, mapping rules per trigger, source-id slot, build-helper integration, budget/decay/saturation crowd-out, no-forbidden-keys, unresolved-id tolerance) and `tests/test_living_reference_world.py` (+11: period-zero empty slots, period-1+ cites prior period ids, focus labels in closed set, attention count invariance, PriceBook invariance, no-forbidden-payload-keys, no-forbidden-event-types, byte-identical replay, jurisdiction-neutral, conditional pressure-fires-fresh-label).
+
+### 117.7 Forward pointer
+
+v1.16.last freezes the v1.16 sequence: closed-set vocabulary lock (the eight v1.16.1 priority rule ids + the v1.15 `INTENT_DIRECTION_LABELS` + the v1.12.8 ∪ v1.16.3 focus labels), per-record budget pin, canonical-view byte-stability across all v1.16 milestones, and a single-page reader-facing summary in `docs/v1_16_endogenous_market_intent_direction_summary.md`. v1.16.last is **docs-only** on top of the v1.16.0 → v1.16.3 code freezes.

@@ -120,6 +120,15 @@ FOCUS_LABEL_DIALOGUE: str = "dialogue"
 FOCUS_LABEL_ESCALATION: str = "escalation"
 FOCUS_LABEL_STEWARDSHIP: str = "stewardship"
 FOCUS_LABEL_MEMORY: str = "memory"
+# v1.16.3 — securities-market-pressure / financing-path feedback
+# focus labels. Synthetic, jurisdiction-neutral, audit-grade —
+# none is a calibrated risk metric, none is a regulator-recognised
+# investment-decision input.
+FOCUS_LABEL_RISK: str = "risk"
+FOCUS_LABEL_FINANCING: str = "financing"
+FOCUS_LABEL_DILUTION: str = "dilution"
+FOCUS_LABEL_MARKET_INTEREST: str = "market_interest"
+FOCUS_LABEL_INFORMATION_GAP: str = "information_gap"
 
 ALL_FOCUS_LABELS: tuple[str, ...] = (
     FOCUS_LABEL_FIRM_STATE,
@@ -135,6 +144,11 @@ ALL_FOCUS_LABELS: tuple[str, ...] = (
     FOCUS_LABEL_ESCALATION,
     FOCUS_LABEL_STEWARDSHIP,
     FOCUS_LABEL_MEMORY,
+    FOCUS_LABEL_RISK,
+    FOCUS_LABEL_FINANCING,
+    FOCUS_LABEL_DILUTION,
+    FOCUS_LABEL_MARKET_INTEREST,
+    FOCUS_LABEL_INFORMATION_GAP,
 )
 
 
@@ -147,6 +161,10 @@ TRIGGER_VALUATION_CONFIDENCE_LOW: str = "valuation_confidence_low"
 TRIGGER_LIQUIDITY_CREDIT_REVIEW: str = "liquidity_or_refinancing_credit_review"
 TRIGGER_RESTRICTIVE_MARKET_OBSERVED: str = "restrictive_market_observed"
 TRIGGER_ROUTINE_OBSERVED: str = "routine_observed"
+# v1.16.3 — additional triggers for the
+# securities-market-pressure / financing-path feedback loop.
+TRIGGER_MARKET_PRESSURE_OBSERVED: str = "market_pressure_observed"
+TRIGGER_FINANCING_PATH_OBSERVED: str = "financing_path_observed"
 
 
 # ---------------------------------------------------------------------------
@@ -236,6 +254,16 @@ class ActorAttentionStateRecord:
     source_escalation_candidate_ids: tuple[str, ...] = field(
         default_factory=tuple
     )
+    # v1.16.3 — prior-period securities-market-pressure /
+    # corporate-financing-path id slots. Plain-id cross-references;
+    # the helper resolves only cited ids and never scans the source
+    # books globally.
+    source_indicative_market_pressure_ids: tuple[str, ...] = field(
+        default_factory=tuple
+    )
+    source_corporate_financing_path_ids: tuple[str, ...] = field(
+        default_factory=tuple
+    )
     previous_attention_state_id: str | None = None
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
@@ -257,6 +285,8 @@ class ActorAttentionStateRecord:
         "source_credit_review_signal_ids",
         "source_dialogue_ids",
         "source_escalation_candidate_ids",
+        "source_indicative_market_pressure_ids",
+        "source_corporate_financing_path_ids",
     )
 
     def __post_init__(self) -> None:
@@ -388,6 +418,12 @@ class ActorAttentionStateRecord:
             "source_dialogue_ids": list(self.source_dialogue_ids),
             "source_escalation_candidate_ids": list(
                 self.source_escalation_candidate_ids
+            ),
+            "source_indicative_market_pressure_ids": list(
+                self.source_indicative_market_pressure_ids
+            ),
+            "source_corporate_financing_path_ids": list(
+                self.source_corporate_financing_path_ids
             ),
             "previous_attention_state_id": self.previous_attention_state_id,
             "metadata": dict(self.metadata),
@@ -578,6 +614,12 @@ class AttentionFeedbackBook:
                     "source_dialogue_ids": list(state.source_dialogue_ids),
                     "source_escalation_candidate_ids": list(
                         state.source_escalation_candidate_ids
+                    ),
+                    "source_indicative_market_pressure_ids": list(
+                        state.source_indicative_market_pressure_ids
+                    ),
+                    "source_corporate_financing_path_ids": list(
+                        state.source_corporate_financing_path_ids
                     ),
                     "previous_attention_state_id": (
                         state.previous_attention_state_id
@@ -942,6 +984,138 @@ def _classify_focus_labels(
 
 
 # ---------------------------------------------------------------------------
+# v1.16.3 — securities-market-pressure / financing-path focus classifier
+#
+# Closed-set deterministic mapping from prior-period
+# IndicativeMarketPressureRecord (v1.15.4) and
+# CorporateFinancingPathRecord (v1.14.4 / v1.15.6) labels to
+# additional fresh attention focus labels. Reads only the cited
+# ids; never scans the source-of-truth books globally. The
+# returned label set is unioned into the v1.12.8 fresh focus set
+# before decay / saturation runs — the v1.12.9 budget discipline
+# is therefore preserved bit-for-bit.
+# ---------------------------------------------------------------------------
+
+
+_RESTRICTIVE_MARKET_ACCESS_PRESSURE_LABELS: frozenset[str] = frozenset(
+    {"constrained", "closed"}
+)
+_TIGHT_LIQUIDITY_PRESSURE_LABELS: frozenset[str] = frozenset(
+    {"tight", "stressed"}
+)
+
+
+def _classify_market_pressure_focus(
+    *,
+    pressure_records: tuple[Any, ...],
+) -> tuple[set[str], bool]:
+    """Map a tuple of cited
+    :class:`world.market_pressure.IndicativeMarketPressureRecord`
+    instances to a set of fresh focus labels.
+
+    Returns ``(focus_set, did_fire)``. ``did_fire`` is ``True`` if
+    any rule contributed a label (used to decide whether the
+    ``market_pressure_observed`` trigger label is recorded).
+    """
+    focus_set: set[str] = set()
+    did_fire = False
+    for record in pressure_records:
+        market_access = getattr(record, "market_access_label", "unknown")
+        financing_relevance = getattr(
+            record, "financing_relevance_label", "unknown"
+        )
+        liquidity = getattr(record, "liquidity_pressure_label", "unknown")
+        demand = getattr(record, "demand_pressure_label", "unknown")
+        status = getattr(record, "status", "unknown")
+
+        if market_access in _RESTRICTIVE_MARKET_ACCESS_PRESSURE_LABELS:
+            focus_set.update(
+                {
+                    FOCUS_LABEL_MARKET_ACCESS,
+                    FOCUS_LABEL_FUNDING,
+                    FOCUS_LABEL_RISK,
+                }
+            )
+            did_fire = True
+        if financing_relevance == "adverse_for_market_access":
+            focus_set.update(
+                {
+                    FOCUS_LABEL_MARKET_ACCESS,
+                    FOCUS_LABEL_FINANCING,
+                    FOCUS_LABEL_RISK,
+                }
+            )
+            did_fire = True
+        if financing_relevance == "caution_for_dilution":
+            focus_set.update(
+                {
+                    FOCUS_LABEL_VALUATION,
+                    FOCUS_LABEL_DILUTION,
+                    FOCUS_LABEL_FINANCING,
+                }
+            )
+            did_fire = True
+        if liquidity in _TIGHT_LIQUIDITY_PRESSURE_LABELS:
+            focus_set.update(
+                {FOCUS_LABEL_LIQUIDITY, FOCUS_LABEL_FUNDING}
+            )
+            did_fire = True
+        if demand == "supportive":
+            focus_set.update(
+                {FOCUS_LABEL_MARKET_INTEREST, FOCUS_LABEL_VALUATION}
+            )
+            did_fire = True
+        # ``insufficient_observations`` can land on either the
+        # demand- or financing-relevance label depending on which
+        # upstream evidence path was thinnest. Either case
+        # signals the actor should attend to closing the
+        # information gap before forming next-period intent.
+        if (
+            demand == "insufficient_observations"
+            or financing_relevance == "insufficient_observations"
+            or status == "insufficient_observations"
+        ):
+            focus_set.add(FOCUS_LABEL_INFORMATION_GAP)
+            did_fire = True
+    return focus_set, did_fire
+
+
+def _classify_financing_path_focus(
+    *,
+    path_records: tuple[Any, ...],
+) -> tuple[set[str], bool]:
+    """Map a tuple of cited
+    :class:`world.financing_paths.CorporateFinancingPathRecord`
+    instances to a set of fresh focus labels.
+
+    Returns ``(focus_set, did_fire)``.
+    """
+    focus_set: set[str] = set()
+    did_fire = False
+    for record in path_records:
+        coherence = getattr(record, "coherence_label", "unknown")
+        constraint = getattr(record, "constraint_label", "unknown")
+        next_review = getattr(record, "next_review_label", "unknown")
+
+        if coherence == "conflicting_evidence":
+            focus_set.update(
+                {FOCUS_LABEL_INFORMATION_GAP, FOCUS_LABEL_FINANCING}
+            )
+            did_fire = True
+        if constraint == "market_access_constraint":
+            focus_set.update(
+                {FOCUS_LABEL_MARKET_ACCESS, FOCUS_LABEL_FINANCING}
+            )
+            did_fire = True
+        if next_review == "compare_options":
+            focus_set.update(
+                {FOCUS_LABEL_FINANCING, FOCUS_LABEL_VALUATION}
+            )
+            did_fire = True
+    return focus_set, did_fire
+
+
+# ---------------------------------------------------------------------------
 # v1.12.9 — apply_attention_budget
 # ---------------------------------------------------------------------------
 
@@ -1052,6 +1226,8 @@ def build_attention_feedback(
     valuation_ids: Sequence[str] = (),
     dialogue_ids: Sequence[str] = (),
     escalation_candidate_ids: Sequence[str] = (),
+    indicative_market_pressure_ids: Sequence[str] = (),
+    corporate_financing_path_ids: Sequence[str] = (),
     per_dimension_budget: int = _DEFAULT_PER_DIMENSION_BUDGET,
     decay_horizon: int = _DEFAULT_DECAY_HORIZON,
     saturation_policy: str = _DEFAULT_SATURATION_POLICY,
@@ -1167,6 +1343,49 @@ def build_attention_feedback(
         restrictive_market=restrictive_market,
         low_valuation_confidence=low_valuation_confidence,
     )
+
+    # ------------------------------------------------------------------
+    # v1.16.3 — securities-market-pressure / financing-path focus
+    # union. Resolve cited prior-period
+    # IndicativeMarketPressureRecord and CorporateFinancingPathRecord
+    # ids; classify each into additional focus labels via the
+    # closed-set rule helpers above; union into the fresh focus set
+    # before decay / saturation runs.
+    # ------------------------------------------------------------------
+    pressure_records: list[Any] = []
+    for pid in indicative_market_pressure_ids:
+        try:
+            pressure_records.append(
+                kernel.indicative_market_pressure.get_record(pid)
+            )
+        except Exception:
+            continue
+    path_records: list[Any] = []
+    for fid in corporate_financing_path_ids:
+        try:
+            path_records.append(
+                kernel.financing_paths.get_path(fid)
+            )
+        except Exception:
+            continue
+    pressure_focus, pressure_fired = _classify_market_pressure_focus(
+        pressure_records=tuple(pressure_records)
+    )
+    path_focus, path_fired = _classify_financing_path_focus(
+        path_records=tuple(path_records)
+    )
+    if pressure_focus or path_focus:
+        merged_fresh = set(fresh_focus_labels) | pressure_focus | path_focus
+        fresh_focus_labels = tuple(sorted(merged_fresh))
+    # Pick the highest-priority new trigger label only if the
+    # v1.12.8 classifier returned the routine fallback. The
+    # ``market_pressure_observed`` trigger outranks the
+    # ``financing_path_observed`` trigger by id-stability.
+    if trigger_label == TRIGGER_ROUTINE_OBSERVED:
+        if pressure_fired:
+            trigger_label = TRIGGER_MARKET_PRESSURE_OBSERVED
+        elif path_fired:
+            trigger_label = TRIGGER_FINANCING_PATH_OBSERVED
 
     # ------------------------------------------------------------------
     # Resolve previous-period attention state (chain link).
@@ -1309,6 +1528,12 @@ def build_attention_feedback(
         source_credit_review_signal_ids=tuple(credit_review_signal_ids),
         source_dialogue_ids=tuple(dialogue_ids),
         source_escalation_candidate_ids=tuple(escalation_candidate_ids),
+        source_indicative_market_pressure_ids=tuple(
+            indicative_market_pressure_ids
+        ),
+        source_corporate_financing_path_ids=tuple(
+            corporate_financing_path_ids
+        ),
         previous_attention_state_id=previous_attention_state_id,
         metadata=state_metadata,
     )
@@ -1327,6 +1552,8 @@ def build_attention_feedback(
         + list(valuation_ids)
         + list(dialogue_ids)
         + list(escalation_candidate_ids)
+        + list(indicative_market_pressure_ids)
+        + list(corporate_financing_path_ids)
     )
 
     feedback = AttentionFeedbackRecord(
