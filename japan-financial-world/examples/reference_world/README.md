@@ -311,6 +311,55 @@ surface, not mutate the public-FWE one. See
 [`../../docs/v1_16_endogenous_market_intent_feedback_summary.md`](../../docs/v1_16_endogenous_market_intent_feedback_summary.md)
 for the v1.16 single-page summary.
 
+**v1.17.last inspection layer freeze.** Layered on top of the
+v1.16.last freeze, the v1.17 sequence ships a public-FWE
+**inspection layer** — display timelines, regime comparison,
+causal annotations, and a static analyst workbench — that makes
+the v1.16 closed loop operationally legible without changing
+any economic behavior. The runnable surface in this directory
+is unchanged: every `python -m examples.reference_world.run_living_reference_world`
+invocation produces the same record set as at v1.16.last, and
+the integration-test `living_world_digest` is byte-identical at
+**`f93bdf3f4203c20d4a58e956160b0bb1004dcdecf0648a92cc961401b705897c`**.
+
+What v1.17 adds, on top of the existing CLI:
+
+- `world/display_timeline.py` (v1.17.1) — `ReportingCalendar` /
+  `ReferenceTimelineSeries` / `SyntheticDisplayPath` /
+  `EventAnnotationRecord` / `CausalTimelineAnnotation` immutable
+  dataclasses + a standalone `DisplayTimelineBook`. Standalone:
+  not registered with `WorldKernel`, never writes to the ledger,
+  never moves the digest.
+- `examples/reference_world/regime_comparison_report.py`
+  (v1.17.2) — kernel-reading driver that runs each v1.11.2
+  regime preset on its own freshly-seeded kernel and produces a
+  deterministic side-by-side `RegimeComparisonPanel` markdown
+  surface.
+- v1.17.3 helpers in `world/display_timeline.py` —
+  `build_event_annotations_from_closed_loop_data` (5 closed-set
+  rules) + `build_causal_timeline_annotations_from_closed_loop_data`
+  (3 plain-id arrow kinds). The `market_environment_change`
+  annotation embeds the env's full closed-set subfield labels
+  (credit / funding / liquidity / volatility / refi) so two
+  regimes whose top-level histograms collide are still visibly
+  distinguishable in the rendered markdown.
+- A single-file static analyst workbench at
+  [`../ui/fwe_workbench_mockup.html`](../ui/fwe_workbench_mockup.html)
+  (v1.17.4) — opens directly under `file://`, no backend, no
+  build, no external runtime. Reorganised around the v1.16
+  closed loop with ten bottom tabs: **Cover · Inputs ·
+  Overview · Timeline · Regime Compare · Attention · Market
+  Intent · Financing · Ledger · Appendix**. "Run mock" is
+  fixture switching, not engine execution.
+
+The v1.17 chain is **rendering, not behavior**. It does *not*
+introduce price formation, `PriceBook` mutation, orders,
+matching, execution, clearing, settlement, financing approval,
+recommendations, real data, Japan calibration, or LLM
+execution. See
+[`../../docs/v1_17_inspection_layer_summary.md`](../../docs/v1_17_inspection_layer_summary.md)
+for the v1.17 single-page summary.
+
 ## What is in this directory
 
 | File                    | Purpose                                                     |

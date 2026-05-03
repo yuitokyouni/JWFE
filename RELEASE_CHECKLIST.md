@@ -23,6 +23,84 @@ can pick up where the last one stopped. Replace the snapshot when a
 new review is performed.
 
 - **Date:** 2026-05-04
+- **Target:** v1.17.last inspection-layer freeze. The
+  v1.16.last endogenous-market-intent feedback freeze (snapshot
+  below), the v1.15.last securities-market-intent aggregation
+  freeze, the v1.14.last corporate-financing-intent freeze, the
+  v1.13.last settlement-substrate freeze, the v1.12.last
+  endogenous-attention-loop freeze, the v1.9.last public-
+  prototype freeze, and the v1.8.0 public release
+  (`v1.8-public-release` at commit `7fa2c42`) all remain
+  unchanged; v1.17.last freezes the v1.17 sequence as the
+  **first public-FWE inspection layer** over the v1.16 closed
+  loop. The layer adds *inspectability*, not new economic
+  behavior — a `ReportingCalendar` + `SyntheticDisplayPath`
+  (v1.17.1), a regime-comparison report (v1.17.2), event /
+  causal annotations with environment-subfield enrichment
+  (v1.17.3), and a single-file static analyst workbench
+  reorganised around the closed loop with ten bottom tabs in
+  strict 1:1 bijection with ten sheet articles (v1.17.4).
+  v1.17.last itself is docs-only on top of the v1.17.0 →
+  v1.17.4 code freezes. The chain is **inspection / rendering
+  only** — no price formation, no market price, no predicted
+  index, no forecast path, no expected return, no target price,
+  no trading, no orders, no execution, no clearing, no
+  settlement, no investment advice, no real data, no Japan
+  calibration, no LLM execution, no stochastic behaviour
+  probabilities, no learned model, no new economic
+  source-of-truth records. The static workbench has no backend,
+  no build, no external runtime, no network I/O — `Run mock` is
+  fixture switching, `Compare Regimes` is display-report
+  navigation, `Export HTML` is a non-destructive status update.
+  Known limitations: no live engine execution from the UI; the
+  workbench's embedded sample fixture digest reflects an earlier
+  engine snapshot and is tagged accordingly; the inspection
+  layer is rendering, not interpretation.
+- **Status:** docs + tests frozen. The freeze is conditional on
+  CI being green on the commit being tagged.
+- **Local results (v1.17.last):**
+  - `pytest -q` → 4165 passed
+  - `compileall world spaces tests examples` → clean
+  - `ruff check .` (repo root) → clean
+  - `python -m examples.reference_world.run_living_reference_world`
+    → unchanged from v1.16.last; produces the same `[setup]` /
+    `[period N]` / `[ledger]` trace and the same default-fixture
+    record set as at v1.16.last. v1.17 added zero records to
+    the per-period sweep.
+  - integration-test fixture `living_world_digest` =
+    **`f93bdf3f4203c20d4a58e956160b0bb1004dcdecf0648a92cc961401b705897c`**
+    (unchanged from v1.16.last across the entire v1.17 sequence
+    — pinned by
+    `tests/test_display_timeline.py::test_default_living_world_run_does_not_create_display_records`
+    and
+    `tests/test_regime_comparison_report.py::test_extract_regime_run_snapshot_does_not_mutate_kernel`)
+  - `python -c "from examples.reference_world.regime_comparison_report import regime_comparison_markdown; print(regime_comparison_markdown())"`
+    → produces a deterministic side-by-side regime comparison
+    markdown surface across constructive / constrained /
+    tightening, with the v1.17.3 environment-subfield row
+    surfacing the difference between regimes whose top-level
+    histograms collide. Re-running yields byte-identical
+    output.
+  - `examples/ui/fwe_workbench_mockup.html` → opens directly
+    under `file://` with no console errors. Bottom-tab ↔ sheet
+    article 1:1 bijection enforced at runtime by the in-page
+    `Validate` button. Inline JSON parses; standalone
+    `sample_living_world_manifest.json` parses. `Run mock`
+    fixture-switches across constructive / mixed / constrained /
+    tightening; `Compare Regimes` lands on the Regime Compare
+    tab and flashes the comparison card; `Validate` reports
+    `validation passed · static UI`; `Export HTML` reports the
+    non-destructive `static prototype` status. Constant
+    `static fixture only · no backend execution` sub-status
+    visible at all times.
+  - Forbidden-token scan + public-wording audit + public /
+    private boundary review + no-confidential-content audit +
+    no-real-data audit + no-behavior-probability audit — all
+    unchanged from v1.16.last.
+
+#### v1.16.last historical snapshot (unchanged)
+
+- **Date:** 2026-05-04
 - **Target:** v1.16.last endogenous market intent feedback
   freeze. The v1.15.last securities-market-intent aggregation
   freeze (snapshot below), the v1.14.last corporate-financing-
@@ -398,9 +476,9 @@ new review is performed.
   passing total. v1.8 + post-rc1 CI fix: `725 passed`. v1.9.last
   freeze: `1626 passed`. v1.13.last freeze: `2988 passed`.
   v1.14.last freeze: `3391 passed`. v1.15.last freeze:
-  `3883 passed`. v1.16.last freeze: `4033 passed`. Use the count
-  of the milestone being tagged; mismatch means the tree is not
-  the freeze tree.
+  `3883 passed`. v1.16.last freeze: `4033 passed`. v1.17.last
+  freeze: `4165 passed`. Use the count of the milestone being
+  tagged; mismatch means the tree is not the freeze tree.
 - [ ] `python -m compileall world spaces tests examples` from
   `japan-financial-world/` succeeds (no syntax errors anywhere,
   including the reference demo and test files).

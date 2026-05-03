@@ -336,6 +336,41 @@ If any of those pins fails, the demo has either grown the
 fixture (intentional but undocumented) or gained a hidden
 quadratic loop (unintended).
 
+## v1.17.last freeze pins
+
+The v1.17.last freeze (docs-only on top of the v1.17.0 → v1.17.4
+code freezes) closes the v1.17 sequence as the **first FWE
+milestone where the v1.16 closed loop is operationally
+inspectable** through display timelines, regime comparison,
+causal annotations, and a static analyst workbench. None of
+these touch the kernel or the per-period sweep. On the default
+4-period fixture (3 firms, 2 investors, 2 banks):
+
+- per-period record count: **108** (period 0) / **110** (periods 1+),
+  unchanged from v1.16.last (every v1.17 milestone added zero
+  records — the display layer runs only when the report / UI
+  asks for it),
+- per-run window: **`[432, 480]`**, unchanged,
+- default 4-period sweep total: **460 records**, unchanged,
+- integration-test `living_world_digest` (v1.17.last):
+  **`f93bdf3f4203c20d4a58e956160b0bb1004dcdecf0648a92cc961401b705897c`**
+  (unchanged from v1.16.last across all v1.17 milestones —
+  pinned by `tests/test_display_timeline.py::test_default_living_world_run_does_not_create_display_records`
+  and `tests/test_regime_comparison_report.py::test_extract_regime_run_snapshot_does_not_mutate_kernel`),
+- pytest count: **4165 / 4165** passing (+132 across the v1.17
+  sequence; v1.17.0 / v1.17.4 are docs / static-HTML only and
+  add no pytest tests; the in-page `Validate` button enforces
+  the workbench-side bijection invariants instead).
+
+The v1.17 layer is a **rendering** of the v1.16 closed-loop
+records — it imports no source-of-truth book on the engine
+side (the runtime-book-free discipline is pinned by a v1.17.1
+text scan), runs each regime on its own freshly-seeded kernel
+on the report-driver side, and never mutates any kernel book.
+The static workbench writes nothing, has no backend, no build,
+and no external runtime; "Run mock" is fixture switching, not
+engine execution.
+
 ## v1.16.last freeze pins
 
 The v1.16.last freeze (docs-only on top of the v1.16.0 → v1.16.3

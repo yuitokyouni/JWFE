@@ -5,6 +5,20 @@ jurisdiction-neutral demo world that exercises every v0 + v1 record
 type through the existing v1.6 reference loop and produces a complete
 causal ledger trace.
 
+> **Note (v1.17.last freeze).** v1.17 froze the public-FWE
+> **inspection layer** on top of the v1.16 closed loop —
+> reporting calendar, synthetic display path, event
+> annotations, causal timeline, regime comparison report, and a
+> single-file static analyst workbench
+> ([`examples/ui/fwe_workbench_mockup.html`](../examples/ui/fwe_workbench_mockup.html)).
+> The headline runnable surface remains the v1.16.last living
+> reference world; v1.17 adds *inspectability*, not new
+> economic behavior. The static workbench is fixture-switching
+> only — the Python engine is invoked from the command line,
+> never from the UI. See
+> [`v1_17_inspection_layer_summary.md`](v1_17_inspection_layer_summary.md)
+> for the v1.17 single-page summary.
+>
 > **Note (v1.16.last freeze).** The headline runnable surface is
 > now the **v1.9.last living reference world** plus the **v1.12
 > endogenous attention-feedback loop** plus the **v1.14 corporate

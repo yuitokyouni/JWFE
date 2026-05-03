@@ -9523,3 +9523,72 @@ The test count moves from `4136 / 4136` (v1.17.2) to `4165 / 4165` (v1.17.3) —
 ### 122.7 Forward pointer
 
 v1.17.4 polishes the workbench prototype with the v1.17.1 / v1.17.2 / v1.17.3 outputs as first-class views — the Attention "what changed" diff strip, cross-tab click-through (clicking an event annotation jumps to the cited record), and a regime-comparison panel embedded in the report sheet that surfaces the per-regime causal trace block. v1.17.last freezes the inspection layer (docs-only).
+
+## 123. v1.17.last Inspection Layer freeze
+
+§123 closes the v1.17 sequence. v1.17.last is **docs-only** on top of the v1.17.0 → v1.17.4 code freezes: no new module, no new test, no new ledger event, no new label vocabulary. The freeze pins the v1.17 surface as the first FWE milestone where the v1.16 closed loop is **operationally inspectable** through display timelines, regime comparison, causal annotations, and a static analyst workbench.
+
+The single-page reader-facing summary is [`v1_17_inspection_layer_summary.md`](v1_17_inspection_layer_summary.md). It mirrors the structure of [`v1_16_endogenous_market_intent_feedback_summary.md`](v1_16_endogenous_market_intent_feedback_summary.md), [`v1_15_securities_market_intent_summary.md`](v1_15_securities_market_intent_summary.md), [`v1_14_corporate_financing_intent_summary.md`](v1_14_corporate_financing_intent_summary.md), [`v1_13_generic_settlement_infrastructure_summary.md`](v1_13_generic_settlement_infrastructure_summary.md), and [`v1_12_endogenous_attention_loop_summary.md`](v1_12_endogenous_attention_loop_summary.md) — sequence map, what v1.17 ships, what v1.17 explicitly is not, performance boundary, UI status, discipline preserved bit-for-bit, known limitations, and what v1.18+ does next.
+
+### 123.1 Final inspection surface (v1.17.last)
+
+The v1.17 layer makes the v1.16 closed loop legible by surfacing the same records the kernel already emits, never by inventing a new economic edge. The five inspection questions defined at v1.17.0 are answered by the static workbench:
+
+1. **What happened?** — Overview KPI cards + Timeline `SyntheticDisplayPath` + event annotations.
+2. **Which actor saw what?** — Attention diff strip + per-actor cards.
+3. **Which evidence changed?** — Market Intent classifier rule_id + evidence summary.
+4. **Which intent / review / pressure changed?** — Market Intent + Financing tabs with citations to the prior-period record that drove the change.
+5. **What changed in the next period?** — Regime Compare subfield differentiator row + per-regime "Events & causal trace" block (v1.17.3) under the comparison table.
+
+The static workbench reorganises around the closed loop with ten bottom tabs in 1:1 bijection with ten sheet articles (audit-cleaned post-v1.17.4): Cover · Inputs · Overview · Timeline · Regime Compare · Attention · Market Intent · Financing · Ledger · Appendix.
+
+### 123.2 Performance-boundary pins (v1.17.last)
+
+| Surface                                            | Value                                                                    |
+| -------------------------------------------------- | ------------------------------------------------------------------------ |
+| Per-period record count (default fixture)          | **108** (period 0) / **110** (periods 1+) — unchanged from v1.16.last     |
+| Per-run window (default 4-period fixture)          | **`[432, 480]`** — unchanged from v1.16.last                              |
+| Default 4-period sweep                             | **460 records** — unchanged                                               |
+| Integration-test `living_world_digest` (canonical) | **`f93bdf3f4203c20d4a58e956160b0bb1004dcdecf0648a92cc961401b705897c`**    |
+| Test count (`pytest -q`)                           | **4165 / 4165**                                                          |
+
+The integration-test `living_world_digest` is **unchanged** from v1.16.last across the entire v1.17 sequence — v1.17.0 was docs-only, v1.17.1 / v1.17.2 / v1.17.3 are display modules and helpers that never write to the kernel, and v1.17.4 / the audit cleanup were static-HTML-only edits. Trip-wire tests at v1.17.1 (`tests/test_display_timeline.py::test_default_living_world_run_does_not_create_display_records`) and v1.17.2 (`tests/test_regime_comparison_report.py::test_extract_regime_run_snapshot_does_not_mutate_kernel`) pin that the digest does not move when the helpers are exercised.
+
+### 123.3 Hard boundary (carried forward verbatim)
+
+This is **inspection, not market trading**. This is **rendering, not price formation**. This is **a reading aid, not a higher-frequency simulation**. This is **synthetic display, not real data**. This is **fixture switching, not engine execution** (the workbench's "Run mock" button does not invoke Python).
+
+No order submission. No buy / sell labels. No order book. No matching. No execution. No clearing. No settlement. No quote dissemination. No bid / ask. No price update. No `PriceBook` mutation. No target price. No expected return. No recommendation. No portfolio allocation. No real exchange mechanics. No financing execution. No loan approval. No bond / equity issuance. No underwriting. No syndication. No pricing. No interest rate. No spread. No coupon. No fee. No offering price. No investment advice. No real data. No Japan calibration. No LLM execution. No stochastic behaviour probabilities. No learned model. **No market price. No predicted index. No expected return. No target price. No forecast path. No real price series.**
+
+Every v1.9.x / v1.10.x / v1.11.x / v1.12.x / v1.13.x / v1.14.x / v1.15.x / v1.16.x anti-claim is preserved unchanged. The v1.9.last public-prototype freeze, the v1.12.last attention-loop freeze, the v1.13.last settlement-substrate freeze, the v1.14.last corporate-financing-intent freeze, the v1.15.last securities-market-intent freeze, the v1.16.last endogenous-market-intent feedback freeze, and the v1.8.0 public release remain untouched.
+
+### 123.4 UI status (static workbench at v1.17.last)
+
+- **Type:** single-file static HTML at `examples/ui/fwe_workbench_mockup.html`.
+- **Backend / build / external runtime / network I/O:** none. Opens directly under `file://`.
+- **Bottom-tab ↔ sheet article mapping:** 10 ↔ 10 bijection, enforced at runtime by the in-page `Validate` button.
+- **Run mock:** static fixture switching from `SAMPLE_RUNS` keyed by the active regime pill (constructive / mixed / constrained / tightening). Updates Overview KPI cards, Timeline header regime label, top-ribbon digest, Settings active-regime cell, and the Attention diff strip. Same regime → byte-identical UI state. Status reads `mock UI run · <regime> · static fixture · no engine execution`.
+- **Compare Regimes:** static / display-report navigation. Activates the dedicated Regime Compare tab and flashes the comparison card.
+- **Validate:** strict in-page bijection check (tab count == sheet count; every tab points to a real sheet; every sheet has a tab; no duplicates; all required ids present; ledger records present; regime-compare card present). Status updates to `validation passed · static UI` or names the first failure.
+- **Export HTML:** non-destructive. Updates the status strip to `export not implemented in static prototype · use browser Save Page / Print`. There is no file-system API.
+- **Sample fixture status:** the embedded digest / per-period record count / per-run window are explicitly tagged `digest_kind: sample_fixture` / `fixture_kind: sample_fixture` / `fixture_note: …` in the manifest. The workbench renders them with `(sample fixture)` annotations next to each value.
+- **Permanent sub-status:** the top-ribbon stack always displays `static fixture only · no backend execution` below the main status so the no-engine-execution discipline is visible at a glance.
+
+### 123.5 Known limitations
+
+The v1.17 layer is a **rendering of the v1.16 closed loop**, not a simulator and not a live UI. Specific limitations:
+
+1. **No live engine execution from the UI.** Running the engine still requires `python -m examples.reference_world.run_living_reference_world` on the command line.
+2. **Workbench sample fixture is older.** The embedded digest / per-period count reflects an earlier engine snapshot and is tagged accordingly; the live v1.16.last runtime emits 108 / 110 records per period and a `[432, 480]` per-run window.
+3. **Regime-comparison fixtures collide on coarse labels.** The v1.11.2 default fixture maps `constrained` and `tightening` to the same coarse closed-loop labels; v1.17.3's environment-subfield enrichment is the explicit remediation that surfaces the differences in the subfield row + the per-regime causal trace block.
+4. **No real-time / event-driven view.** The workbench renders a quarterly run on a monthly / daily-like display axis — the daily-like granularity is a reading aid, not a higher-frequency simulation.
+5. **Inspection layer, not interpretation.** v1.17 makes the loop's causal structure legible to a human reader; it does not interpret labels, infer real-world meaning, or draw any conclusion about the modelled behaviour.
+
+### 123.6 What v1.18+ does next
+
+- **v1.18 — scenario library / exogenous event templates.** Named, deterministic, reproducible scenario templates that compose with the existing `--regime` presets and the v1.17.2 `RegimeComparisonPanel`. Still no real-data, no calibration, no execution.
+- **v1.19 — local run bridge / report export (conditional).** If UI execution becomes necessary, a CLI-driven bridge that writes regime-comparison + causal-trace reports to disk for the static workbench to `Load sample run` against. Still no backend, no build, no network.
+- **v2.0 — Japan public calibration in private JFWE only.** Public FWE remains jurisdiction-neutral and synthetic.
+- **Future price formation remains gated** until the v1.16 / v1.17 surface is operationally legible to a reviewer who has not read this codebase.
+
+The v1.17 chain stays display-only and label-only forever. Future milestones may *cite* v1.17 display objects (plain-id cross-references, additional rendering kinds), but they may **never** mutate the v1.17 vocabulary, replace the deterministic helpers with stochastic ones, or introduce execution paths on top of the inspection layer.

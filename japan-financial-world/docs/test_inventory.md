@@ -1,6 +1,41 @@
 # Test Inventory
 
-Snapshot of the test suite at **v1.16.last** (`Endogenous
+Snapshot of the test suite at **v1.17.last** (`Inspection Layer
+freeze` — docs-only milestone that closes the v1.17 sequence;
+ships the single-page reader-facing summary in
+[`v1_17_inspection_layer_summary.md`](v1_17_inspection_layer_summary.md),
+the v1.17.last release-readiness snapshot in
+[`RELEASE_CHECKLIST.md`](../../RELEASE_CHECKLIST.md), and the
+v1.17.last position-in-sequence row in `world_model.md` §123;
+no new code, no new tests, no new ledger event types, no new
+behavior; test count = **4165 / 4165**, per-period record count
+= **108 / 110**, per-run window = **`[432, 480]`**,
+`living_world_digest` =
+**`f93bdf3f4203c20d4a58e956160b0bb1004dcdecf0648a92cc961401b705897c`**
+— all unchanged from v1.16.last by design across the entire
+v1.17 sequence; the v1.17 surface is the **first public-FWE
+inspection layer over the v1.16 closed loop** (reporting
+calendar / synthetic display path / event annotations / causal
+timeline / regime comparison report / static analyst
+workbench); inspection / rendering only — no price formation,
+no market price, no predicted index, no forecast path, no
+expected return, no target price, no trading, no orders, no
+execution, no clearing, no settlement, no investment advice,
+no real data, no Japan calibration, no LLM execution, no
+stochastic behaviour probabilities, no learned model, no new
+economic source-of-truth records. The v1.17 layer is a
+rendering of records the kernel already emits; the report
+driver runs each regime on its own freshly-seeded kernel and
+walks the read-only book interface only. The static workbench
+has no backend, no build, no external runtime, no network I/O
+— "Run mock" is fixture switching, "Compare Regimes" is
+display-report navigation, "Export HTML" is a non-destructive
+status update. The v1.16.last and v1.15.last historical
+snapshots below are preserved unchanged.)
+
+---
+
+Earlier snapshot at **v1.16.last** (`Endogenous
 Market Intent Feedback freeze` — docs-only milestone that closes
 the v1.16 sequence; ships the single-page reader-facing summary
 in [`v1_16_endogenous_market_intent_feedback_summary.md`](v1_16_endogenous_market_intent_feedback_summary.md),

@@ -148,6 +148,39 @@ portfolio allocations / financing approvals / loan approvals /
 real data / Japan calibration / LLM execution / stochastic
 behaviour probabilities / learned models.
 
+### v1.17.last freeze
+
+The v1.17 sequence is now frozen — the inspection layer is
+complete. v1.17.last is **docs-only** on top of the v1.17.0 →
+v1.17.4 code freezes. The single-page reader-facing summary is
+[`../../docs/v1_17_inspection_layer_summary.md`](../../docs/v1_17_inspection_layer_summary.md).
+The integration-test `living_world_digest` is unchanged from
+v1.16.last at
+**`f93bdf3f4203c20d4a58e956160b0bb1004dcdecf0648a92cc961401b705897c`**
+across the entire v1.17 sequence; pytest count is **4165 / 4165**.
+
+What this means for the static workbench specifically:
+
+- The bottom-tab ↔ sheet article mapping is a **strict 1:1
+  bijection** — 10 ↔ 10, no orphans, no duplicates. The in-page
+  `Validate` button enforces the bijection at runtime.
+- `Run mock` is **fixture switching**, not engine execution.
+  Same regime selection → byte-identical UI state.
+- `Compare Regimes` is **static / display-report navigation** —
+  it activates the Regime Compare tab and flashes the comparison
+  card; the displayed digests / histograms / causal arrows come
+  from the inline `SAMPLE_RUNS` fixture and the inline JSON
+  manifest, never from a live engine run.
+- The sample manifest is explicitly tagged `digest_kind:
+  sample_fixture` / `fixture_kind: sample_fixture` / `fixture_note:
+  …`. The displayed digest, per-period count, and per-run
+  window are sample fixture, not live output. The live v1.16.last
+  runtime emits 108 / 110 records per period and a `[432, 480]`
+  per-run window.
+- A constant `static fixture only · no backend execution`
+  sub-status is permanently visible in the top-ribbon so the
+  no-engine-execution discipline is on screen at a glance.
+
 ### v1.17.0 design pointer (forward look)
 
 v1.17 is the **presentation and inspection layer** designed
