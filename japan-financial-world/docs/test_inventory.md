@@ -1,6 +1,33 @@
 # Test Inventory
 
-Snapshot of the test suite at **v1.12.last** (`Endogenous
+Snapshot of the test suite at **v1.14.last** (`Corporate Financing
+Intent freeze` — docs-only milestone that closes the v1.14
+sequence; ships the single-page reader-facing summary in
+[`v1_14_corporate_financing_intent_summary.md`](v1_14_corporate_financing_intent_summary.md),
+the v1.14.last release-readiness snapshot in
+[`RELEASE_CHECKLIST.md`](../../RELEASE_CHECKLIST.md), and the
+v1.14.last position-in-sequence row in `world_model.md` §105;
+no new code, no new tests, no new ledger event types, no new
+behavior; test count = **3391 / 3391**, per-period record count
+= **96 / 98**, per-run window = **`[384, 432]`**,
+`living_world_digest` =
+**`3df73fd4f152c16d1188f5c15b69bdc8a5cd6061b637ea35af671e86c6fa2d71`**
+— all unchanged from v1.14.5; the underlying surface is the
+bounded corporate financing reasoning chain
+`market environment → firm latent state → investor intent /
+valuation / bank credit review → corporate financing need →
+funding option candidates → capital structure review → financing
+path`, layered on top of the v1.12 endogenous attention loop and
+the v1.13 settlement substrate; storage / audit / graph-linking
+only — no financing execution, no loan approval, no bond / equity
+issuance, no underwriting, no syndication, no bookbuilding, no
+allocation, no pricing, no optimal capital structure decision,
+no investment advice, no real data, no Japan calibration. The
+v1.12.last historical snapshot below is preserved unchanged.)
+
+---
+
+Earlier snapshot at **v1.12.last** (`Endogenous
 attention loop freeze` — docs-only milestone that closes the
 v1.12 endogenous-attention sequence; ships the single-page
 reader-facing summary in

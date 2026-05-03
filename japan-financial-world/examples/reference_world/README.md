@@ -136,6 +136,39 @@ Two runs of the same regime produce byte-identical Markdown
 reports; two runs across regimes produce different reports
 deterministically.
 
+**v1.14.last corporate financing chain.** Layered on top of the
+v1.9.last substrate and the v1.12.last attention loop, the v1.14
+sequence ships a bounded corporate financing reasoning chain on
+the per-period sweep. Per firm per period the orchestrator emits:
+
+```
+firm latent state / market environment / interbank liquidity / bank credit review / investor intent
+  → 1 CorporateFinancingNeedRecord       (v1.14.1)
+  → 2 FundingOptionCandidate records     (v1.14.2)
+  → 1 CapitalStructureReviewCandidate    (v1.14.3)
+  → 1 CorporateFinancingPathRecord       (v1.14.4 / v1.14.5)
+```
+
+Bounded by `P × F` per layer (`5 × firms = 15` records / period
+on the default 3-firm fixture). The default 4-period sweep emits
+**408 records** (up from `~348` at v1.13.last); the
+integration-test `living_world_digest` is now
+**`3df73fd4f152c16d1188f5c15b69bdc8a5cd6061b637ea35af671e86c6fa2d71`**
+(moved at v1.14.5 by design). The markdown report (`--markdown`)
+adds a `## Corporate financing` section with five histograms
+(purpose / option-type / market-access / path-coherence /
+path-constraint).
+
+**Hard boundary preserved bit-for-bit.** Storage / audit /
+graph-linking only — no financing execution, no loan approval,
+no bond / equity issuance, no underwriting, no syndication, no
+bookbuilding, no allocation, no interest rate / spread / fee /
+coupon / offering price, no optimal capital structure decision,
+no real leverage / D/E / WACC, no PD / LGD / EAD / rating, no
+investment advice, no real data, no Japan calibration. See
+[`../../docs/v1_14_corporate_financing_intent_summary.md`](../../docs/v1_14_corporate_financing_intent_summary.md)
+for the v1.14 single-page summary.
+
 ## What is in this directory
 
 | File                    | Purpose                                                     |

@@ -314,6 +314,31 @@ If any of those pins fails, the demo has either grown the
 fixture (intentional but undocumented) or gained a hidden
 quadratic loop (unintended).
 
+## v1.14.last freeze pins
+
+The v1.14.last freeze (docs-only on top of the v1.14.5 code
+freeze) pins the following on the default 4-period fixture
+(3 firms, 2 investors, 2 banks, 4 periods):
+
+- per-period record count: **96** (period 0) / **98** (periods 1+),
+  up from 81 / 83 at v1.13.last (the +15 per period is the
+  v1.14.5 corporate-financing chain: 1 need + 2 options + 1
+  capital-structure review + 1 financing path per firm),
+- per-run window: **`[384, 432]`**, up from `[324, 372]` at
+  v1.13.last,
+- default 4-period sweep total: **408 records**,
+- integration-test `living_world_digest`:
+  **`3df73fd4f152c16d1188f5c15b69bdc8a5cd6061b637ea35af671e86c6fa2d71`**
+  (moved at v1.14.5 by design; unchanged through v1.14.1 →
+  v1.14.4 because those milestones were storage-only),
+- pytest count: **3391 / 3391** passing.
+
+The chain itself is bounded by `P × F` per layer — never
+`O(P × F × I)` or `O(P × F × B × option_count)`. v1.14.5
+deliberately did **not** add a new dense shape: every layer of
+the chain stays in the same `O(P × F)` shape as the v1.10.3
+corporate strategic response candidate.
+
 ## Position in the v1.9 sequence
 
 | Milestone | What | Status |

@@ -8599,3 +8599,48 @@ The test count moves from `3376 / 3376` (v1.14.4) to `3391 / 3391` (v1.14.5) —
 v1.14.5 closes the v1.14 integration sequence:
 
 - **v1.14.last** — public-prototype freeze of the corporate-financing chain. No new code; sets the version freeze tag, audits docs, and pins the canonical fixture's record-count + digest. The next non-prototype-freeze work is v1.15+ (TBD).
+
+## 105. v1.14.last Corporate Financing Intent freeze
+
+§105 closes the v1.14 sequence. v1.14.last is **docs-only** on top of the v1.14.1 → v1.14.5 code freezes: no new module, no new test, no new ledger event, no new label vocabulary. The freeze pins the v1.14 surface as the first FWE milestone where the living reference world carries a bounded corporate financing reasoning chain alongside the v1.12 endogenous attention loop.
+
+The single-page reader-facing summary is [`v1_14_corporate_financing_intent_summary.md`](v1_14_corporate_financing_intent_summary.md). It mirrors the structure of [`v1_13_generic_settlement_infrastructure_summary.md`](v1_13_generic_settlement_infrastructure_summary.md) — sequence map, what v1.14 ships, what v1.14 explicitly is not, performance boundary, discipline preserved bit-for-bit, what v1.15 does next.
+
+### 105.1 Final living-world chain (v1.14.last)
+
+```
+market environment   (v1.12.2)
+  → firm latent state   (v1.12.0)
+  → investor intent  /  valuation   /  bank credit review
+       (v1.12.1     /  v1.12.5    /  v1.12.6 / v1.12.7)
+  → corporate financing need        (v1.14.1)
+  → funding option candidates       (v1.14.2)
+  → capital structure review        (v1.14.3)
+  → financing path                  (v1.14.4 / v1.14.5)
+```
+
+Bounded by `P × F` per layer. Storage / audit / graph-linking only. No financing execution, no loan approval, no bond / equity issuance, no underwriting, no syndication, no bookbuilding, no allocation, no interest rate / spread / fee / coupon / offering price, no optimal capital structure decision, no investment advice, no real data, no Japan calibration.
+
+### 105.2 Performance-boundary pins (v1.14.last)
+
+| Surface                                            | Value                                                                    |
+| -------------------------------------------------- | ------------------------------------------------------------------------ |
+| Per-period record count (default fixture)          | **96** (period 0) / **98** (periods 1+) — up from 81 / 83 at v1.13.last  |
+| Per-run window (default 4-period fixture)          | **`[384, 432]`** — up from `[324, 372]` at v1.13.last                    |
+| Default 4-period sweep                             | **408 records**                                                          |
+| Integration-test `living_world_digest` (canonical) | **`3df73fd4f152c16d1188f5c15b69bdc8a5cd6061b637ea35af671e86c6fa2d71`**   |
+| Test count (`pytest -q`)                           | **3391 / 3391**                                                          |
+
+The digest moved at v1.14.5 by design (the new ledger records and per-period id tuples flow into the canonical view's bytes). It was unchanged through v1.14.1 → v1.14.4 because those milestones were storage-only.
+
+### 105.3 Hard boundary (carried forward verbatim)
+
+No financing execution. No loan approval. No bond issuance. No equity issuance. No underwriting. No syndication. No bookbuilding. No allocation. No pricing. No interest rate, spread, fee, coupon, or offering price. No optimal capital structure decision. No real leverage / D/E / WACC. No PD / LGD / EAD / rating. No investment advice. No real data. No Japan calibration.
+
+Every v1.9.x / v1.10.x / v1.11.x / v1.12.x / v1.13.x anti-claim is preserved unchanged. The v1.9.last public-prototype freeze, the v1.12.last attention-loop freeze, the v1.13.last settlement-substrate freeze, and the v1.8.0 public release remain untouched.
+
+### 105.4 What v1.15 does next
+
+v1.15 begins the **securities market intent aggregation** layer. The premise is that investor intents do not directly update prices — they are first aggregated by a broker / exchange / market-venue abstraction into security-level market pressure. That pressure can later feed back into equity-issuance accessibility, dilution concern, market access, and the capital-structure review.
+
+v1.15.0 is docs-only design (see [`v1_15_securities_market_intent_aggregation_design.md`](v1_15_securities_market_intent_aggregation_design.md)). Subsequent v1.15.x milestones will ship `ListedSecurityRecord`, `MarketVenueRecord`, `InvestorTradingIntentRecord`, `AggregatedMarketInterestRecord`, and `IndicativeMarketPressureRecord` storage. **No order submission, no order matching, no trade execution, no clearing, no settlement, no real exchange mechanics, no real price formation, no Japan calibration.**

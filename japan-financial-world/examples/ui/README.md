@@ -56,9 +56,21 @@ split that the engine actually maintains:
 | Slot                    | Current value | Meaning                                                  |
 | ----------------------- | ------------- | -------------------------------------------------------- |
 | UI prototype            | `v0`          | this static workbench                                    |
-| Runtime engine          | `v1.14.1`     | latest active code milestone (corporate financing need)  |
+| Runtime engine          | `v1.14.1`     | runtime version pinned in the bundled sample manifest    |
 | Evidence substrate      | `v1.13.6`     | latest `EvidenceResolver` bucket set                     |
 | Frozen attention loop   | `v1.12.last`  | the v1.12 attention-feedback loop pinned for replay      |
+
+The bundled sample manifest captures a snapshot of v1.14.1
+(`CorporateFinancingNeedRecord` storage). The latest engine
+freeze is **v1.14.last** — the first FWE milestone where the
+living reference world carries a bounded corporate financing
+reasoning chain (need → funding options → capital structure
+review → financing path), pinned at digest
+`3df73fd4f152c16d1188f5c15b69bdc8a5cd6061b637ea35af671e86c6fa2d71`
+on the default 4-period fixture. This UI prototype is
+intentionally lower-frequency than the engine and is bumped
+opportunistically; for the engine narrative see
+[`../../docs/v1_14_corporate_financing_intent_summary.md`](../../docs/v1_14_corporate_financing_intent_summary.md).
 
 These advance independently. The prototype version is
 intentionally lower than the runtime version because the

@@ -22,38 +22,50 @@ Each readiness review records its result here so the next reviewer
 can pick up where the last one stopped. Replace the snapshot when a
 new review is performed.
 
-- **Date:** 2026-05-02
-- **Target:** v1.13.last generic central-bank settlement
-  infrastructure freeze. The v1.12.last freeze (2026-05-04
-  snapshot below), the v1.9.last public prototype freeze, and
-  the v1.8.0 public release (`v1.8-public-release` at commit
-  `7fa2c42`) all remain unchanged; v1.13.last freezes the v1.13
-  generic, jurisdiction-neutral, label-only settlement /
-  interbank-liquidity / central-bank-signal substrate, plus the
-  citation-only cross-link to v1.12.x at v1.13.5. v1.13.last
-  itself is docs-only on top of the v1.13.1 → v1.13.5 code
-  freezes. The substrate is **storage and labels only** — no
-  payment execution, no real balances, no calibrated liquidity
-  model, no policy decision, no Japan calibration.
+- **Date:** 2026-05-03
+- **Target:** v1.14.last corporate financing intent freeze. The
+  v1.13.last settlement-substrate freeze (snapshot below), the
+  v1.12.last endogenous-attention-loop freeze (2026-05-04
+  snapshot further below), the v1.9.last public-prototype
+  freeze, and the v1.8.0 public release (`v1.8-public-release`
+  at commit `7fa2c42`) all remain unchanged; v1.14.last freezes
+  the v1.14 corporate financing reasoning chain (need → funding
+  options → capital structure review → financing path) layered
+  on top of the v1.12 attention loop and the v1.13 settlement
+  substrate. v1.14.last itself is docs-only on top of the
+  v1.14.1 → v1.14.5 code freezes. The chain is **storage /
+  audit / graph-linking only** — no financing execution, no
+  loan approval, no bond / equity issuance, no underwriting,
+  no syndication, no bookbuilding, no allocation, no pricing,
+  no optimal capital structure decision, no real leverage /
+  D/E / WACC, no investment advice, no real data, no Japan
+  calibration.
 - **Status:** docs + tests frozen. The freeze is conditional on
   CI being green on the commit being tagged.
-- **Local results (v1.13.last):**
-  - `pytest -q` → 2988 passed
+- **Local results (v1.14.last):**
+  - `pytest -q` → 3391 passed
   - `compileall world spaces tests examples` → clean
   - `ruff check .` (repo root) → clean
   - `python -m examples.reference_world.run_living_reference_world`
     → produces `[setup]` / `[period N]` / `[ledger]` trace with
-    v1.12.8 `attn_states=` + `memory_sels=` per-period columns;
-    re-run yields byte-identical output
+    v1.14.5 `financing_needs= / funding_options= / capital_reviews=
+    / financing_paths=` per-period columns; re-run yields
+    byte-identical output. Default 4-period sweep emits 408
+    records (per-period 96 / 98)
   - `... --markdown` → appends v1.9.1 deterministic Markdown
-    report including the v1.12.8 `## Attention feedback`
-    section; re-run yields byte-identical output
+    report including the v1.14.5 `## Corporate financing`
+    section with five histograms (purpose / option-type /
+    market-access / path-coherence / path-constraint); re-run
+    yields byte-identical output
   - `... --manifest /tmp/lw.json` → writes
     `living_world_manifest.v1` JSON carrying the perf-fixture
     `living_world_digest`. The integration-test fixture digest
-    moved at v1.13.5 to
-    `916e410d829bec0be26b92989fa2d5438b80637a5c56afd785e0b56cfbebb379`;
-    two runs into different paths diff to zero (modulo path)
+    moved at v1.14.5 to
+    `3df73fd4f152c16d1188f5c15b69bdc8a5cd6061b637ea35af671e86c6fa2d71`
+    (previously `916e410d…cfbebb379` at v1.13.5 / v1.13.6 —
+    unchanged through v1.14.1 → v1.14.4 because those milestones
+    were storage-only); two runs into different paths diff to
+    zero (modulo path)
   - `... --market-regime constructive --markdown`,
     `... --market-regime constrained --markdown`, and
     `... --market-regime tightening --markdown` — three
@@ -100,7 +112,34 @@ new review is performed.
     rule is integer-counted and weight-deterministic; the
     closed-set vocabulary contains no `pd` / `lgd` / `ead` /
     `default` / `rating` / `advice` / `recommendation` /
-    `underwrite` / `buy` / `sell` token
+    `underwrite` / `buy` / `sell` token / `selected_option` /
+    `optimal_option` / `approved` / `executed` / `commitment` /
+    `syndication` / `allocation` / `pricing` / `interest_rate` /
+    `spread` / `coupon` / `fee` / `offering_price` /
+    `target_price` / `expected_return` / `take_up_probability`
+
+#### v1.13.last historical snapshot (unchanged)
+
+- **Date:** 2026-05-02
+- **Target:** v1.13.last generic central-bank settlement
+  infrastructure freeze. The v1.13 substrate (settlement
+  accounts / payment instructions + settlement events /
+  interbank-liquidity state / central-bank-operation +
+  collateral-eligibility signals / v1.13.5 citation-only
+  cross-link to v1.12.x) is **storage and labels only** — no
+  payment execution, no real balances, no calibrated liquidity
+  model, no policy decision, no Japan calibration.
+- **Status:** docs + tests frozen at the v1.13.last commit.
+- **Local results (v1.13.last):**
+  - `pytest -q` → 2988 passed
+  - `compileall world spaces tests examples` → clean
+  - `ruff check .` (repo root) → clean
+  - `python -m examples.reference_world.run_living_reference_world`
+    → per-period 81 / 83 records, run total in `[324, 372]`
+  - integration-test fixture `living_world_digest` =
+    `916e410d829bec0be26b92989fa2d5438b80637a5c56afd785e0b56cfbebb379`
+    (moved at v1.13.5 by design, unchanged at v1.13.6 / v1.14.1
+    → v1.14.4)
 
 #### v1.9.last historical snapshot (unchanged)
 
@@ -201,8 +240,10 @@ new review is performed.
   and should not happen by an unpinned upgrade.
 - [ ] `pytest -q` from `japan-financial-world/` reports the expected
   passing total. v1.8 + post-rc1 CI fix: `725 passed`. v1.9.last
-  freeze: `1626 passed`. Use the count of the milestone being
-  tagged; mismatch means the tree is not the freeze tree.
+  freeze: `1626 passed`. v1.13.last freeze: `2988 passed`.
+  v1.14.last freeze: `3391 passed`. Use the count of the
+  milestone being tagged; mismatch means the tree is not the
+  freeze tree.
 - [ ] `python -m compileall world spaces tests examples` from
   `japan-financial-world/` succeeds (no syntax errors anywhere,
   including the reference demo and test files).

@@ -5,16 +5,19 @@ jurisdiction-neutral demo world that exercises every v0 + v1 record
 type through the existing v1.6 reference loop and produces a complete
 causal ledger trace.
 
-> **Note (v1.12.last freeze, 2026-05-04).** The headline runnable
-> surface is now the **v1.9.last living reference world** plus the
-> **v1.12 endogenous attention-feedback loop** layered on top. The
-> original v1.6 reference loop demo described below is preserved as
-> the single-shot explainer / replay-determinism baseline; the
-> multi-period, attention-conditioned, feedback-bounded living world
-> is the demo a v1.12.last reader should run first. See
+> **Note (v1.14.last freeze).** The headline runnable surface is
+> now the **v1.9.last living reference world** plus the **v1.12
+> endogenous attention-feedback loop** plus the **v1.14 corporate
+> financing reasoning chain** (need → funding options → capital
+> structure review → financing path). The original v1.6 reference
+> loop demo described below is preserved as the single-shot
+> explainer / replay-determinism baseline; the multi-period,
+> attention-conditioned, feedback-bounded, financing-aware living
+> world is the demo a v1.14.last reader should run first. See
+> [`v1_14_corporate_financing_intent_summary.md`](v1_14_corporate_financing_intent_summary.md)
+> for the v1.14 single-page summary and
 > [`v1_12_endogenous_attention_loop_summary.md`](v1_12_endogenous_attention_loop_summary.md)
-> for the v1.12 single-page summary and the regime-comparison demo
-> commands.
+> for the v1.12 attention-loop single-page summary.
 
 The demo lives under `examples/reference_world/` (entry point + entity
 catalog + expected-story narrative + runnable script). A test in
