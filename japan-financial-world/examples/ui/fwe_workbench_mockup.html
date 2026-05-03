@@ -681,6 +681,116 @@
       box-shadow: 0 0 0 2px var(--blue-tint);
     }
 
+    /* v1.17.4 redesign — Overview KPI cards + closed-loop diagram */
+    .overview-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .overview-card {
+      background: var(--paper);
+      border: 1px solid #e3e0d8;
+      border-radius: 6px;
+      padding: 12px 14px;
+    }
+    .overview-card .label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+    }
+    .overview-card .value {
+      font-family: var(--font-mono);
+      color: var(--blue);
+      font-weight: 700;
+      font-size: 16px;
+      margin-top: 4px;
+      line-height: 1.3;
+    }
+    .overview-card .note {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+    .loop-diagram {
+      background: var(--ivory);
+      border: 1px solid #e3e0d8;
+      border-radius: 6px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    .loop-diagram svg {
+      display: block;
+      width: 100%;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .loop-diagram .loop-caption {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--muted);
+      text-align: center;
+      margin-top: 8px;
+    }
+
+    /* v1.17.4 redesign — Attention diff strip */
+    .diff-strip {
+      background: var(--paper);
+      border: 1px solid #e3e0d8;
+      border-left: 3px solid var(--blue);
+      border-radius: 6px;
+      padding: 14px 16px;
+      margin-bottom: 14px;
+    }
+    .diff-strip h3 {
+      margin: 0 0 10px 0;
+      font-size: 14px;
+      color: var(--blue-2);
+    }
+    .diff-strip-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    .diff-strip .diff-cell {
+      background: var(--sheet);
+      border-radius: 4px;
+      padding: 10px;
+    }
+    .diff-strip .diff-cell.full {
+      grid-column: 1 / -1;
+    }
+    .diff-strip .diff-cell .label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+    }
+    .diff-strip .diff-cell .value {
+      margin-top: 4px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .diff-strip .diff-cell.dropped .value { color: var(--danger); }
+    .diff-strip .diff-cell.reinforced .value { color: var(--ok); }
+    .diff-strip .diff-cell.new-focus .value { color: var(--blue); font-weight: 600; }
+    .diff-strip .diff-cell.trigger .value { color: var(--amber); }
+
+    /* v1.17.4 redesign — boundary callout used on Market Intent /
+       Financing tabs to surface the hard-boundary anti-claim list. */
+    .boundary-callout {
+      background: #fff8eb;
+      border: 1px solid #f0d8a4;
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: #5a4a1a;
+      margin-bottom: 14px;
+    }
+    .boundary-callout strong { color: var(--amber); }
+
     /* ------------------------------------------------------------------ */
     /* Ledger row interactivity                                           */
     /* ------------------------------------------------------------------ */
@@ -1343,13 +1453,57 @@
         <div class="sheet-inner">
           <div class="band">
             <div>
-              <div class="chapter">Sheet III</div>
-              <h1>Attention &amp; Endogenous Feedback</h1>
+              <div class="chapter">Sheet VI</div>
+              <h1>Attention · what changed?</h1>
             </div>
             <div class="mono">selected evidence · budgeted memory</div>
           </div>
-          <div class="subband">What an actor saw in period N changes what it attends to in period N+1.</div>
+          <div class="subband">What an actor saw in period N changes what it attends to in period N+1. The diff strip below summarises that change for the active regime.</div>
           <div class="panel-body">
+
+            <!-- v1.17.4 — Attention diff strip -->
+            <section class="diff-strip mock-run-glow" aria-label="Attention diff for the active regime">
+              <h3>Attention diff · period N → period N+1
+                <span class="tag" style="margin-left:8px;">sample fixture · v1.16.3 mapping</span>
+              </h3>
+              <div class="diff-strip-grid">
+                <div class="diff-cell">
+                  <div class="label">Previous focus</div>
+                  <div class="value" id="diff-previous">dialogue, stewardship, engagement</div>
+                </div>
+                <div class="diff-cell trigger full">
+                  <div class="label">Trigger</div>
+                  <div class="value" id="diff-trigger">
+                    IndicativeMarketPressure.market_access_label = constrained ·
+                    CorporateFinancingPath.constraint_label = market_access_constraint
+                  </div>
+                </div>
+                <div class="diff-cell new-focus">
+                  <div class="label">New focus</div>
+                  <div class="value" id="diff-new">market_access, financing, risk</div>
+                </div>
+                <div class="diff-cell dropped">
+                  <div class="label">Dropped focus</div>
+                  <div class="value" id="diff-dropped">engagement</div>
+                </div>
+                <div class="diff-cell reinforced">
+                  <div class="label">Reinforced focus</div>
+                  <div class="value" id="diff-reinforced">liquidity, funding</div>
+                </div>
+                <div class="diff-cell full">
+                  <div class="label">Why it changed</div>
+                  <div class="value" id="diff-why">
+                    Prior-period market pressure and financing constraint
+                    flowed into the next-period attention budget via the
+                    v1.16.3 deterministic mapping. The fresh focus set is
+                    unioned with the v1.12.8 inherited focus *before* the
+                    v1.12.9 budget / decay / saturation pipeline runs, so
+                    pressure-driven labels can crowd out stale prior
+                    focus when the cap is reached.
+                  </div>
+                </div>
+              </div>
+            </section>
 
             <div id="cards-attention-actors" class="grid cols-3">
               <section class="card">
@@ -2025,15 +2179,15 @@
         </div>
       </article>
 
-      <!-- OUTPUTS -->
-      <article id="sheet-outputs" class="sheet">
+      <!-- TIMELINE (renamed from Outputs at v1.17.4) -->
+      <article id="sheet-timeline" class="sheet">
         <div class="sheet-inner">
           <div class="band">
             <div>
-              <div class="chapter">Sheet VII</div>
-              <h1>Outputs · Index, Events, Causal Tables</h1>
+              <div class="chapter">Sheet IV</div>
+              <h1>Timeline · Synthetic Display Path &amp; Events</h1>
             </div>
-            <div class="mono">regime · constrained</div>
+            <div class="mono">regime · <span id="timeline-active-regime">constrained</span></div>
           </div>
           <div class="subband">The main output is not stylized facts. It is the time path, the event trace, the actor
             response, and the causal evidence chain.</div>
@@ -2249,19 +2403,168 @@
               </div>
             </section>
 
-            <!-- v1.17.4 — Regime Compare snapshot card.
-               Click "Compare Regimes" in the top ribbon to land here. -->
-            <section id="card-regime-compare" class="card mock-run-glow" style="margin-top:14px;">
+          </div>
+        </div>
+      </article>
+
+      <!-- =============================================================== -->
+      <!-- v1.17.4 redesign — closed-loop tabs                              -->
+      <!-- OVERVIEW · REGIME COMPARE · MARKET INTENT · FINANCING            -->
+      <!-- =============================================================== -->
+
+      <!-- OVERVIEW -->
+      <article id="sheet-overview" class="sheet">
+        <div class="sheet-inner">
+          <div class="band">
+            <div>
+              <div class="chapter">Sheet III</div>
+              <h1>Overview · v1.16 closed loop at a glance</h1>
+            </div>
+            <div class="mono">regime · <span id="overview-active-regime">constrained</span></div>
+          </div>
+          <div class="subband">One-screen answer to: what happened, why, who reacted, what changed next. Closed-loop inspection view — not a market simulator.</div>
+          <div class="panel-body">
+
+            <!-- Closed-loop diagram -->
+            <section class="loop-diagram mock-run-glow">
+              <svg viewBox="0 0 1200 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="v1.16 closed-loop diagram">
+                <defs>
+                  <marker id="loop-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#034694"/>
+                  </marker>
+                </defs>
+                <g font-family="Inter" font-size="13" text-anchor="middle">
+                  <g>
+                    <rect x="20"   y="60" width="160" height="80" rx="8" fill="#fff" stroke="#034694" stroke-width="1.5"/>
+                    <text x="100" y="92"  fill="#034694" font-weight="700">Attention</text>
+                    <text x="100" y="112" fill="#6b7280" font-size="11">v1.12.8 · v1.16.3</text>
+                    <text x="100" y="128" fill="#6b7280" font-size="11">focus_labels</text>
+                  </g>
+                  <g>
+                    <rect x="220"  y="60" width="170" height="80" rx="8" fill="#fff" stroke="#034694" stroke-width="1.5"/>
+                    <text x="305" y="92"  fill="#034694" font-weight="700">Market Intent</text>
+                    <text x="305" y="112" fill="#6b7280" font-size="11">v1.15.2 · v1.16.1</text>
+                    <text x="305" y="128" fill="#6b7280" font-size="11">classifier rule_id</text>
+                  </g>
+                  <g>
+                    <rect x="430"  y="60" width="180" height="80" rx="8" fill="#fff" stroke="#034694" stroke-width="1.5"/>
+                    <text x="520" y="92"  fill="#034694" font-weight="700">Aggregated Interest</text>
+                    <text x="520" y="112" fill="#6b7280" font-size="11">v1.15.3</text>
+                    <text x="520" y="128" fill="#6b7280" font-size="11">net + liquidity counts</text>
+                  </g>
+                  <g>
+                    <rect x="650"  y="60" width="180" height="80" rx="8" fill="#fff" stroke="#034694" stroke-width="1.5"/>
+                    <text x="740" y="92"  fill="#034694" font-weight="700">Market Pressure</text>
+                    <text x="740" y="112" fill="#6b7280" font-size="11">v1.15.4</text>
+                    <text x="740" y="128" fill="#6b7280" font-size="11">indicative · not price</text>
+                  </g>
+                  <g>
+                    <rect x="870"  y="60" width="190" height="80" rx="8" fill="#fff" stroke="#034694" stroke-width="1.5"/>
+                    <text x="965" y="92"  fill="#034694" font-weight="700">Financing Path</text>
+                    <text x="965" y="112" fill="#6b7280" font-size="11">v1.14.4 · v1.15.6</text>
+                    <text x="965" y="128" fill="#6b7280" font-size="11">constraint + coherence</text>
+                  </g>
+                </g>
+                <!-- Forward arrows -->
+                <g stroke="#034694" stroke-width="1.5" fill="none" marker-end="url(#loop-arrow)">
+                  <line x1="180" y1="100" x2="220" y2="100"/>
+                  <line x1="390" y1="100" x2="430" y2="100"/>
+                  <line x1="610" y1="100" x2="650" y2="100"/>
+                  <line x1="830" y1="100" x2="870" y2="100"/>
+                </g>
+                <!-- Feedback arrow back to Attention (v1.16.3) -->
+                <g stroke="#7c1d2c" stroke-width="1.5" fill="none" marker-end="url(#loop-arrow)" stroke-dasharray="6 4">
+                  <path d="M 965 140 C 965 180, 100 180, 100 140"/>
+                </g>
+                <text x="540" y="178" font-family="Inter" font-size="11" fill="#7c1d2c" text-anchor="middle">v1.16.3 next-period attention feedback</text>
+                <text x="540" y="40"  font-family="Inter" font-size="11" fill="#6b7280" text-anchor="middle">v1.16 closed deterministic loop · synthetic, label-only, no execution</text>
+              </svg>
+              <div class="loop-caption">attention → market intent → aggregated interest → indicative pressure → financing path → next-period attention</div>
+            </section>
+
+            <!-- Compact KPI cards -->
+            <div class="overview-cards mock-run-glow">
+              <div class="overview-card">
+                <div class="label">Active regime</div>
+                <div class="value" id="ov-active-regime">constrained</div>
+                <div class="note">v1.11.2 preset</div>
+              </div>
+              <div class="overview-card">
+                <div class="label">Top event</div>
+                <div class="value" id="ov-top-event">2026-03-31 · market_environment_change</div>
+                <div class="note">v1.17.3 annotation</div>
+              </div>
+              <div class="overview-card">
+                <div class="label">Top market pressure</div>
+                <div class="value" id="ov-top-pressure">selective · cautious demand</div>
+                <div class="note">indicative · not price</div>
+              </div>
+              <div class="overview-card">
+                <div class="label">Top financing constraint</div>
+                <div class="value" id="ov-top-financing">no_obvious_constraint · coherent</div>
+                <div class="note">v1.14.4 · path label</div>
+              </div>
+              <div class="overview-card">
+                <div class="label">Top attention shift</div>
+                <div class="value" id="ov-top-attention">credit + liquidity + market_access widened</div>
+                <div class="note">v1.16.3 fresh focus</div>
+              </div>
+              <div class="overview-card">
+                <div class="label">Display path endpoint</div>
+                <div class="value" id="ov-endpoint">0.41</div>
+                <div class="note">synthetic display value · not a price</div>
+              </div>
+            </div>
+
+            <div class="overview-cards" style="grid-template-columns: 1fr 1fr;">
+              <div class="overview-card">
+                <div class="label">Digest <span class="muted">(sample fixture)</span></div>
+                <div class="value" id="ov-digest">cf05a1ac…1d0e43</div>
+                <div class="note">canonical SHA-256 over the run's ledger view</div>
+              </div>
+              <div class="overview-card">
+                <div class="label">Fixture status</div>
+                <div class="value">sample fixture</div>
+                <div class="note">no live engine execution · use `python -m pytest` to verify</div>
+              </div>
+            </div>
+
+            <div class="boundary-callout">
+              <strong>Closed-loop inspection view.</strong> This page is a
+              rendering of the v1.16 closed-loop records that already exist
+              in the kernel. It does <strong>not</strong> form prices,
+              forecast paths, expected returns, target prices, or
+              recommendations. Histogram counts and label values are
+              synthetic ordinals over closed-set vocabularies.
+            </div>
+
+          </div>
+        </div>
+      </article>
+
+      <!-- REGIME COMPARE -->
+      <article id="sheet-regime-compare" class="sheet">
+        <div class="sheet-inner">
+          <div class="band">
+            <div>
+              <div class="chapter">Sheet V</div>
+              <h1>Regime Compare · v1.17.2 / v1.17.3 surface</h1>
+            </div>
+            <div class="mono">v1.11.2 presets · sample fixture</div>
+          </div>
+          <div class="subband">Side-by-side closed-loop labels under each v1.11.2 regime preset. Same top-level label can hide different causal subfields; v1.17.3 exposes those differences.</div>
+          <div class="panel-body">
+
+            <section id="card-regime-compare" class="card mock-run-glow">
               <div class="section-rule"></div>
               <h3 class="card-title">
                 Regime compare snapshot
                 <span class="tag" style="margin-left:8px;">sample fixture · v1.17.2 / v1.17.3 surface</span>
               </h3>
               <p class="muted small" style="margin-top:0;">
-                Side-by-side closed-loop labels under each v1.11.2 regime
-                preset. Identical histograms (e.g. constrained vs
-                tightening at <code>risk_reduction_review 24</code>) are
-                still visibly different through the
+                Identical histograms (e.g. constrained vs tightening at
+                <code>risk_reduction_review&nbsp;24</code>) are still
+                visibly different through the
                 <strong>market environment subfields</strong> and the
                 per-regime causal trace surfaced by v1.17.3.
               </p>
@@ -2291,6 +2594,13 @@
                     <td class="mono">risk_reduction_review&nbsp;24</td>
                   </tr>
                   <tr>
+                    <td>Aggregated market interest</td>
+                    <td class="mono">balanced&nbsp;12</td>
+                    <td class="mono">balanced&nbsp;12</td>
+                    <td class="mono">balanced&nbsp;12</td>
+                    <td class="mono">balanced&nbsp;12</td>
+                  </tr>
+                  <tr>
                     <td>Indicative pressure (market access)</td>
                     <td class="mono">selective&nbsp;12</td>
                     <td class="mono">selective&nbsp;12</td>
@@ -2306,10 +2616,17 @@
                   </tr>
                   <tr>
                     <td>Market environment subfields <span class="muted">(differentiator)</span></td>
-                    <td class="mono">credit=neutral, funding=normal, refi=open</td>
-                    <td class="mono">credit=tightening, funding=selective, refi=open</td>
-                    <td class="mono">credit=stressed, funding=normal, refi=open</td>
-                    <td class="mono">credit=tightening, funding=expensive, refi=selective</td>
+                    <td class="mono">credit=neutral, funding=normal, liquidity=normal, refi=open</td>
+                    <td class="mono">credit=tightening, funding=selective, liquidity=normal, refi=open</td>
+                    <td class="mono">credit=stressed, funding=normal, liquidity=tight, refi=open</td>
+                    <td class="mono">credit=tightening, funding=expensive, liquidity=tight, refi=selective</td>
+                  </tr>
+                  <tr>
+                    <td>Key event annotation (v1.17.3)</td>
+                    <td>2026-03-31 · attention_shift (engagement-led)</td>
+                    <td>2026-03-31 · market_environment_change (medium)</td>
+                    <td>2026-03-31 · market_environment_change (medium · stressed credit)</td>
+                    <td>2026-03-31 · market_environment_change (medium · tightening credit + selective refi)</td>
                   </tr>
                   <tr>
                     <td>Top causal arrow (v1.17.3)</td>
@@ -2334,6 +2651,361 @@
               </div>
             </section>
 
+            <div class="boundary-callout">
+              <strong>Why the subfield row matters.</strong> The default
+              v1.11.2 fixture maps both <code>constrained</code> and
+              <code>tightening</code> to the same coarse closed-loop labels
+              (<code>selective</code> pressure, <code>balanced</code>
+              aggregated interest, <code>risk_reduction_review</code>
+              intent). v1.17.3 surfaces the underlying environment
+              subfields so the two regimes are still visibly
+              distinguishable: <code>credit=stressed, funding=normal,
+              refi=open</code> (constrained) vs
+              <code>credit=tightening, funding=expensive, refi=selective</code>
+              (tightening).
+            </div>
+
+          </div>
+        </div>
+      </article>
+
+      <!-- MARKET INTENT -->
+      <article id="sheet-market-intent" class="sheet">
+        <div class="sheet-inner">
+          <div class="band">
+            <div>
+              <div class="chapter">Sheet VII</div>
+              <h1>Market Intent · v1.15 / v1.16 chain</h1>
+            </div>
+            <div class="mono">investor → aggregated → pressure</div>
+          </div>
+          <div class="subband">Per-investor market intent direction (v1.16.1 classifier), per-venue aggregated interest (v1.15.3), and per-security indicative pressure (v1.15.4). Synthetic, label-only, non-binding.</div>
+          <div class="panel-body">
+
+            <div class="boundary-callout">
+              <strong>Hard boundary.</strong> Market intent is <strong>not</strong> an order.
+              Aggregated interest is <strong>not</strong> order imbalance.
+              Indicative pressure is <strong>not</strong> price. No matching, no execution,
+              no clearing, no settlement, no quote dissemination, no PriceBook mutation.
+            </div>
+
+            <section class="card">
+              <div class="section-rule"></div>
+              <h3 class="card-title">A. Investor market intent <span class="tag">per investor × security · v1.16.1 classifier</span></h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Investor</th>
+                    <th>Security</th>
+                    <th>Classifier rule_id</th>
+                    <th>Evidence summary</th>
+                    <th>intent_direction_label</th>
+                    <th class="num">Confidence</th>
+                    <th>Source ids</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-market-intent-investor">
+                  <tr>
+                    <td>investor:reference_pension_a</td>
+                    <td>security:firm:reference_manufacturer_a:equity:line_1</td>
+                    <td class="mono">priority_3a_risk_flag_watch</td>
+                    <td>intent=risk_flag_watch · valuation_conf=0.45 · firm_pressure=0.62 · env=selective_or_constrained</td>
+                    <td class="mono">risk_reduction_review</td>
+                    <td class="num">0.65</td>
+                    <td class="mono">intent:investor:reference_pension_a:firm:reference_manufacturer_a:2026-03-31</td>
+                  </tr>
+                  <tr>
+                    <td>investor:reference_pension_a</td>
+                    <td>security:firm:reference_manufacturer_b:equity:line_1</td>
+                    <td class="mono">priority_3a_risk_flag_watch</td>
+                    <td>intent=risk_flag_watch · valuation_conf=0.50 · firm_pressure=0.55 · env=selective_or_constrained</td>
+                    <td class="mono">risk_reduction_review</td>
+                    <td class="num">0.65</td>
+                    <td class="mono">intent:investor:reference_pension_a:firm:reference_manufacturer_b:2026-03-31</td>
+                  </tr>
+                  <tr>
+                    <td>investor:reference_asset_manager_a</td>
+                    <td>security:firm:reference_manufacturer_a:equity:line_1</td>
+                    <td class="mono">priority_3a_risk_flag_watch</td>
+                    <td>intent=risk_flag_watch · valuation_conf=0.50 · firm_pressure=0.60 · env=selective_or_constrained</td>
+                    <td class="mono">risk_reduction_review</td>
+                    <td class="num">0.65</td>
+                    <td class="mono">intent:investor:reference_asset_manager_a:firm:reference_manufacturer_a:2026-03-31</td>
+                  </tr>
+                  <tr>
+                    <td>investor:reference_asset_manager_a</td>
+                    <td>security:firm:reference_manufacturer_c:equity:line_1</td>
+                    <td class="mono">priority_3a_risk_flag_watch</td>
+                    <td>intent=risk_flag_watch · valuation_conf=0.48 · firm_pressure=0.58 · env=selective_or_constrained</td>
+                    <td class="mono">risk_reduction_review</td>
+                    <td class="num">0.65</td>
+                    <td class="mono">intent:investor:reference_asset_manager_a:firm:reference_manufacturer_c:2026-03-31</td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+
+            <section class="card" style="margin-top:14px;">
+              <div class="section-rule"></div>
+              <h3 class="card-title">B. Aggregated market interest <span class="tag">per venue × security · v1.15.3</span></h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Venue</th>
+                    <th>Security</th>
+                    <th class="num">increased</th>
+                    <th class="num">reduced</th>
+                    <th class="num">neutral / hold</th>
+                    <th>net_interest_label</th>
+                    <th>liquidity_interest_label</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-market-intent-aggregated">
+                  <tr>
+                    <td>venue:reference_exchange_a</td>
+                    <td>security:firm:reference_manufacturer_a:equity:line_1</td>
+                    <td class="num">0</td>
+                    <td class="num">2</td>
+                    <td class="num">0</td>
+                    <td class="mono">balanced</td>
+                    <td class="mono">normal</td>
+                  </tr>
+                  <tr>
+                    <td>venue:reference_exchange_a</td>
+                    <td>security:firm:reference_manufacturer_b:equity:line_1</td>
+                    <td class="num">0</td>
+                    <td class="num">2</td>
+                    <td class="num">0</td>
+                    <td class="mono">balanced</td>
+                    <td class="mono">normal</td>
+                  </tr>
+                  <tr>
+                    <td>venue:reference_exchange_a</td>
+                    <td>security:firm:reference_manufacturer_c:equity:line_1</td>
+                    <td class="num">0</td>
+                    <td class="num">2</td>
+                    <td class="num">0</td>
+                    <td class="mono">balanced</td>
+                    <td class="mono">normal</td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+
+            <section class="card" style="margin-top:14px;">
+              <div class="section-rule"></div>
+              <h3 class="card-title">C. Indicative market pressure <span class="tag">per security · v1.15.4</span></h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Security</th>
+                    <th>demand_pressure_label</th>
+                    <th>liquidity_pressure_label</th>
+                    <th>market_access_label</th>
+                    <th>financing_relevance_label</th>
+                    <th>source_aggregated_interest_ids</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-market-intent-pressure">
+                  <tr>
+                    <td>security:firm:reference_manufacturer_a:equity:line_1</td>
+                    <td class="mono">balanced</td>
+                    <td class="mono">normal</td>
+                    <td class="mono">selective</td>
+                    <td class="mono">neutral_for_financing</td>
+                    <td class="mono">aggregated_market_interest:venue:reference_exchange_a:security:firm:reference_manufacturer_a:equity:line_1:2026-03-31</td>
+                  </tr>
+                  <tr>
+                    <td>security:firm:reference_manufacturer_b:equity:line_1</td>
+                    <td class="mono">balanced</td>
+                    <td class="mono">normal</td>
+                    <td class="mono">selective</td>
+                    <td class="mono">neutral_for_financing</td>
+                    <td class="mono">aggregated_market_interest:venue:reference_exchange_a:security:firm:reference_manufacturer_b:equity:line_1:2026-03-31</td>
+                  </tr>
+                  <tr>
+                    <td>security:firm:reference_manufacturer_c:equity:line_1</td>
+                    <td class="mono">balanced</td>
+                    <td class="mono">normal</td>
+                    <td class="mono">selective</td>
+                    <td class="mono">neutral_for_financing</td>
+                    <td class="mono">aggregated_market_interest:venue:reference_exchange_a:security:firm:reference_manufacturer_c:equity:line_1:2026-03-31</td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+
+          </div>
+        </div>
+      </article>
+
+      <!-- FINANCING -->
+      <article id="sheet-financing" class="sheet">
+        <div class="sheet-inner">
+          <div class="band">
+            <div>
+              <div class="chapter">Sheet VIII</div>
+              <h1>Financing · v1.14 / v1.15.6 chain</h1>
+            </div>
+            <div class="mono">need → options → review → path</div>
+          </div>
+          <div class="subband">Corporate financing reasoning chain plus v1.15.6 indicative-pressure feedback into capital structure review and financing path. Storage / audit / graph-linking only.</div>
+          <div class="panel-body">
+
+            <div class="boundary-callout">
+              <strong>Hard boundary.</strong> No financing execution. No loan approval.
+              No bond / equity issuance. No underwriting. No syndication. No
+              bookbuilding. No allocation. No pricing. No optimal capital
+              structure decision. No coupon / fee / interest_rate / spread.
+            </div>
+
+            <section class="card">
+              <div class="section-rule"></div>
+              <h3 class="card-title">A. Financing path summary <span class="tag">per firm · v1.14.4 + v1.15.6</span></h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Firm</th>
+                    <th>Need type</th>
+                    <th>Funding options</th>
+                    <th>Capital structure review</th>
+                    <th>Path constraint</th>
+                    <th>Coherence label</th>
+                    <th>Market pressure cited</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-financing-path-summary">
+                  <tr>
+                    <td>firm:reference_manufacturer_a</td>
+                    <td class="mono">general_purpose_funding</td>
+                    <td>bank loan candidate · bond issuance candidate</td>
+                    <td class="mono">capital_structure_review:firm:reference_manufacturer_a:2026-03-31</td>
+                    <td class="mono">no_obvious_constraint</td>
+                    <td class="mono">coherent</td>
+                    <td class="mono">indicative_market_pressure:security:firm:reference_manufacturer_a:equity:line_1:2026-03-31</td>
+                  </tr>
+                  <tr>
+                    <td>firm:reference_manufacturer_b</td>
+                    <td class="mono">capex_funding</td>
+                    <td>bank loan candidate · internal cash candidate</td>
+                    <td class="mono">capital_structure_review:firm:reference_manufacturer_b:2026-03-31</td>
+                    <td class="mono">no_obvious_constraint</td>
+                    <td class="mono">coherent</td>
+                    <td class="mono">indicative_market_pressure:security:firm:reference_manufacturer_b:equity:line_1:2026-03-31</td>
+                  </tr>
+                  <tr>
+                    <td>firm:reference_manufacturer_c</td>
+                    <td class="mono">refinancing</td>
+                    <td>bank loan candidate · asset sale candidate</td>
+                    <td class="mono">capital_structure_review:firm:reference_manufacturer_c:2026-03-31</td>
+                    <td class="mono">no_obvious_constraint</td>
+                    <td class="mono">coherent</td>
+                    <td class="mono">indicative_market_pressure:security:firm:reference_manufacturer_c:equity:line_1:2026-03-31</td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+
+            <section class="card" style="margin-top:14px;">
+              <div class="section-rule"></div>
+              <h3 class="card-title">B. Funding option candidates <span class="tag">v1.14.2 · candidates only</span></h3>
+              <p class="muted small" style="margin-top:0;">
+                Candidate language only. Selection / approval / pricing /
+                allocation are explicitly out of scope.
+              </p>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Firm</th>
+                    <th>Candidate type</th>
+                    <th>Status</th>
+                    <th>Notes</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-financing-funding-options">
+                  <tr>
+                    <td>firm:reference_manufacturer_a</td>
+                    <td class="mono">bank_loan_candidate</td>
+                    <td class="status-cell">candidate</td>
+                    <td>candidate only · no commitment, no underwriting</td>
+                  </tr>
+                  <tr>
+                    <td>firm:reference_manufacturer_a</td>
+                    <td class="mono">bond_issuance_candidate</td>
+                    <td class="status-cell">candidate</td>
+                    <td>candidate only · no offering, no pricing</td>
+                  </tr>
+                  <tr>
+                    <td>firm:reference_manufacturer_b</td>
+                    <td class="mono">bank_loan_candidate</td>
+                    <td class="status-cell">candidate</td>
+                    <td>candidate only</td>
+                  </tr>
+                  <tr>
+                    <td>firm:reference_manufacturer_b</td>
+                    <td class="mono">internal_cash_candidate</td>
+                    <td class="status-cell">candidate</td>
+                    <td>candidate only · no balance-sheet mutation</td>
+                  </tr>
+                  <tr>
+                    <td>firm:reference_manufacturer_c</td>
+                    <td class="mono">bank_loan_candidate</td>
+                    <td class="status-cell">candidate</td>
+                    <td>candidate only</td>
+                  </tr>
+                  <tr>
+                    <td>firm:reference_manufacturer_c</td>
+                    <td class="mono">asset_sale_candidate</td>
+                    <td class="status-cell">candidate</td>
+                    <td>candidate only · no asset disposition</td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+
+            <section class="card" style="margin-top:14px;">
+              <div class="section-rule"></div>
+              <h3 class="card-title">C. Capital structure review <span class="tag">v1.14.3 + v1.15.6 pressure citation</span></h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Firm</th>
+                    <th>market_access_label</th>
+                    <th>dilution_concern_label</th>
+                    <th>covenant_headroom_label</th>
+                    <th>rating_perception_label</th>
+                    <th>source_indicative_market_pressure_ids</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-financing-capital-structure-review">
+                  <tr>
+                    <td>firm:reference_manufacturer_a</td>
+                    <td class="mono">selective</td>
+                    <td class="mono">low</td>
+                    <td class="mono">moderate</td>
+                    <td class="mono">stable</td>
+                    <td class="mono">indicative_market_pressure:security:firm:reference_manufacturer_a:equity:line_1:2026-03-31</td>
+                  </tr>
+                  <tr>
+                    <td>firm:reference_manufacturer_b</td>
+                    <td class="mono">selective</td>
+                    <td class="mono">low</td>
+                    <td class="mono">moderate</td>
+                    <td class="mono">watch</td>
+                    <td class="mono">indicative_market_pressure:security:firm:reference_manufacturer_b:equity:line_1:2026-03-31</td>
+                  </tr>
+                  <tr>
+                    <td>firm:reference_manufacturer_c</td>
+                    <td class="mono">selective</td>
+                    <td class="mono">low</td>
+                    <td class="mono">tight</td>
+                    <td class="mono">watch</td>
+                    <td class="mono">indicative_market_pressure:security:firm:reference_manufacturer_c:equity:line_1:2026-03-31</td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+
           </div>
         </div>
       </article>
@@ -2343,7 +3015,7 @@
         <div class="sheet-inner">
           <div class="band">
             <div>
-              <div class="chapter">Sheet VIII</div>
+              <div class="chapter">Sheet IX</div>
               <h1>Ledger &amp; Causal Inspector</h1>
             </div>
             <div class="mono">parent evidence · downstream records</div>
@@ -2627,6 +3299,37 @@
             </div>
 
             <section class="card" style="margin-top:14px;">
+              <h3 class="card-title">v1.16 / v1.17 milestone trail</h3>
+              <table>
+                <thead>
+                  <tr><th>Milestone</th><th>What it ships</th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="mono">v1.16.last</td>
+                    <td>closed deterministic loop: attention → market intent → aggregated interest → indicative pressure → financing path → next-period attention</td>
+                  </tr>
+                  <tr>
+                    <td class="mono">v1.17.1</td>
+                    <td>temporal display series · ReportingCalendar / SyntheticDisplayPath / EventAnnotation / CausalTimelineAnnotation</td>
+                  </tr>
+                  <tr>
+                    <td class="mono">v1.17.2</td>
+                    <td>regime comparison report · NamedRegimePanel + RegimeComparisonPanel + side-by-side markdown</td>
+                  </tr>
+                  <tr>
+                    <td class="mono">v1.17.3</td>
+                    <td>event annotations + causal timeline · per-record causal trace surfaced under regime comparison</td>
+                  </tr>
+                  <tr>
+                    <td class="mono">v1.17.4</td>
+                    <td>static workbench polish · this UI · 10-tab redesign around the closed loop</td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+
+            <section class="card" style="margin-top:14px;">
               <h3 class="card-title">Status of this UI</h3>
               <table>
                 <tr>
@@ -2668,14 +3371,13 @@
     <nav class="bottom-tabs" aria-label="Workbook sheets">
       <button class="sheet-tab active" data-sheet="cover" data-category="cover" type="button">Cover</button>
       <button class="sheet-tab group-start" data-sheet="settings" data-category="setup" type="button">Inputs</button>
-      <button class="sheet-tab group-start" data-sheet="market" data-category="state" type="button">Market
-        State</button>
+      <button class="sheet-tab group-start" data-sheet="overview" data-category="state" type="button">Overview</button>
+      <button class="sheet-tab" data-sheet="timeline" data-category="state" type="button">Timeline</button>
+      <button class="sheet-tab" data-sheet="regime-compare" data-category="state" type="button">Regime Compare</button>
       <button class="sheet-tab" data-sheet="attention" data-category="state" type="button">Attention</button>
-      <button class="sheet-tab" data-sheet="firms" data-category="state" type="button">Firms</button>
-      <button class="sheet-tab" data-sheet="investors" data-category="state" type="button">Investors</button>
-      <button class="sheet-tab" data-sheet="banks" data-category="state" type="button">Banks</button>
-      <button class="sheet-tab group-start" data-sheet="outputs" data-category="output" type="button">Outputs</button>
-      <button class="sheet-tab" data-sheet="ledger" data-category="output" type="button">Ledger</button>
+      <button class="sheet-tab" data-sheet="market-intent" data-category="state" type="button">Market Intent</button>
+      <button class="sheet-tab" data-sheet="financing" data-category="state" type="button">Financing</button>
+      <button class="sheet-tab group-start" data-sheet="ledger" data-category="output" type="button">Ledger</button>
       <button class="sheet-tab group-start" data-sheet="appendix" data-category="meta" type="button">Appendix</button>
     </nav>
   </main>
@@ -2693,8 +3395,11 @@
     "ui_prototype_version": "v0",
     "runtime_engine_version": "v1.16.last",
     "display_layer_version": "v1.17.1",
+    "regime_compare_version": "v1.17.2",
+    "annotation_layer_version": "v1.17.3",
+    "static_workbench_version": "v1.17.4",
     "closed_loop_version": "v1.16.last",
-    "latest_display_module": "v1.17.1 Temporal Display Series",
+    "latest_display_module": "v1.17.4 Static Workbench Polish",
     "digest": "916e410d829bec0be26b92989fa2d5438b80637a5c56afd785e0b56cfbebb379",
     "digest_kind": "sample_fixture",
     "as_of_period": "2026-Q3",
@@ -2703,6 +3408,69 @@
     "fixture_kind": "sample_fixture",
     "fixture_note": "sample manifest snapshots an earlier engine build; the live v1.16.last runtime emits 108 / 110 records per period and a [432, 480] per-run window",
     "synthetic_only": true
+  },
+  "overview": {
+    "active_regime": "constrained",
+    "top_event": "2026-03-31 · market_environment_change · medium",
+    "top_pressure": "selective · cautious demand",
+    "top_financing_constraint": "no_obvious_constraint · coherent",
+    "top_attention_shift": "credit + liquidity + market_access widened",
+    "display_path_endpoint": "0.41",
+    "digest_short": "cf05a1ac…1d0e43",
+    "fixture_kind": "sample_fixture"
+  },
+  "timeline": {
+    "calendar": "2026-Q1 → 2026-Q4 quarterly · monthly display rendering",
+    "synthetic_display_path_kind": "indicative_pressure_path",
+    "interpolation_label": "step",
+    "boundary_note": "Display-only. Not a price. Not a forecast. Not real market data. Synthetic ordinal in [0, 1] rendered for inspection of the v1.16 closed-loop run."
+  },
+  "regime_compare": {
+    "panel_id": "regime_comparison:reference_run:default",
+    "regimes": [
+      {"regime_id": "constructive", "digest": "dbccdd17…7a0313", "subfields": "credit=neutral, funding=normal, liquidity=normal, refi=open"},
+      {"regime_id": "mixed",        "digest": "2bcde5a4…00b1c0", "subfields": "credit=tightening, funding=selective, liquidity=normal, refi=open"},
+      {"regime_id": "constrained",  "digest": "cf05a1ac…1d0e43", "subfields": "credit=stressed, funding=normal, liquidity=tight, refi=open"},
+      {"regime_id": "tightening",   "digest": "6b3b73af…aec53d", "subfields": "credit=tightening, funding=expensive, liquidity=tight, refi=selective"}
+    ],
+    "fixture_kind": "sample_fixture"
+  },
+  "attention_diff": {
+    "regime": "constrained",
+    "previous_focus": ["dialogue", "stewardship", "engagement"],
+    "trigger": "IndicativeMarketPressure.market_access_label = constrained · CorporateFinancingPath.constraint_label = market_access_constraint",
+    "new_focus": ["market_access", "financing", "risk"],
+    "dropped_focus": ["engagement"],
+    "reinforced_focus": ["liquidity", "funding"],
+    "why": "Prior-period market pressure and financing constraint flowed into the next-period attention budget via the v1.16.3 deterministic mapping.",
+    "fixture_kind": "sample_fixture"
+  },
+  "market_intent": {
+    "investor_rows": [
+      {"investor": "investor:reference_pension_a",       "security": "security:firm:reference_manufacturer_a:equity:line_1", "rule_id": "priority_3a_risk_flag_watch", "intent_direction_label": "risk_reduction_review", "confidence": 0.65},
+      {"investor": "investor:reference_pension_a",       "security": "security:firm:reference_manufacturer_b:equity:line_1", "rule_id": "priority_3a_risk_flag_watch", "intent_direction_label": "risk_reduction_review", "confidence": 0.65},
+      {"investor": "investor:reference_asset_manager_a", "security": "security:firm:reference_manufacturer_a:equity:line_1", "rule_id": "priority_3a_risk_flag_watch", "intent_direction_label": "risk_reduction_review", "confidence": 0.65},
+      {"investor": "investor:reference_asset_manager_a", "security": "security:firm:reference_manufacturer_c:equity:line_1", "rule_id": "priority_3a_risk_flag_watch", "intent_direction_label": "risk_reduction_review", "confidence": 0.65}
+    ],
+    "aggregated_rows": [
+      {"venue": "venue:reference_exchange_a", "security": "security:firm:reference_manufacturer_a:equity:line_1", "increased": 0, "reduced": 2, "neutral_or_hold": 0, "net_interest_label": "balanced",     "liquidity_interest_label": "normal"},
+      {"venue": "venue:reference_exchange_a", "security": "security:firm:reference_manufacturer_b:equity:line_1", "increased": 0, "reduced": 2, "neutral_or_hold": 0, "net_interest_label": "balanced",     "liquidity_interest_label": "normal"},
+      {"venue": "venue:reference_exchange_a", "security": "security:firm:reference_manufacturer_c:equity:line_1", "increased": 0, "reduced": 2, "neutral_or_hold": 0, "net_interest_label": "balanced",     "liquidity_interest_label": "normal"}
+    ],
+    "pressure_rows": [
+      {"security": "security:firm:reference_manufacturer_a:equity:line_1", "demand_pressure_label": "balanced", "liquidity_pressure_label": "normal", "market_access_label": "selective", "financing_relevance_label": "neutral_for_financing"},
+      {"security": "security:firm:reference_manufacturer_b:equity:line_1", "demand_pressure_label": "balanced", "liquidity_pressure_label": "normal", "market_access_label": "selective", "financing_relevance_label": "neutral_for_financing"},
+      {"security": "security:firm:reference_manufacturer_c:equity:line_1", "demand_pressure_label": "balanced", "liquidity_pressure_label": "normal", "market_access_label": "selective", "financing_relevance_label": "neutral_for_financing"}
+    ],
+    "fixture_kind": "sample_fixture"
+  },
+  "financing": {
+    "path_summary_rows": [
+      {"firm": "firm:reference_manufacturer_a", "need_type": "general_purpose_funding", "candidates": "bank_loan_candidate · bond_issuance_candidate", "constraint_label": "no_obvious_constraint", "coherence_label": "coherent"},
+      {"firm": "firm:reference_manufacturer_b", "need_type": "capex_funding",            "candidates": "bank_loan_candidate · internal_cash_candidate", "constraint_label": "no_obvious_constraint", "coherence_label": "coherent"},
+      {"firm": "firm:reference_manufacturer_c", "need_type": "refinancing",              "candidates": "bank_loan_candidate · asset_sale_candidate",   "constraint_label": "no_obvious_constraint", "coherence_label": "coherent"}
+    ],
+    "fixture_kind": "sample_fixture"
   },
   "market_state": {
     "kpis": [
@@ -3039,15 +3807,15 @@
     // -----------------------------------------------------------------
     (function () {
       var sheetCategories = {
-        'sheet-settings': { label: 'INPUT', cls: 'setup' },
-        'sheet-market': { label: 'STATE', cls: 'state' },
-        'sheet-attention': { label: 'STATE', cls: 'state' },
-        'sheet-firms': { label: 'STATE', cls: 'state' },
-        'sheet-investors': { label: 'STATE', cls: 'state' },
-        'sheet-banks': { label: 'STATE', cls: 'state' },
-        'sheet-outputs': { label: 'OUTPUT', cls: 'output' },
-        'sheet-ledger': { label: 'OUTPUT', cls: 'output' },
-        'sheet-appendix': { label: 'META', cls: 'meta' }
+        'sheet-settings':       { label: 'INPUT',  cls: 'setup'  },
+        'sheet-overview':       { label: 'STATE',  cls: 'state'  },
+        'sheet-timeline':       { label: 'STATE',  cls: 'state'  },
+        'sheet-regime-compare': { label: 'STATE',  cls: 'state'  },
+        'sheet-attention':      { label: 'STATE',  cls: 'state'  },
+        'sheet-market-intent':  { label: 'STATE',  cls: 'state'  },
+        'sheet-financing':      { label: 'STATE',  cls: 'state'  },
+        'sheet-ledger':         { label: 'OUTPUT', cls: 'output' },
+        'sheet-appendix':       { label: 'META',   cls: 'meta'   }
       };
       Object.keys(sheetCategories).forEach(function (id) {
         var sheet = document.getElementById(id);
@@ -3577,9 +4345,15 @@
           unresolved_refs: '0',
           top_event: '2026-04-15 · attention_shift · low (engagement-led)',
           attention_summary: 'engagement, dialogue, stewardship reinforced',
-          market_pressure: 'selective · supportive demand',
+          market_pressure: 'open · supportive demand',
           financing_constraint: 'no_obvious_constraint · coherent',
-          env_subfields: 'credit=neutral, funding=normal, refi=open'
+          env_subfields: 'credit=neutral, funding=normal, refi=open',
+          diff_previous:   'memory',
+          diff_trigger:    'No restrictive prior pressure · v1.16.3 mapping idle',
+          diff_new:        'engagement, dialogue, stewardship',
+          diff_dropped:    '—',
+          diff_reinforced: '—',
+          diff_why:        'Constructive regime fires the v1.12.8 engagement_intent_observed branch only; the v1.16.3 fresh-focus union contributes no new labels.'
         },
         mixed: {
           regime_label: 'mixed',
@@ -3593,7 +4367,13 @@
           attention_summary: 'firm_state, market_environment, market_access widened',
           market_pressure: 'selective · balanced demand',
           financing_constraint: 'no_obvious_constraint · partially_coherent',
-          env_subfields: 'credit=tightening, funding=selective, refi=open'
+          env_subfields: 'credit=tightening, funding=selective, refi=open',
+          diff_previous:   'engagement, dialogue, stewardship',
+          diff_trigger:    'MarketEnvironmentState.overall_market_access_label = selective_or_constrained',
+          diff_new:        'firm_state, market_environment, market_access',
+          diff_dropped:    'engagement, dialogue, stewardship',
+          diff_reinforced: 'memory',
+          diff_why:        'Mixed regime widens v1.12.8 risk-intent + restrictive-market focus; v1.16.3 contributes market_access via prior pressure citation.'
         },
         constrained: {
           regime_label: 'constrained',
@@ -3607,7 +4387,13 @@
           attention_summary: 'credit, liquidity, market_access, refinancing_window saturated',
           market_pressure: 'selective · cautious demand',
           financing_constraint: 'no_obvious_constraint · coherent (subfield-led)',
-          env_subfields: 'credit=stressed, funding=normal, refi=open'
+          env_subfields: 'credit=stressed, funding=normal, refi=open',
+          diff_previous:   'dialogue, stewardship, engagement',
+          diff_trigger:    'IndicativeMarketPressure.market_access_label = selective · firm financial state pressure ≥ 0.6',
+          diff_new:        'market_access, financing, risk',
+          diff_dropped:    'engagement',
+          diff_reinforced: 'liquidity, funding',
+          diff_why:        'Prior-period market pressure (selective + cautious demand) and the v1.15.6 financing-path constraint flowed into next-period attention. The v1.16.3 fresh focus set is unioned with the v1.12.8 inherited focus before the v1.12.9 budget pipeline runs, so pressure-driven labels crowd out stale prior focus.'
         },
         tightening: {
           regime_label: 'tightening',
@@ -3621,7 +4407,13 @@
           attention_summary: 'credit, liquidity, refinancing_window pressured',
           market_pressure: 'selective · adverse-leaning demand',
           financing_constraint: 'no_obvious_constraint · coherent (subfield-led)',
-          env_subfields: 'credit=tightening, funding=expensive, refi=selective'
+          env_subfields: 'credit=tightening, funding=expensive, refi=selective',
+          diff_previous:   'dialogue, stewardship, engagement',
+          diff_trigger:    'MarketEnvironmentState credit=tightening, funding=expensive, refi=selective',
+          diff_new:        'market_access, financing, risk, refinancing_window',
+          diff_dropped:    'engagement',
+          diff_reinforced: 'liquidity, funding, credit',
+          diff_why:        'Tightening regime carries different env subfields than constrained even when the top-level label collides. v1.17.3 surfaces credit=tightening + funding=expensive + refi=selective; the v1.16.3 mapping widens attention to refinancing_window in addition to the constrained-regime baseline.'
         }
       };
 
@@ -3643,17 +4435,35 @@
       function runMock() {
         var regime = selectedRegime();
         var fixture = SAMPLE_RUNS[regime] || SAMPLE_RUNS.constrained;
-        // Update Outputs KPIs.
+        // Timeline KPIs (v1.17.4 renamed from Outputs).
         setText('kpi-endpoint', fixture.endpoint);
         setText('kpi-risk-intents', fixture.risk_intents);
         setText('kpi-credit-watches', fixture.credit_watches);
         setText('kpi-attention-shifts', fixture.attention_shifts);
         setText('kpi-unresolved', fixture.unresolved_refs);
         setText('kpi-digest', fixture.digest_short);
-        // Update top-ribbon digest hint.
+        // Top-ribbon digest hint.
         setText('digest-short', fixture.digest_short);
-        // Update Settings active-regime cell.
+        // Settings active-regime cell.
         setText('regime-active', fixture.regime_label);
+        // Timeline + Overview header regime labels.
+        setText('timeline-active-regime', fixture.regime_label);
+        setText('overview-active-regime', fixture.regime_label);
+        // Overview compact KPI cards.
+        setText('ov-active-regime',  fixture.regime_label);
+        setText('ov-top-event',      fixture.top_event);
+        setText('ov-top-pressure',   fixture.market_pressure);
+        setText('ov-top-financing',  fixture.financing_constraint);
+        setText('ov-top-attention',  fixture.attention_summary);
+        setText('ov-endpoint',       fixture.endpoint);
+        setText('ov-digest',         fixture.digest_short);
+        // Attention diff strip (v1.17.4).
+        setText('diff-previous',   fixture.diff_previous);
+        setText('diff-trigger',    fixture.diff_trigger);
+        setText('diff-new',        fixture.diff_new);
+        setText('diff-dropped',    fixture.diff_dropped);
+        setText('diff-reinforced', fixture.diff_reinforced);
+        setText('diff-why',        fixture.diff_why);
         // Update the regime-compare card heading hint, if present.
         flashMockRunGlow();
         setStatus(
@@ -3683,10 +4493,11 @@
             failures.push('tab ' + (name || '?') + ' has no matching sheet');
           }
         });
-        // Required sheets exist.
+        // Required sheets exist (v1.17.4 redesign).
         [
-          'cover', 'settings', 'market', 'attention', 'firms',
-          'investors', 'banks', 'outputs', 'ledger', 'appendix'
+          'cover', 'settings', 'overview', 'timeline',
+          'regime-compare', 'attention', 'market-intent',
+          'financing', 'ledger', 'appendix'
         ].forEach(function (req) {
           if (!document.getElementById('sheet-' + req)) {
             failures.push('required sheet missing: ' + req);
@@ -3713,13 +4524,13 @@
       }
 
       function compareRegimes() {
-        // Activate the Outputs sheet and scroll to the regime-compare
-        // card. We click the tab so the existing tab-switching IIFE
-        // handles state + URL hash.
-        var outputsTab = document.querySelector(
-          '.sheet-tab[data-sheet="outputs"]'
+        // v1.17.4 redesign: activate the dedicated Regime Compare
+        // sheet and flash the card. We click the tab so the existing
+        // tab-switching IIFE handles active state + URL hash.
+        var regimeTab = document.querySelector(
+          '.sheet-tab[data-sheet="regime-compare"]'
         );
-        if (outputsTab) outputsTab.click();
+        if (regimeTab) regimeTab.click();
         var card = $id('card-regime-compare');
         if (card) {
           // Defer scroll to next frame so the sheet swap completes.

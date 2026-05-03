@@ -202,23 +202,33 @@ intentionally lower than the runtime version because the
 prototype shows engine behaviour at a snapshot — not a 1:1
 mirror of every code milestone.
 
-## What each tab shows
+## What each tab shows (v1.17.4 redesign)
 
-Each tab is a *visual placeholder* for one analyst-facing surface
-of the engine:
+The bottom-tab strip reorganises the workbench around the v1.16
+closed loop so a first-time reader can inspect *what happened*,
+*why*, *who reacted*, and *what changed next* without reading the
+ledger line by line. Ten tabs, none of which executes the engine:
 
-| Sheet         | Static content                                                                                            | Data-bound after Load sample run                  |
-| ------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| Cover         | title, author, build line, hard-boundary footer                                                          | unchanged                                         |
-| Settings      | run digest / seed / periods / firms / investors / banks; market regime selector mock; strategy modules    | unchanged (regime selector is interactive)        |
-| Market State  | period-by-period regime labels, state lineage                                                             | KPI cards + quarterly + lineage                   |
-| Attention     | per-actor `ActorAttentionState`, selected evidence, memory selection, budget / decay / crowding / saturation | three actor cards + discipline table              |
-| Firms         | firm latent state, corporate financing need (v1.14.1) placeholder, strategic response candidates          | latent + financing need + strategic response      |
-| Investors     | valuation refresh lite, intent signal, stewardship themes, dialogue / escalation candidates               | all four tables                                   |
-| Banks         | bank credit review lite, interbank liquidity state (v1.13.5), v1.13 substrate map                         | credit review + interbank liquidity + substrate    |
-| Outputs       | wide hero index/event timeline, KPI strip, LLM-readable causal summary table, stylized facts (secondary)  | index path + baseline drawn from points; event annotations + chips; KPIs; causal summary |
-| Ledger        | record stream, selected record, parent evidence, downstream records, digest / manifest area              | record stream is clickable — selecting a row updates the three inspector panels |
-| Appendix      | version boundary, hard-boundary statement, status of this UI                                              | unchanged                                         |
+| Sheet           | Purpose                                                                                                                                  |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Cover           | title, author, build line, hard-boundary footer.                                                                                         |
+| Inputs          | run configuration: regime selector, sample-fixture status, periods, reporting calendar, display frequency, actors, digest. *Strategy / behavior modules* live in a default-collapsed `<details>`. |
+| Overview        | one-screen closed-loop view — small SVG diagram (attention → market intent → aggregated interest → indicative pressure → financing path → next-period attention) plus six compact KPI cards (active regime / top event / top market pressure / top financing constraint / top attention shift / display path endpoint) and a digest + fixture-status pair. |
+| Timeline        | renamed from Outputs. Wide synthetic display path on a one-year window, event-annotation ticks, KPI row, LLM-readable causal summary table, and the secondary stylized-facts diagnostic table. The chart now carries a *Display-only. Not a price. Not a forecast. Not real market data.* banner under the SVG. |
+| Regime Compare  | side-by-side panel of v1.11.2 regime presets (constructive / mixed / constrained / tightening) with the v1.17.3 **market environment subfields** row that surfaces the difference between regimes whose top-level histograms collide. |
+| Attention       | starts with a v1.17.4 **diff strip** (Previous focus / Trigger / New focus / Dropped / Reinforced / Why) at the top so a reader sees *what changed* before scrolling into the per-actor cards and the v1.12.9 budget / decay / crowding / saturation table. |
+| Market Intent   | the v1.15 / v1.16 chain — three tables: Investor market intent (per investor × security, with v1.16.1 classifier rule_id and confidence), Aggregated market interest (per venue × security, v1.15.3), Indicative market pressure (per security, v1.15.4). Boundary callout pinned at top. |
+| Financing       | the v1.14 / v1.15.6 chain — three tables: Financing path summary (per firm), Funding option candidates (candidate language only — bank / bond / internal cash / asset sale), Capital structure review (with v1.15.6 `source_indicative_market_pressure_ids` citation). Boundary callout pinned at top. |
+| Ledger          | record stream + selected record + parent evidence + downstream records inspector. Click any row to update the three inspector panels.                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Appendix        | version boundary, hard-boundary anti-claim list, **v1.16 / v1.17 milestone trail** (v1.16.last → v1.17.4), and the status-of-this-UI table.                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+
+The folded-out tabs (Market State, Firms, Investors, Banks, raw
+Outputs) are no longer reachable from the bottom strip but their
+underlying sample fixture survives as JSON (`market_state` /
+`firms` / `investors` / `banks` / `outputs` keys) — the new tabs
+re-render the same data from a closed-loop perspective. None of
+the v1.17.4 redesign touches engine code, the `living_world_digest`,
+or the test count.
 
 ## How the data binding works
 

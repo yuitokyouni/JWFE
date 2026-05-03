@@ -4,8 +4,11 @@
     "ui_prototype_version": "v0",
     "runtime_engine_version": "v1.16.last",
     "display_layer_version": "v1.17.1",
+    "regime_compare_version": "v1.17.2",
+    "annotation_layer_version": "v1.17.3",
+    "static_workbench_version": "v1.17.4",
     "closed_loop_version": "v1.16.last",
-    "latest_display_module": "v1.17.1 Temporal Display Series",
+    "latest_display_module": "v1.17.4 Static Workbench Polish",
     "digest": "916e410d829bec0be26b92989fa2d5438b80637a5c56afd785e0b56cfbebb379",
     "digest_kind": "sample_fixture",
     "as_of_period": "2026-Q3",
@@ -14,6 +17,69 @@
     "fixture_kind": "sample_fixture",
     "fixture_note": "sample manifest snapshots an earlier engine build; the live v1.16.last runtime emits 108 / 110 records per period and a [432, 480] per-run window",
     "synthetic_only": true
+  },
+  "overview": {
+    "active_regime": "constrained",
+    "top_event": "2026-03-31 · market_environment_change · medium",
+    "top_pressure": "selective · cautious demand",
+    "top_financing_constraint": "no_obvious_constraint · coherent",
+    "top_attention_shift": "credit + liquidity + market_access widened",
+    "display_path_endpoint": "0.41",
+    "digest_short": "cf05a1ac…1d0e43",
+    "fixture_kind": "sample_fixture"
+  },
+  "timeline": {
+    "calendar": "2026-Q1 → 2026-Q4 quarterly · monthly display rendering",
+    "synthetic_display_path_kind": "indicative_pressure_path",
+    "interpolation_label": "step",
+    "boundary_note": "Display-only. Not a price. Not a forecast. Not real market data. Synthetic ordinal in [0, 1] rendered for inspection of the v1.16 closed-loop run."
+  },
+  "regime_compare": {
+    "panel_id": "regime_comparison:reference_run:default",
+    "regimes": [
+      {"regime_id": "constructive", "digest": "dbccdd17…7a0313", "subfields": "credit=neutral, funding=normal, liquidity=normal, refi=open"},
+      {"regime_id": "mixed",        "digest": "2bcde5a4…00b1c0", "subfields": "credit=tightening, funding=selective, liquidity=normal, refi=open"},
+      {"regime_id": "constrained",  "digest": "cf05a1ac…1d0e43", "subfields": "credit=stressed, funding=normal, liquidity=tight, refi=open"},
+      {"regime_id": "tightening",   "digest": "6b3b73af…aec53d", "subfields": "credit=tightening, funding=expensive, liquidity=tight, refi=selective"}
+    ],
+    "fixture_kind": "sample_fixture"
+  },
+  "attention_diff": {
+    "regime": "constrained",
+    "previous_focus": ["dialogue", "stewardship", "engagement"],
+    "trigger": "IndicativeMarketPressure.market_access_label = constrained · CorporateFinancingPath.constraint_label = market_access_constraint",
+    "new_focus": ["market_access", "financing", "risk"],
+    "dropped_focus": ["engagement"],
+    "reinforced_focus": ["liquidity", "funding"],
+    "why": "Prior-period market pressure and financing constraint flowed into the next-period attention budget via the v1.16.3 deterministic mapping.",
+    "fixture_kind": "sample_fixture"
+  },
+  "market_intent": {
+    "investor_rows": [
+      {"investor": "investor:reference_pension_a",       "security": "security:firm:reference_manufacturer_a:equity:line_1", "rule_id": "priority_3a_risk_flag_watch", "intent_direction_label": "risk_reduction_review", "confidence": 0.65},
+      {"investor": "investor:reference_pension_a",       "security": "security:firm:reference_manufacturer_b:equity:line_1", "rule_id": "priority_3a_risk_flag_watch", "intent_direction_label": "risk_reduction_review", "confidence": 0.65},
+      {"investor": "investor:reference_asset_manager_a", "security": "security:firm:reference_manufacturer_a:equity:line_1", "rule_id": "priority_3a_risk_flag_watch", "intent_direction_label": "risk_reduction_review", "confidence": 0.65},
+      {"investor": "investor:reference_asset_manager_a", "security": "security:firm:reference_manufacturer_c:equity:line_1", "rule_id": "priority_3a_risk_flag_watch", "intent_direction_label": "risk_reduction_review", "confidence": 0.65}
+    ],
+    "aggregated_rows": [
+      {"venue": "venue:reference_exchange_a", "security": "security:firm:reference_manufacturer_a:equity:line_1", "increased": 0, "reduced": 2, "neutral_or_hold": 0, "net_interest_label": "balanced", "liquidity_interest_label": "normal"},
+      {"venue": "venue:reference_exchange_a", "security": "security:firm:reference_manufacturer_b:equity:line_1", "increased": 0, "reduced": 2, "neutral_or_hold": 0, "net_interest_label": "balanced", "liquidity_interest_label": "normal"},
+      {"venue": "venue:reference_exchange_a", "security": "security:firm:reference_manufacturer_c:equity:line_1", "increased": 0, "reduced": 2, "neutral_or_hold": 0, "net_interest_label": "balanced", "liquidity_interest_label": "normal"}
+    ],
+    "pressure_rows": [
+      {"security": "security:firm:reference_manufacturer_a:equity:line_1", "demand_pressure_label": "balanced", "liquidity_pressure_label": "normal", "market_access_label": "selective", "financing_relevance_label": "neutral_for_financing"},
+      {"security": "security:firm:reference_manufacturer_b:equity:line_1", "demand_pressure_label": "balanced", "liquidity_pressure_label": "normal", "market_access_label": "selective", "financing_relevance_label": "neutral_for_financing"},
+      {"security": "security:firm:reference_manufacturer_c:equity:line_1", "demand_pressure_label": "balanced", "liquidity_pressure_label": "normal", "market_access_label": "selective", "financing_relevance_label": "neutral_for_financing"}
+    ],
+    "fixture_kind": "sample_fixture"
+  },
+  "financing": {
+    "path_summary_rows": [
+      {"firm": "firm:reference_manufacturer_a", "need_type": "general_purpose_funding", "candidates": "bank_loan_candidate · bond_issuance_candidate", "constraint_label": "no_obvious_constraint", "coherence_label": "coherent"},
+      {"firm": "firm:reference_manufacturer_b", "need_type": "capex_funding",            "candidates": "bank_loan_candidate · internal_cash_candidate", "constraint_label": "no_obvious_constraint", "coherence_label": "coherent"},
+      {"firm": "firm:reference_manufacturer_c", "need_type": "refinancing",              "candidates": "bank_loan_candidate · asset_sale_candidate",   "constraint_label": "no_obvious_constraint", "coherence_label": "coherent"}
+    ],
+    "fixture_kind": "sample_fixture"
   },
   "market_state": {
     "kpis": [
