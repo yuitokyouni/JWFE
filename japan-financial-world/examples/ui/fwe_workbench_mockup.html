@@ -1304,150 +1304,6 @@
         </div>
       </article>
 
-      <!-- MARKET STATE -->
-      <article id="sheet-market" class="sheet">
-        <div class="sheet-inner">
-          <div class="band">
-            <div>
-              <div class="chapter">Sheet II</div>
-              <h1>Market Environment State</h1>
-            </div>
-            <div class="mono">context regime · label-based</div>
-          </div>
-          <div class="subband">Market state is recorded context, not price formation. Labels are designed for actor
-            attention frames.</div>
-          <div class="panel-body">
-
-            <div id="grid-market-kpis" class="grid cols-4">
-              <section class="card">
-                <h3 class="card-title">Liquidity</h3>
-                <div class="kpi">
-                  <div class="label">regime</div>
-                  <div class="value">tight</div>
-                  <div class="note">from liquidity market + readout</div>
-                </div>
-              </section>
-              <section class="card">
-                <h3 class="card-title">Credit</h3>
-                <div class="kpi">
-                  <div class="label">regime</div>
-                  <div class="value">tightening</div>
-                  <div class="note">spread environment</div>
-                </div>
-              </section>
-              <section class="card">
-                <h3 class="card-title">Funding</h3>
-                <div class="kpi">
-                  <div class="label">window</div>
-                  <div class="value">selective</div>
-                  <div class="note">no DCM execution</div>
-                </div>
-              </section>
-              <section class="card">
-                <h3 class="card-title">Risk appetite</h3>
-                <div class="kpi">
-                  <div class="label">regime</div>
-                  <div class="value">risk_off</div>
-                  <div class="note">synthetic label</div>
-                </div>
-              </section>
-            </div>
-
-            <div class="grid cols-2" style="margin-top:14px;">
-              <section class="card">
-                <h3 class="card-title">Quarterly market environment</h3>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Period</th>
-                      <th>Rates</th>
-                      <th>Credit</th>
-                      <th>Funding</th>
-                      <th>Liquidity</th>
-                      <th>Volatility</th>
-                      <th>Overall</th>
-                    </tr>
-                  </thead>
-                  <tbody id="tbody-market-quarterly">
-                    <tr>
-                      <td>2026-Q1</td>
-                      <td>rising</td>
-                      <td>tightening</td>
-                      <td>selective</td>
-                      <td>normal</td>
-                      <td>elevated</td>
-                      <td>mixed</td>
-                    </tr>
-                    <tr>
-                      <td>2026-Q2</td>
-                      <td>rising</td>
-                      <td>tightening</td>
-                      <td>selective</td>
-                      <td>tight</td>
-                      <td>elevated</td>
-                      <td>selective</td>
-                    </tr>
-                    <tr>
-                      <td>2026-Q3</td>
-                      <td>high</td>
-                      <td>stressed</td>
-                      <td>closed</td>
-                      <td>tight</td>
-                      <td>stressed</td>
-                      <td>constrained</td>
-                    </tr>
-                    <tr>
-                      <td>2026-Q4</td>
-                      <td>high</td>
-                      <td>tightening</td>
-                      <td>selective</td>
-                      <td>tight</td>
-                      <td>elevated</td>
-                      <td>selective</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </section>
-              <section class="card">
-                <h3 class="card-title">State lineage</h3>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Record</th>
-                      <th>Reads</th>
-                      <th>Consumed by</th>
-                    </tr>
-                  </thead>
-                  <tbody id="tbody-market-lineage">
-                    <tr>
-                      <td class="mono">env:2026Q1</td>
-                      <td>market conditions, readout</td>
-                      <td>firm state, investor intent</td>
-                    </tr>
-                    <tr>
-                      <td class="mono">readout:Q1</td>
-                      <td>rates, credit, equity, funding, liquidity</td>
-                      <td>market environment state</td>
-                    </tr>
-                    <tr>
-                      <td class="mono">cond:credit</td>
-                      <td>synthetic spread tone</td>
-                      <td>readout + evidence resolver</td>
-                    </tr>
-                    <tr>
-                      <td class="mono">env:2026Q1</td>
-                      <td>+ interbank liquidity (v1.13.5)</td>
-                      <td>bank credit review citation</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </section>
-            </div>
-
-          </div>
-        </div>
-      </article>
-
       <!-- ATTENTION -->
       <article id="sheet-attention" class="sheet">
         <div class="sheet-inner">
@@ -1671,509 +1527,6 @@
                 </svg>
               </section>
             </div>
-
-          </div>
-        </div>
-      </article>
-
-      <!-- FIRMS -->
-      <article id="sheet-firms" class="sheet">
-        <div class="sheet-inner">
-          <div class="band">
-            <div>
-              <div class="chapter">Sheet IV</div>
-              <h1>Firms · Latent State &amp; Financing Need</h1>
-            </div>
-            <div class="mono">corporate side · label-only</div>
-          </div>
-          <div class="subband">Firms record latent operating-pressure labels and synthetic financing-need posture. Never
-            a financial-statement update.</div>
-          <div class="panel-body">
-
-            <section class="card">
-              <h3 class="card-title">Firm financial latent state · 2026-Q3</h3>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Firm</th>
-                    <th>Liquidity pressure</th>
-                    <th>Funding need</th>
-                    <th>Debt-service pressure</th>
-                    <th>Market-access pressure</th>
-                    <th>Confidence</th>
-                  </tr>
-                </thead>
-                <tbody id="tbody-firms-latent">
-                  <tr>
-                    <td>firm:1</td>
-                    <td class="num">0.42</td>
-                    <td class="num">0.30</td>
-                    <td class="num">0.55</td>
-                    <td class="num">0.48</td>
-                    <td class="num">0.50</td>
-                  </tr>
-                  <tr>
-                    <td>firm:2</td>
-                    <td class="num">0.71</td>
-                    <td class="num">0.74</td>
-                    <td class="num">0.66</td>
-                    <td class="num">0.62</td>
-                    <td class="num">0.55</td>
-                  </tr>
-                  <tr>
-                    <td>firm:3</td>
-                    <td class="num">0.38</td>
-                    <td class="num">0.28</td>
-                    <td class="num">0.40</td>
-                    <td class="num">0.36</td>
-                    <td class="num">0.50</td>
-                  </tr>
-                </tbody>
-              </table>
-            </section>
-
-            <div class="grid cols-2" style="margin-top:14px;">
-              <section class="card">
-                <h3 class="card-title">Corporate financing need (v1.14.1) · placeholder</h3>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Firm</th>
-                      <th>Horizon</th>
-                      <th>Purpose</th>
-                      <th>Urgency</th>
-                      <th>Size label</th>
-                    </tr>
-                  </thead>
-                  <tbody id="tbody-firms-financing-need">
-                    <tr>
-                      <td>firm:1</td>
-                      <td>near_term</td>
-                      <td>working_capital</td>
-                      <td>moderate</td>
-                      <td>reference_size_medium</td>
-                    </tr>
-                    <tr>
-                      <td>firm:2</td>
-                      <td>immediate</td>
-                      <td>refinancing</td>
-                      <td>elevated</td>
-                      <td>reference_size_large</td>
-                    </tr>
-                    <tr>
-                      <td>firm:3</td>
-                      <td>medium_term</td>
-                      <td>growth_capex</td>
-                      <td>low</td>
-                      <td>reference_size_small</td>
-                    </tr>
-                  </tbody>
-                </table>
-                <div class="note-box" style="margin-top:10px;">
-                  Need labels record what a firm is paying attention to in
-                  financing terms. They are not applications, mandates,
-                  rates, or commitments.
-                </div>
-              </section>
-              <section class="card">
-                <h3 class="card-title">Corporate strategic response candidates</h3>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Firm</th>
-                      <th>Posture</th>
-                      <th>Trigger</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody id="tbody-firms-strategic">
-                    <tr>
-                      <td>firm:1</td>
-                      <td>watch</td>
-                      <td>routine review</td>
-                      <td>candidate</td>
-                    </tr>
-                    <tr>
-                      <td>firm:2</td>
-                      <td>defensive_review</td>
-                      <td>liquidity pressure</td>
-                      <td>candidate</td>
-                    </tr>
-                    <tr>
-                      <td>firm:3</td>
-                      <td>opportunistic_capex</td>
-                      <td>cheap funding signal (lagged)</td>
-                      <td>candidate</td>
-                    </tr>
-                  </tbody>
-                </table>
-                <div class="note-box" style="margin-top:10px;">
-                  Candidates are recorded postures, not board decisions.
-                  v1.10.3 stamps <span class="mono">no_decision</span> /
-                  <span class="mono">no_contract_mutation</span> on every record.
-                </div>
-              </section>
-            </div>
-
-          </div>
-        </div>
-      </article>
-
-      <!-- INVESTORS -->
-      <article id="sheet-investors" class="sheet">
-        <div class="sheet-inner">
-          <div class="band">
-            <div>
-              <div class="chapter">Sheet V</div>
-              <h1>Investors · Intent &amp; Stewardship</h1>
-            </div>
-            <div class="mono">portfolio review · non-binding</div>
-          </div>
-          <div class="subband">Investors record valuation claims, intent labels, dialogue and escalation candidates.
-            Never an order, allocation, or recommendation.</div>
-          <div class="panel-body">
-
-            <div class="grid cols-2">
-              <section class="card">
-                <h3 class="card-title">Valuation refresh lite · 2026-Q3</h3>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Investor → Firm</th>
-                      <th>Method</th>
-                      <th>Synthetic estimate</th>
-                      <th>Confidence</th>
-                    </tr>
-                  </thead>
-                  <tbody id="tbody-investors-valuation">
-                    <tr>
-                      <td>investor:a → firm:1</td>
-                      <td>multiples</td>
-                      <td class="num">102.4</td>
-                      <td class="num">0.55</td>
-                    </tr>
-                    <tr>
-                      <td>investor:a → firm:2</td>
-                      <td>multiples</td>
-                      <td class="num">96.1</td>
-                      <td class="num">0.45</td>
-                    </tr>
-                    <tr>
-                      <td>investor:a → firm:3</td>
-                      <td>multiples</td>
-                      <td class="num">108.3</td>
-                      <td class="num">0.60</td>
-                    </tr>
-                    <tr>
-                      <td>investor:b → firm:1</td>
-                      <td>scenario</td>
-                      <td class="num">100.7</td>
-                      <td class="num">0.50</td>
-                    </tr>
-                    <tr>
-                      <td>investor:b → firm:2</td>
-                      <td>scenario</td>
-                      <td class="num">94.0</td>
-                      <td class="num">0.40</td>
-                    </tr>
-                    <tr>
-                      <td>investor:b → firm:3</td>
-                      <td>scenario</td>
-                      <td class="num">109.5</td>
-                      <td class="num">0.55</td>
-                    </tr>
-                  </tbody>
-                </table>
-                <div class="note-box" style="margin-top:10px;">
-                  Each row is one valuer's opinionated synthetic claim.
-                  Stamped with <span class="mono">no_price_movement</span> /
-                  <span class="mono">no_investment_advice</span> /
-                  <span class="mono">synthetic_only</span>.
-                </div>
-              </section>
-              <section class="card">
-                <h3 class="card-title">Investor intent signal (v1.12.1)</h3>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Investor</th>
-                      <th>Firm</th>
-                      <th>Direction</th>
-                      <th>Trigger</th>
-                    </tr>
-                  </thead>
-                  <tbody id="tbody-investors-intent">
-                    <tr>
-                      <td>investor:a</td>
-                      <td>firm:1</td>
-                      <td>routine</td>
-                      <td>baseline</td>
-                    </tr>
-                    <tr>
-                      <td>investor:a</td>
-                      <td>firm:2</td>
-                      <td>deepen_due_diligence</td>
-                      <td>liquidity pressure ≥ 0.65</td>
-                    </tr>
-                    <tr>
-                      <td>investor:a</td>
-                      <td>firm:3</td>
-                      <td>routine</td>
-                      <td>baseline</td>
-                    </tr>
-                    <tr>
-                      <td>investor:b</td>
-                      <td>firm:1</td>
-                      <td>routine</td>
-                      <td>baseline</td>
-                    </tr>
-                    <tr>
-                      <td>investor:b</td>
-                      <td>firm:2</td>
-                      <td>request_dialogue</td>
-                      <td>refinancing_window selective</td>
-                    </tr>
-                    <tr>
-                      <td>investor:b</td>
-                      <td>firm:3</td>
-                      <td>routine</td>
-                      <td>baseline</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </section>
-            </div>
-
-            <div class="grid cols-2" style="margin-top:14px;">
-              <section class="card">
-                <h3 class="card-title">Stewardship themes</h3>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Investor</th>
-                      <th>Theme</th>
-                      <th>Type</th>
-                    </tr>
-                  </thead>
-                  <tbody id="tbody-investors-stewardship">
-                    <tr>
-                      <td>investor:a</td>
-                      <td>capital_discipline</td>
-                      <td>cross-portfolio</td>
-                    </tr>
-                    <tr>
-                      <td>investor:a</td>
-                      <td>governance_review</td>
-                      <td>cross-portfolio</td>
-                    </tr>
-                    <tr>
-                      <td>investor:b</td>
-                      <td>climate_disclosure</td>
-                      <td>cross-portfolio</td>
-                    </tr>
-                    <tr>
-                      <td>investor:b</td>
-                      <td>capital_discipline</td>
-                      <td>cross-portfolio</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </section>
-              <section class="card">
-                <h3 class="card-title">Dialogue / escalation candidates</h3>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>From</th>
-                      <th>To</th>
-                      <th>Type</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody id="tbody-investors-dialogue">
-                    <tr>
-                      <td>investor:a</td>
-                      <td>firm:2</td>
-                      <td>portfolio_company_dialogue</td>
-                      <td>candidate</td>
-                    </tr>
-                    <tr>
-                      <td>investor:b</td>
-                      <td>firm:2</td>
-                      <td>investor_escalation_candidate</td>
-                      <td>candidate</td>
-                    </tr>
-                    <tr>
-                      <td>investor:a</td>
-                      <td>firm:3</td>
-                      <td>portfolio_company_dialogue</td>
-                      <td>candidate</td>
-                    </tr>
-                  </tbody>
-                </table>
-                <div class="note-box" style="margin-top:10px;">
-                  Candidates only — no voting, no proxy filing, no public
-                  campaign, no AGM/EGM action.
-                </div>
-              </section>
-            </div>
-
-          </div>
-        </div>
-      </article>
-
-      <!-- BANKS -->
-      <article id="sheet-banks" class="sheet">
-        <div class="sheet-inner">
-          <div class="band">
-            <div>
-              <div class="chapter">Sheet VI</div>
-              <h1>Banks · Credit Review &amp; Interbank Liquidity</h1>
-            </div>
-            <div class="mono">review note · non-binding</div>
-          </div>
-          <div class="subband">Banks record diagnostic credit-review notes and a placeholder per-period
-            interbank-liquidity state. No lending decision, no covenant enforcement, no contract mutation.</div>
-          <div class="panel-body">
-
-            <div class="grid cols-2">
-              <section class="card">
-                <h3 class="card-title">Bank credit review lite · 2026-Q3</h3>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Bank → Firm</th>
-                      <th>Watch label</th>
-                      <th>Pressure</th>
-                      <th>Confidence</th>
-                    </tr>
-                  </thead>
-                  <tbody id="tbody-banks-credit-review">
-                    <tr>
-                      <td>bank:c → firm:1</td>
-                      <td>routine_monitoring</td>
-                      <td class="num">0.32</td>
-                      <td class="num">0.60</td>
-                    </tr>
-                    <tr>
-                      <td>bank:c → firm:2</td>
-                      <td>refinancing_watch</td>
-                      <td class="num">0.74</td>
-                      <td class="num">0.62</td>
-                    </tr>
-                    <tr>
-                      <td>bank:c → firm:3</td>
-                      <td>routine_monitoring</td>
-                      <td class="num">0.28</td>
-                      <td class="num">0.55</td>
-                    </tr>
-                    <tr>
-                      <td>bank:d → firm:1</td>
-                      <td>routine_monitoring</td>
-                      <td class="num">0.30</td>
-                      <td class="num">0.58</td>
-                    </tr>
-                    <tr>
-                      <td>bank:d → firm:2</td>
-                      <td>liquidity_watch</td>
-                      <td class="num">0.71</td>
-                      <td class="num">0.60</td>
-                    </tr>
-                    <tr>
-                      <td>bank:d → firm:3</td>
-                      <td>routine_monitoring</td>
-                      <td class="num">0.26</td>
-                      <td class="num">0.55</td>
-                    </tr>
-                  </tbody>
-                </table>
-                <div class="note-box" style="margin-top:10px;">
-                  Every <span class="mono">bank_credit_review_note</span>
-                  stamps <span class="mono">no_lending_decision</span> /
-                  <span class="mono">no_covenant_enforcement</span> /
-                  <span class="mono">no_contract_mutation</span> /
-                  <span class="mono">no_default_declaration</span> /
-                  <span class="mono">no_internal_rating</span> /
-                  <span class="mono">no_probability_of_default</span>.
-                </div>
-              </section>
-              <section class="card">
-                <h3 class="card-title">Interbank liquidity state (v1.13.5) · per bank · per period</h3>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Bank</th>
-                      <th>Liquidity</th>
-                      <th>Settlement pressure</th>
-                      <th>Reserve access</th>
-                      <th>Funding stress</th>
-                    </tr>
-                  </thead>
-                  <tbody id="tbody-banks-interbank-liquidity">
-                    <tr>
-                      <td>bank:c</td>
-                      <td>normal</td>
-                      <td>low</td>
-                      <td>available</td>
-                      <td>low</td>
-                    </tr>
-                    <tr>
-                      <td>bank:d</td>
-                      <td>normal</td>
-                      <td>low</td>
-                      <td>available</td>
-                      <td>low</td>
-                    </tr>
-                  </tbody>
-                </table>
-                <div class="note-box" style="margin-top:10px;">
-                  Placeholder labels at v1.13.5 — fixed strings, fixed
-                  <span class="mono">confidence=0.5</span>. No real
-                  balance, no calibrated liquidity model, no real-system
-                  mapping.
-                </div>
-              </section>
-            </div>
-
-            <section class="card" style="margin-top:14px;">
-              <h3 class="card-title">v1.13 substrate (storage-only · not on per-period sweep)</h3>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Layer</th>
-                    <th>Record</th>
-                    <th>Status</th>
-                    <th>Boundary</th>
-                  </tr>
-                </thead>
-                <tbody id="tbody-banks-substrate">
-                  <tr>
-                    <td>v1.13.1</td>
-                    <td>SettlementAccountRecord</td>
-                    <td>storage</td>
-                    <td>no payment execution</td>
-                  </tr>
-                  <tr>
-                    <td>v1.13.2</td>
-                    <td>PaymentInstructionRecord / SettlementEventRecord</td>
-                    <td>storage</td>
-                    <td>no clearing, no settlement</td>
-                  </tr>
-                  <tr>
-                    <td>v1.13.3</td>
-                    <td>InterbankLiquidityStateRecord</td>
-                    <td>storage + per-period</td>
-                    <td>no calibrated liquidity model</td>
-                  </tr>
-                  <tr>
-                    <td>v1.13.4</td>
-                    <td>CentralBankOperationSignal / CollateralEligibilitySignal</td>
-                    <td>storage</td>
-                    <td>tier labels — never percentages</td>
-                  </tr>
-                </tbody>
-              </table>
-            </section>
 
           </div>
         </div>
@@ -4483,17 +3836,51 @@
           try { JSON.parse(node.textContent || '{}'); }
           catch (e) { failures.push('inline JSON parse failed'); }
         }
-        // Sheet tabs reference real sheet ids.
+        // v1.17.4 audit (post-orphan-cleanup): the workbook
+        // must have a strict 1:1 mapping between bottom tabs
+        // and sheet articles, with no orphans and no duplicates.
         var tabs = Array.prototype.slice.call(
           document.querySelectorAll('.sheet-tab')
         );
+        var sheets = Array.prototype.slice.call(
+          document.querySelectorAll('article.sheet')
+        );
+        // a) tab count == sheet count.
+        if (tabs.length !== sheets.length) {
+          failures.push(
+            'tab/sheet count mismatch: '
+              + tabs.length + ' tabs vs '
+              + sheets.length + ' sheets'
+          );
+        }
+        // b) every tab points to a real sheet.
+        var tabNames = [];
         tabs.forEach(function (tab) {
-          var name = tab.dataset.sheet;
+          var name = tab.dataset.sheet || '';
+          tabNames.push(name);
           if (!name || !document.getElementById('sheet-' + name)) {
-            failures.push('tab ' + (name || '?') + ' has no matching sheet');
+            failures.push(
+              'tab ' + (name || '?') + ' has no matching sheet'
+            );
           }
         });
-        // Required sheets exist (v1.17.4 redesign).
+        // c) every sheet has a tab pointing at it.
+        var sheetIds = [];
+        sheets.forEach(function (sheet) {
+          var id = sheet.id || '';
+          var name = id.replace(/^sheet-/, '');
+          sheetIds.push(name);
+          if (tabNames.indexOf(name) === -1) {
+            failures.push('orphan sheet (no tab): ' + name);
+          }
+        });
+        // d) no duplicate sheet ids.
+        var seen = {};
+        sheetIds.forEach(function (n) {
+          if (seen[n]) failures.push('duplicate sheet id: ' + n);
+          seen[n] = true;
+        });
+        // e) Required sheets exist (v1.17.4 redesign).
         [
           'cover', 'settings', 'overview', 'timeline',
           'regime-compare', 'attention', 'market-intent',
@@ -4503,7 +3890,7 @@
             failures.push('required sheet missing: ' + req);
           }
         });
-        // Ledger inspector + records present.
+        // f) Ledger inspector + records present.
         if (!document.getElementById('tbody-ledger-records')
           && !document.querySelector('#sheet-ledger table')) {
           failures.push('ledger records table missing');
