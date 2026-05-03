@@ -9089,3 +9089,52 @@ The test count moves from `3883 / 3883` (v1.15.last) to `3983 / 3983` (v1.16.1) 
 ### 115.5 Forward pointer
 
 v1.16.2 rewires the v1.15.5 living-world investor-market-intent phase to call `classify_market_intent_direction` (with evidence resolved from the per-period `(investor, firm, security)` context) instead of the four-cycle rotation. Default-fixture digest will move; record counts and the per-run window are expected to stay the same (no new records, only different labels). v1.16.3 closes the v1.12 → v1.15 attention loop. v1.16.last freezes the layer.
+
+## 116. v1.16.2 Living-world classifier rewire
+
+§116 ships the second concrete code milestone in the v1.16 sequence — the **living-world rewire** that retires the v1.15.5 four-cycle rotation. Before v1.16.2, `intent_direction_label` on every `InvestorMarketIntentRecord` came from `(period_idx + investor_idx + firm_idx) % 4` indexing into a closed-set tuple of four safe labels — a placeholder synthesis that satisfied the closed-set contract but was **not endogenous** to the rest of the world. After v1.16.2, the same label is produced by the v1.16.1 pure-function classifier reading evidence already created earlier in the same period.
+
+### 116.1 What changed in `world/reference_living_world.py`
+
+- The v1.15.5 module-level rotation tables `_SAFE_INTENT_DIRECTION_BY_ROTATION` and `_MARKET_INTENT_INTENSITY_BY_ROTATION` are removed. A test pins their absence so a future regression cannot silently re-introduce the rotation.
+- The investor-market-intent phase now imports `classify_market_intent_direction` from `world.market_intent_classifier` (the v1.16.1 pure function) and calls it once per `(investor, firm)` pair per period.
+- The five classifier inputs are resolved from existing records cited in the same iteration:
+  - `investor_intent_direction` ← `kernel.investor_intents.get_intent(pair_intent_evidence[0]).intent_direction` (or `"unknown"` if no intent is cited).
+  - `valuation_confidence` ← `kernel.valuations.get_valuation(pair_valuation_evidence[0]).confidence` (or `None`).
+  - `firm_market_access_pressure` ← `kernel.firm_financial_states.get_state(firm_state_for_pair).market_access_pressure` (or `None`).
+  - `market_environment_access_label` ← `kernel.market_environments.get_state(mes_ids_period[0]).overall_market_access_label` (or `"unknown"`). Resolved once per period — the default fixture has one MES per period.
+  - `attention_focus_labels` ← `kernel.attention_feedback.get_attention_state(f"attention_state:{investor_id}:{iso_date}").focus_labels` (or `()` if missing).
+- `InvestorMarketIntentRecord.intent_direction_label` is now the classifier's `intent_direction_label`. The `confidence` field carries the classifier's synthetic confidence (no more hardcoded `0.5`). The `intensity_label` is mapped from `(classifier_status, classifier_confidence)` via the deterministic `_intensity_label_for_classifier_confidence(...)` helper:
+  - `evidence_deficient` → `"unknown"`
+  - `default_fallback` → `"low"`
+  - `classifier_confidence ≥ 0.7` → `"elevated"`
+  - `classifier_confidence ≥ 0.6` → `"moderate"`
+  - else → `"low"`
+- The record's `metadata` mapping carries a compact, deterministic classifier-audit block:
+  - `classifier_version` (= `"v1.16.1"`),
+  - `classifier_rule_id` (one of the eight v1.16.1 priority rule ids),
+  - `classifier_status` (`evidence_deficient` / `default_fallback` / `classified`),
+  - `classifier_confidence` (the same `[0.0, 1.0]` scalar),
+  - `classifier_unresolved_or_missing_count` (0–5),
+  - `classifier_evidence_summary` (a small `{str → JSON-friendly}` mapping with one entry per input).
+
+### 116.2 What did not change
+
+- **Record types, record count, and the per-run window**. v1.16.2 emits exactly the same `InvestorMarketIntentRecord` / `AggregatedMarketInterestRecord` / `IndicativeMarketPressureRecord` cardinalities as v1.15.6 (`I × F` intents per period and `F` of each aggregate). No new books, no new ledger event types, no helper rewrite.
+- **Evidence-id citations** are preserved — `evidence_investor_intent_ids`, `evidence_valuation_ids`, `evidence_market_environment_state_ids`, `evidence_firm_state_ids`, `evidence_security_ids`, `evidence_venue_ids` are all populated exactly as before.
+- **Read scope**. The classifier still reads only cited ids — there is no new global scan, no new cross-book join, no kernel mutation outside the existing `InvestorMarketIntentBook.add_intent` write.
+- **PriceBook invariant**. The phase does not mutate the PriceBook; the v1.15.5 / v1.15.6 / v1.16.2 tests pin `kernel.prices.snapshot()` is byte-equal before and after the full sweep.
+
+### 116.3 Anti-claims
+
+This is **endogenous market-interest direction classification, not market trading**. v1.16.2 does **not** introduce: orders / order books / matching / execution / clearing / settlement / quote dissemination / bid / ask / price formation / `PriceBook` mutation / target prices / expected returns / recommendations / portfolio allocations / target weights / overweight / underweight / real-data ingestion / Japan calibration / stochastic behaviour probabilities / LLM execution / new record types. The output remains in the v1.15 closed-set `INTENT_DIRECTION_LABELS` (= `SAFE_INTENT_LABELS ∪ {"unknown"}`); the forbidden trade-instruction verbs are disjoint by construction (pinned by both classifier-module tests and living-world tests).
+
+### 116.4 Performance boundary
+
+The integration-test `living_world_digest` moves from `bd7abdb9a62fb93a1001d3f760b76b3ab4a361313c3af936c8b860f5ab58baf8` (v1.15.6 / v1.16.1) to **`0b75e95ad8f157df5e938c1318817c07f00798179c3d11b8629452d30d9398fa`** (v1.16.2) by design — `InvestorMarketIntentRecord` payloads now carry classifier-derived `intent_direction_label` / `intensity_label` / `confidence` instead of rotation-derived ones, and additionally include the new `metadata` block with the classifier audit. The number of records, the per-period record count, and the per-run window are unchanged. The shift is pinned by `tests/test_living_reference_world.py::test_v1_12_9_living_world_digest_pinned` to detect any further accidental drift.
+
+The test count moves from `3983 / 3983` (v1.16.1) to `3999 / 3999` (v1.16.2) — `+16` tests in `tests/test_living_reference_world.py` covering classifier vocabulary, classifier-audit metadata, classifier-confidence on the record, no-rotation success condition, two-run determinism, intensity-label closed-set membership, record-count invariance, PriceBook invariance, evidence-id preservation, no-forbidden-payload-keys, classifier rule_id namespace, no-forbidden-event-types, byte-identical canonical replay, jurisdiction-neutral metadata, classifier-module no-runtime-book-imports, and orchestrator-imports-classifier (rotation-table-absence regression).
+
+### 116.5 Forward pointer
+
+v1.16.3 closes the v1.12 → v1.15 attention loop: the next-period `ActorAttentionState.focus_labels` will be widened by the previous period's `IndicativeMarketPressureRecord` outcomes so attention shifts in response to market-interest pressure. v1.16.last freezes the layer (closed-set vocabulary lock + per-record budget pin + canonical-view byte-stability across all v1.16 milestones).
