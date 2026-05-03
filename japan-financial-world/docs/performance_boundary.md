@@ -46,7 +46,7 @@ This milestone records the loop shapes so that:
 3. Anyone reviewing the v1.9 freeze surface can see, in one
    place, what the engine is and is not doing.
 
-## Current loop shapes (v1.13.last)
+## Current loop shapes (v1.14.5)
 
 The following table describes the loop shape of each phase
 inside `world/reference_living_world.run_living_reference_world`.
@@ -80,7 +80,11 @@ count (currently 2–3 each).
 | Corporate strategic response candidate (v1.10.3, corp.)  | `O(P × F)`                                | 4 × 3 = 12 cands.      |
 | Review routines                                          | `O(P × (I+B))`                            | 4 × 4 = 16 reviews     |
 | Attention feedback (v1.12.8)                             | `O(P × (I+B))`                            | 4 × 4 = 16 states+fb×2 |
-| Reporting / replay / manifest                            | `O(R)` over emitted ledger records        | ~340 records           |
+| Corporate financing need (v1.14.5)                       | `O(P × F)`                                | 4 × 3 = 12 needs       |
+| Funding option candidate (v1.14.5)                       | `O(P × F × 2)`                            | 4 × 3 × 2 = 24 options |
+| Capital structure review candidate (v1.14.5)             | `O(P × F)`                                | 4 × 3 = 12 reviews     |
+| Corporate financing path (v1.14.5)                       | `O(P × F)`                                | 4 × 3 = 12 paths       |
+| Reporting / replay / manifest                            | `O(R)` over emitted ledger records        | ~408 records           |
 
 Per-period record-count breakdown (default fixture, v1.13.last):
 
@@ -102,13 +106,17 @@ I × F                  investor intent signal (v1.12.1)              =  6
 F                      corporate strategic response candidate        =  3
 2 × (I + B)            review_run + review_signal                    =  8
 2 × (I + B)            attention state + feedback (v1.12.8)          =  8
-                                                            total   = 81  (period 0)
+F                      corporate financing need (v1.14.5)            =  3
+2 × F                  funding option candidate (v1.14.5)            =  6
+F                      capital structure review candidate (v1.14.5)  =  3
+F                      corporate financing path (v1.14.5)            =  3
+                                                            total   = 96  (period 0)
 + (I + B) memory selections from period 1+ (budgeted)             ≈ +2  (period 1+)
-                                                            total   = 83  (period 1+)
-× 4 periods (period 0: 81; periods 1–3: 83)                        = 330
+                                                            total   = 98  (period 1+)
+× 4 periods (period 0: 96; periods 1–3: 98)                        = 390
 + ~14 one-off setup (interactions, routines, profiles)
 +   4 one-off setup (stewardship themes, v1.10.5)
-                                                          ≈ ~348 records
+                                                          ≈ ~408 records
 ```
 
 The v1.13 generic settlement substrate (v1.13.1 settlement
@@ -120,6 +128,18 @@ default living-reference-world per-period sweep. Only the
 v1.13.5 `interbank_liquidity_state` is on the per-period path
 (one record per bank per period).
 
+The v1.14 corporate-financing chain (v1.14.1 needs, v1.14.2
+funding options, v1.14.3 capital-structure reviews, v1.14.4
+financing paths) was storage-only through v1.14.4. **v1.14.5 is
+the first living-world integration** — the four layers are now
+on the per-period path (1 need + 2 options + 1 capital-structure
+review + 1 financing path per firm per period; bounded by
+`P × F`, never an `I × F × option` or `B × F × option` dense
+loop). Storage / audit / graph-linking only — no execution, no
+loan approval, no security issuance, no underwriting, no
+syndication, no pricing, no recommendation, no real leverage /
+D/E / WACC.
+
 Of the loops above:
 
 - The **bounded all-pairs** loops are the valuation
@@ -128,7 +148,9 @@ Of the loops above:
   escalation candidate `O(P × I × F)`. These four are the only
   bounded all-pairs traversals; v1.10.5 deliberately did **not**
   add a new dense shape (it reuses the existing `I × F` shape
-  for both engagement records).
+  for both engagement records). v1.14.5 also did **not** add a
+  new dense shape — the financing chain is `O(P × F)` per
+  layer, never `O(P × F × I)` or `O(P × F × B × option_count)`.
 - All other loops are linear in the actor, firm, or industry
   count.
 

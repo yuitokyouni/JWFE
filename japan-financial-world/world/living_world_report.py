@@ -262,6 +262,29 @@ class LivingWorldPeriodReport:
     attention_trigger_counts: tuple[tuple[str, int], ...] = field(
         default_factory=tuple
     )
+    # v1.14.5 additive: per-period corporate financing chain counts +
+    # four histograms (need funding-purpose, option type, capital-
+    # structure market-access, and financing-path coherence). Used by
+    # the Markdown renderer's "## Corporate financing" section.
+    corporate_financing_need_count: int = 0
+    funding_option_candidate_count: int = 0
+    capital_structure_review_candidate_count: int = 0
+    corporate_financing_path_count: int = 0
+    corporate_financing_purpose_counts: tuple[tuple[str, int], ...] = field(
+        default_factory=tuple
+    )
+    funding_option_type_counts: tuple[tuple[str, int], ...] = field(
+        default_factory=tuple
+    )
+    capital_structure_market_access_counts: tuple[tuple[str, int], ...] = (
+        field(default_factory=tuple)
+    )
+    financing_path_coherence_counts: tuple[tuple[str, int], ...] = field(
+        default_factory=tuple
+    )
+    financing_path_constraint_counts: tuple[tuple[str, int], ...] = field(
+        default_factory=tuple
+    )
     # v1.11.1 additive: per-period banker-readable labels lifted
     # from the period's CapitalMarketReadoutRecord (if any). When
     # the period has no readout, the labels default to empty
@@ -307,6 +330,10 @@ class LivingWorldPeriodReport:
             "attention_state_count",
             "attention_feedback_count",
             "memory_selection_count",
+            "corporate_financing_need_count",
+            "funding_option_candidate_count",
+            "capital_structure_review_candidate_count",
+            "corporate_financing_path_count",
         ):
             value = getattr(self, name)
             if not isinstance(value, int) or value < 0:
@@ -417,6 +444,38 @@ class LivingWorldPeriodReport:
             tuple(sorted(normalized_trigger_counts)),
         )
 
+        # v1.14.5 — corporate financing histograms. Five sorted
+        # tuple-of-(label, count) fields, each shaped exactly like
+        # the v1.12.1 / v1.12.8 histograms.
+        for histogram_field_name in (
+            "corporate_financing_purpose_counts",
+            "funding_option_type_counts",
+            "capital_structure_market_access_counts",
+            "financing_path_coherence_counts",
+            "financing_path_constraint_counts",
+        ):
+            normalized_histogram: list[tuple[str, int]] = []
+            for entry in getattr(self, histogram_field_name):
+                if (
+                    not isinstance(entry, tuple)
+                    or len(entry) != 2
+                    or not isinstance(entry[0], str)
+                    or not entry[0]
+                    or not isinstance(entry[1], int)
+                    or entry[1] < 0
+                ):
+                    raise ValueError(
+                        f"{histogram_field_name} entries must be "
+                        "(non-empty str, non-negative int); "
+                        f"got {entry!r}"
+                    )
+                normalized_histogram.append((entry[0], entry[1]))
+            object.__setattr__(
+                self,
+                histogram_field_name,
+                tuple(sorted(normalized_histogram)),
+            )
+
         object.__setattr__(self, "metadata", dict(self.metadata))
 
     def to_dict(self) -> dict[str, Any]:
@@ -480,6 +539,38 @@ class LivingWorldPeriodReport:
             "attention_trigger_counts": [
                 [label, count]
                 for label, count in self.attention_trigger_counts
+            ],
+            "corporate_financing_need_count": (
+                self.corporate_financing_need_count
+            ),
+            "funding_option_candidate_count": (
+                self.funding_option_candidate_count
+            ),
+            "capital_structure_review_candidate_count": (
+                self.capital_structure_review_candidate_count
+            ),
+            "corporate_financing_path_count": (
+                self.corporate_financing_path_count
+            ),
+            "corporate_financing_purpose_counts": [
+                [label, count]
+                for label, count in self.corporate_financing_purpose_counts
+            ],
+            "funding_option_type_counts": [
+                [label, count]
+                for label, count in self.funding_option_type_counts
+            ],
+            "capital_structure_market_access_counts": [
+                [label, count]
+                for label, count in self.capital_structure_market_access_counts
+            ],
+            "financing_path_coherence_counts": [
+                [label, count]
+                for label, count in self.financing_path_coherence_counts
+            ],
+            "financing_path_constraint_counts": [
+                [label, count]
+                for label, count in self.financing_path_constraint_counts
             ],
             "rates_tone": self.rates_tone,
             "credit_tone": self.credit_tone,
@@ -1023,6 +1114,7 @@ def _build_period_report(
             **_extract_readout_labels(kernel, period),
             **_extract_market_environment_summary(kernel, period),
             **_extract_attention_feedback_summary(kernel, period),
+            **_extract_corporate_financing_summary(kernel, period),
             record_type_counts=period_record_type_counts,
             warnings=tuple(period_warnings),
             metadata={
@@ -1069,6 +1161,110 @@ def _extract_investor_intent_summary(
     return {
         "investor_intent_count": resolved,
         "investor_intent_direction_counts": tuple(sorted(counts.items())),
+    }
+
+
+def _extract_corporate_financing_summary(
+    kernel: Any, period: LivingReferencePeriodSummary
+) -> dict[str, Any]:
+    """v1.14.5 — read the period's corporate financing chain
+    records (need / option / capital-structure-review / path) and
+    return per-record counts plus four sorted histograms (need
+    funding-purpose, option type, capital-structure market-access,
+    financing-path coherence + constraint). When the period has
+    no chain records the histograms are empty and the renderer
+    skips the section.
+    """
+    need_ids = getattr(period, "corporate_financing_need_ids", ())
+    option_ids = getattr(period, "funding_option_candidate_ids", ())
+    review_ids = getattr(period, "capital_structure_review_candidate_ids", ())
+    path_ids = getattr(period, "corporate_financing_path_ids", ())
+
+    if not need_ids and not option_ids and not review_ids and not path_ids:
+        return {
+            "corporate_financing_need_count": 0,
+            "funding_option_candidate_count": 0,
+            "capital_structure_review_candidate_count": 0,
+            "corporate_financing_path_count": 0,
+            "corporate_financing_purpose_counts": (),
+            "funding_option_type_counts": (),
+            "capital_structure_market_access_counts": (),
+            "financing_path_coherence_counts": (),
+            "financing_path_constraint_counts": (),
+        }
+
+    purpose_counts: dict[str, int] = {}
+    needs_book = getattr(kernel, "corporate_financing_needs", None)
+    if needs_book is not None:
+        for nid in need_ids:
+            try:
+                rec = needs_book.get_need(nid)
+            except Exception:
+                continue
+            purpose_counts[rec.funding_purpose_label] = (
+                purpose_counts.get(rec.funding_purpose_label, 0) + 1
+            )
+
+    option_type_counts: dict[str, int] = {}
+    options_book = getattr(kernel, "funding_options", None)
+    if options_book is not None:
+        for oid in option_ids:
+            try:
+                rec = options_book.get_candidate(oid)
+            except Exception:
+                continue
+            option_type_counts[rec.option_type_label] = (
+                option_type_counts.get(rec.option_type_label, 0) + 1
+            )
+
+    market_access_counts: dict[str, int] = {}
+    reviews_book = getattr(kernel, "capital_structure_reviews", None)
+    if reviews_book is not None:
+        for rid in review_ids:
+            try:
+                rec = reviews_book.get_candidate(rid)
+            except Exception:
+                continue
+            market_access_counts[rec.market_access_label] = (
+                market_access_counts.get(rec.market_access_label, 0) + 1
+            )
+
+    coherence_counts: dict[str, int] = {}
+    constraint_counts: dict[str, int] = {}
+    paths_book = getattr(kernel, "financing_paths", None)
+    if paths_book is not None:
+        for pid in path_ids:
+            try:
+                rec = paths_book.get_path(pid)
+            except Exception:
+                continue
+            coherence_counts[rec.coherence_label] = (
+                coherence_counts.get(rec.coherence_label, 0) + 1
+            )
+            constraint_counts[rec.constraint_label] = (
+                constraint_counts.get(rec.constraint_label, 0) + 1
+            )
+
+    return {
+        "corporate_financing_need_count": len(need_ids),
+        "funding_option_candidate_count": len(option_ids),
+        "capital_structure_review_candidate_count": len(review_ids),
+        "corporate_financing_path_count": len(path_ids),
+        "corporate_financing_purpose_counts": tuple(
+            sorted(purpose_counts.items())
+        ),
+        "funding_option_type_counts": tuple(
+            sorted(option_type_counts.items())
+        ),
+        "capital_structure_market_access_counts": tuple(
+            sorted(market_access_counts.items())
+        ),
+        "financing_path_coherence_counts": tuple(
+            sorted(coherence_counts.items())
+        ),
+        "financing_path_constraint_counts": tuple(
+            sorted(constraint_counts.items())
+        ),
     }
 
 
@@ -1702,6 +1898,68 @@ def render_living_world_markdown(report: LivingWorldTraceReport) -> str:
             "`SelectedObservationSet`. **Not** a trade, **not** "
             "a lending decision, **not** a corporate action; "
             "synthetic, deterministic, non-binding."
+        )
+        lines.append("")
+
+    # v1.14.5 — corporate financing chain section. One row per
+    # period; columns count needs / options / reviews / paths and
+    # carry concise label histograms (purpose / option type /
+    # market access / path coherence / path constraint). Storage /
+    # audit / graph-linking only — never an order, trade,
+    # allocation, loan approval, security issuance, pricing, or
+    # recommendation.
+    has_v1145_signal = any(
+        ps.get("corporate_financing_need_count", 0) > 0
+        for ps in md["period_summaries"]
+    )
+    if has_v1145_signal:
+        lines.append("## Corporate financing")
+        lines.append("")
+        lines.append(
+            "| period | as_of_date | needs | options | reviews | "
+            "paths | purpose histogram | option type histogram | "
+            "market access histogram | path coherence histogram | "
+            "path constraint histogram |"
+        )
+        lines.append(
+            "| --- | --- | --- | --- | --- | --- | --- | --- | "
+            "--- | --- | --- |"
+        )
+        for ps in md["period_summaries"]:
+            if ps.get("corporate_financing_need_count", 0) == 0:
+                continue
+
+            def _fmt(histogram: list[list[Any]] | tuple) -> str:
+                if not histogram:
+                    return "—"
+                return ", ".join(
+                    f"{label}={count}" for label, count in histogram
+                )
+
+            lines.append(
+                f"| `{ps['period_id']}` | `{ps['as_of_date']}` | "
+                f"{ps.get('corporate_financing_need_count', 0)} | "
+                f"{ps.get('funding_option_candidate_count', 0)} | "
+                f"{ps.get('capital_structure_review_candidate_count', 0)} | "
+                f"{ps.get('corporate_financing_path_count', 0)} | "
+                f"{_fmt(ps.get('corporate_financing_purpose_counts', []))} | "
+                f"{_fmt(ps.get('funding_option_type_counts', []))} | "
+                f"{_fmt(ps.get('capital_structure_market_access_counts', []))} | "
+                f"{_fmt(ps.get('financing_path_coherence_counts', []))} | "
+                f"{_fmt(ps.get('financing_path_constraint_counts', []))} |"
+            )
+        lines.append("")
+        lines.append(
+            "> Corporate financing records are an auditable "
+            "reasoning chain — need → funding options → capital "
+            "structure review → financing path. **Storage / audit "
+            "/ graph-linking only**: no financing execution, no "
+            "loan approval, no bond / equity issuance, no "
+            "underwriting, no syndication, no bookbuilding, no "
+            "allocation, no interest rate / spread / fee / coupon "
+            "/ offering price, no optimal capital structure "
+            "decision, no real leverage / D/E / WACC, no "
+            "investment recommendation, no Japan calibration."
         )
         lines.append("")
 

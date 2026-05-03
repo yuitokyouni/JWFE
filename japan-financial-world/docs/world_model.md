@@ -8554,3 +8554,48 @@ The test count moves from `3270 / 3270` (v1.14.3) to `3376 / 3376` (v1.14.4) —
 v1.14.4 closes the storage / audit phase of the v1.14 sequence. The next milestone is:
 
 - **v1.14.5 living-world financing integration** — wires the four-layer chain (`CorporateFinancingNeedBook` → `FundingOptionCandidateBook` → `CapitalStructureReviewBook` → `CorporateFinancingPathBook`) into the per-period living-world sweep so `living_world_manifest.v1` carries the financing-reasoning subgraph alongside the existing record stream. The orchestrator integration is when `living_world_digest` shifts; storage milestones up through v1.14.4 leave the digest byte-identical.
+
+## 104. v1.14.5 Living-world corporate financing integration
+
+§104 ships the first living-world integration of the v1.14 corporate-financing storage chain. v1.14.1 / v1.14.2 / v1.14.3 / v1.14.4 left `living_world_digest` byte-identical because they were storage-only; v1.14.5 puts the four layers on the per-period path so the chain shows up in the manifest, the markdown report, the canonical view, and the digest. The integration is **storage / audit / graph-linking only** — there is **no financing execution, no loan approval, no bond / equity issuance, no underwriting, no syndication, no bookbuilding, no allocation, no interest rate / spread / fee / coupon / offering price, no optimal capital structure decision, no capital-structure optimisation, no real leverage / D/E / WACC calculation, no lending decision, no investment recommendation, no trading, no price formation, no real data ingestion, no Japan calibration**.
+
+### 104.1 What v1.14.5 ships
+
+A new financing-chain phase in `world/reference_living_world.py::run_living_reference_world` runs **after** the v1.12.8 attention-feedback phase and **before** the period summary is assembled. Per firm per period it emits, deterministically:
+
+- **1 `CorporateFinancingNeedRecord`** per firm. `funding_purpose_label` rotates by firm position over `{working_capital, refinancing, growth_capex}`; the other label fields are fixed (`near_term` / `moderate` / `reference_size_medium`). Cites the firm's financial-state id, the period's market-environment-state ids, and the firm's corporate-signal id.
+- **2 `FundingOptionCandidate`** per need (`bank_loan_candidate` + `bond_issuance_candidate`). Cites the need id, the period's MES + interbank-liquidity-state ids, the firm's financial-state id, and the per-firm filtered bank-credit-review-signal + investor-intent ids.
+- **1 `CapitalStructureReviewCandidate`** per firm. `review_type_label` rotates by firm position over `{liquidity_review, refinancing_review, leverage_review}`; `market_access_label` rotates over `{open, selective, open}` to seed a non-trivial histogram. Cites need + funding-option ids + the same upstream context as the option layer.
+- **1 `CorporateFinancingPathRecord`** per firm, built via the v1.14.4 deterministic helper `build_corporate_financing_path`. The helper synthesises `path_type` / `coherence` / `constraint` / `next_review` from the cited records and never iterates the books globally.
+
+Total per period: `5 × firms` records (1 need + 2 options + 1 review + 1 path). Bounded by `P × F` — no `I × F × option_count` or `B × F × option_count` dense loop.
+
+Surfaces touched:
+
+- `LivingReferencePeriodSummary` gains four new id-tuple fields (`corporate_financing_need_ids` / `funding_option_candidate_ids` / `capital_structure_review_candidate_ids` / `corporate_financing_path_ids`).
+- The `living_world_replay` canonical view now emits the same four id tuples per period (additive to the existing schema).
+- The CLI trace prints `financing_needs= / funding_options= / capital_reviews= / financing_paths=` per period and a longer no-execution disclaimer in the integrated-chain summary.
+- The markdown report gains a `## Corporate financing` section with one row per period, four counts (needs / options / reviews / paths), and five histograms (purpose / option-type / market-access / coherence / constraint).
+- `WorldKernel.financing_paths` and the prior three v1.14 books receive ledger + clock wiring on every default kernel.
+
+### 104.2 Anti-claims
+
+The financing chain emits **only** four event types: `corporate_financing_need_recorded`, `funding_option_candidate_recorded`, `capital_structure_review_candidate_recorded`, `corporate_financing_path_recorded`. Tests pin the absence of `order_submitted` / `trade_executed` / `price_updated` / `contract_created` / `contract_status_updated` / `ownership_transferred` / `loan_approved` / `security_issued` / `underwriting_executed` over the default sweep.
+
+No financing-record payload carries `approved`, `executed`, `selected_option`, `optimal_option`, `commitment`, `underwriting`, `syndication`, `allocation`, `pricing`, `interest_rate`, `spread`, `coupon`, `fee`, `offering_price`, `target_price`, `expected_return`, `recommendation`, `investment_advice`, `real_data_value`, `leverage_ratio`, `debt_to_equity`, `WACC`, `PD`, `LGD`, or `EAD`. Tests pin every key.
+
+### 104.3 Performance boundary
+
+The per-period record count moves from `81` (v1.13.5) to `96` (v1.14.5) for the default fixture (3 firms): `81 + 5 × 3 = 96`. Per-run total moves from `[324, 372]` to `[384, 432]`. The default 4-period sweep emits **408** records (`96 + 98 + 98 + 98` plus 14 + 4 setup overhead). The expected-record-count formula in `tests/test_living_reference_world_performance_boundary.py::count_expected_living_world_records` adds `5 × firms` per period; the helper-formula assertion now pins `total == 384`.
+
+### 104.4 Digest
+
+The integration-test `living_world_digest` moves from `916e410d829bec0be26b92989fa2d5438b80637a5c56afd785e0b56cfbebb379` (v1.13.5 / v1.13.6 — v1.14.1–v1.14.4 left it unchanged because they were storage-only) to **`3df73fd4f152c16d1188f5c15b69bdc8a5cd6061b637ea35af671e86c6fa2d71`** (v1.14.5) by design. The new ledger records and the four new id tuples on each period summary flow into the canonical view's bytes.
+
+The test count moves from `3376 / 3376` (v1.14.4) to `3391 / 3391` (v1.14.5) — `+15` integration tests appended to `tests/test_living_reference_world.py` covering: per-period need / option / review / path count shapes, citation graph shape (option → need, review → need + option, path → need + option + review), upstream citations to MES + firm-state + IBL, no forbidden ledger event types, no anti-field payload keys, replay determinism across two runs, canonical-view tuple presence, markdown-section presence, and synthetic-only id scan.
+
+### 104.5 Forward pointer
+
+v1.14.5 closes the v1.14 integration sequence:
+
+- **v1.14.last** — public-prototype freeze of the corporate-financing chain. No new code; sets the version freeze tag, audits docs, and pins the canonical fixture's record-count + digest. The next non-prototype-freeze work is v1.15+ (TBD).

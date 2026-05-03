@@ -276,6 +276,18 @@ def _canonicalize_period(period: LivingReferencePeriodSummary) -> dict[str, Any]
         "bank_memory_selection_ids": list(
             getattr(period, "bank_memory_selection_ids", ())
         ),
+        "corporate_financing_need_ids": list(
+            getattr(period, "corporate_financing_need_ids", ())
+        ),
+        "funding_option_candidate_ids": list(
+            getattr(period, "funding_option_candidate_ids", ())
+        ),
+        "capital_structure_review_candidate_ids": list(
+            getattr(period, "capital_structure_review_candidate_ids", ())
+        ),
+        "corporate_financing_path_ids": list(
+            getattr(period, "corporate_financing_path_ids", ())
+        ),
     }
 
 

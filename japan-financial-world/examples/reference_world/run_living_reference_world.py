@@ -260,6 +260,10 @@ def _print_trace(result: LivingReferenceWorldResult) -> None:
             f"valuations={len(ps.valuation_ids)} "
             f"credit_reviews={len(ps.bank_credit_review_signal_ids)} "
             f"reviews={len(ps.investor_review_run_ids) + len(ps.bank_review_run_ids)} "
+            f"financing_needs={len(ps.corporate_financing_need_ids)} "
+            f"funding_options={len(ps.funding_option_candidate_ids)} "
+            f"capital_reviews={len(ps.capital_structure_review_candidate_ids)} "
+            f"financing_paths={len(ps.corporate_financing_path_ids)} "
             f"attn_states={len(ps.investor_attention_state_ids) + len(ps.bank_attention_state_ids)} "
             f"memory_sels={len(ps.investor_memory_selection_ids) + len(ps.bank_memory_selection_ids)} "
             f"records={ps.record_count_created}"
@@ -278,7 +282,9 @@ def _print_trace(result: LivingReferenceWorldResult) -> None:
         "review lite -> portfolio-company dialogue metadata -> "
         "investor escalation candidates -> investor intent "
         "signals -> corporate strategic response candidates -> "
-        "review. No price formation, no trading, no lending "
+        "review -> corporate financing need -> funding option "
+        "candidates -> capital structure review -> financing "
+        "path. No price formation, no trading, no lending "
         "decisions, no covenant enforcement, no contract or "
         "constraint mutation, no firm financial statement "
         "updates, no accounting values, no canonical-truth "
@@ -290,7 +296,10 @@ def _print_trace(result: LivingReferenceWorldResult) -> None:
         "clearing, no quote dissemination, no security "
         "recommendation, no order submission, no rebalancing, "
         "no portfolio allocation, no buy / sell / overweight / "
-        "underweight execution."
+        "underweight execution, no loan approval, no bond / "
+        "equity issuance, no underwriting, no syndication, no "
+        "bookbuilding, no allocation, no capital-structure "
+        "optimisation, no real leverage / D/E / WACC."
     )
 
 
