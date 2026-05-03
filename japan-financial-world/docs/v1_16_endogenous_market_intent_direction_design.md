@@ -358,8 +358,8 @@ same.
 
 | Milestone     | What                                                                                                                                   | Status                  |
 | ------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
-| **v1.16.0**   | **Endogenous market intent direction design (this document)**                                                                          | **Docs-only (planned)** |
-| v1.16.1       | `world/market_intent_classifier.py` — `classify_investor_market_intent_direction(...)` returning `(intent_direction_label, intensity_label, metadata)` plus unit tests | Planned                 |
+| v1.16.0       | Endogenous market intent direction design (this document)                                                                              | Shipped (docs-only)     |
+| **v1.16.1**   | **`world/market_intent_classifier.py`** — **`MarketIntentClassificationResult` + `classify_market_intent_direction(...)` pure function + 100 unit tests; runtime-book-free; signature rejects `period_idx` / `investor_idx` / `firm_idx`** | **Shipped**             |
 | v1.16.2       | Rewire the v1.15.5 living-world investor-market-intent phase to call the classifier instead of the four-cycle rotation; `living_world_digest` moves by design | Planned                 |
 | v1.16.3       | Wire the classifier into the v1.12.8 attention-feedback loop so the actor's prior-period focus labels feed the next period's classification (closes the v1.12 → v1.15 loop) | Planned                 |
 | v1.16.last    | Endogenous market intent direction freeze (docs-only)                                                                                  | Planned                 |

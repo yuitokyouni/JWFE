@@ -9039,3 +9039,53 @@ The classifier must read only the cited evidence ids (no global scan); return on
 The premise: v1.15.5 currently sets `InvestorMarketIntentRecord.intent_direction_label` via a deterministic four-cycle rotation `(period_idx + investor_idx + firm_idx) % 4`. This is acceptable for bounded demo diversity but is not endogenous. v1.16 replaces the *position* with a *cause* — the classifier is a pure function from cited evidence to a closed-set label, with no probabilistic step, no LLM call, and no real-data dependency.
 
 This is **endogenous market-interest direction classification, not market trading**. It produces audit-grade review-posture labels from cited evidence; it does not generate orders, prices, quotes, allocations, or recommendations. v1.16.0 is docs-only — no code, no tests, no `living_world_digest` change, no per-run window change.
+
+## 115. v1.16.1 Endogenous market intent direction classifier
+
+§115 ships the first concrete code milestone in the v1.16 sequence. v1.16.1 is a **pure-function classifier module + unit tests only** — no living-world rewiring yet (that arrives at v1.16.2). The module ships:
+
+- `world/market_intent_classifier.py` — `MarketIntentClassificationResult` (frozen dataclass) + `classify_market_intent_direction(...)` pure function. Module-level closed-set helper sets (`ENGAGEMENT_FOCUS_LABELS`, `LIQUIDITY_FUNDING_FOCUS_LABELS`, `FIRM_VALUATION_MARKET_FOCUS_LABELS`, `CONSTRAINED_MES_LABELS`, `SELECTIVE_OR_CONSTRAINED_MES_LABELS`, `CONSTRUCTIVE_MES_LABELS`, `FORBIDDEN_OUTPUT_LABELS`).
+- 100 tests in `tests/test_market_intent_classifier.py` covering per-rule firing, priority ordering, period_idx-absence regression, evidence-difference regression, forbidden-label disjoint invariant, numeric validation (bool / non-numeric / out-of-range rejected), result immutability, `to_dict` determinism, no-runtime-book-imports check, and jurisdiction-neutral scan.
+
+### 115.1 Pure function discipline
+
+The classifier is **runtime-book-free** by construction:
+
+- It takes **no kernel argument**. The caller is responsible for resolving evidence (typically via the v1.12.3 `EvidenceResolver`) and passing the small abstract inputs in.
+- It **imports no source-of-truth book** — only `world.market_intents.INTENT_DIRECTION_LABELS` for the closed-set output check. A test scans the module text and pins the absence of imports from `world.ledger`, `world.kernel`, `world.market_intents.InvestorMarketIntent*`, `world.market_interest`, `world.market_pressure`, `world.securities`, `world.investor_intent`, `world.valuations`, `world.firm_state`, `world.market_environment`, `world.attention`, `world.attention_feedback`.
+- It **takes no positional indices** — the signature is parameter-checked to reject `period_idx` / `investor_idx` / `firm_idx` / `period_index` / `investor_index` / `firm_index` / `rotation_index`. The v1.15.5 four-cycle rotation those indices drove is the thing v1.16 replaces.
+- It is **deterministic** — same inputs return byte-identical `to_dict` output across many calls.
+
+### 115.2 Eight-priority rule table (per v1.16.0 design)
+
+| Pri | Trigger                                                                                                                | → label                       | rule_id                                              |
+| --- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ---------------------------------------------------- |
+| 1   | All five inputs absent / unknown                                                                                        | `unknown`                     | `priority_1_evidence_deficient`                      |
+| 2   | `engagement_watch` + focus ∩ `{engagement, dialogue, stewardship, stewardship_theme}` non-empty                          | `engagement_linked_review`    | `priority_2_engagement_linked_review`                |
+| 3a  | `risk_flag_watch` (always)                                                                                              | `risk_reduction_review`       | `priority_3a_risk_flag_watch`                        |
+| 3b  | `deepen_due_diligence` + (firm pressure ≥ 0.7 OR env ∈ {constrained, closed})                                            | `risk_reduction_review`       | `priority_3b_due_diligence_pressure`                 |
+| 4a  | focus ∩ {liquidity, funding} non-empty + env ∈ {selective, constrained, closed}                                          | `liquidity_watch`             | `priority_4a_liquidity_focus_constrained_env`        |
+| 4b  | firm pressure ≥ 0.7 + focus ∩ {liquidity, funding} non-empty                                                             | `liquidity_watch`             | `priority_4b_high_pressure_liquidity_focus`          |
+| 5a  | valuation confidence < 0.4 + env ∈ {constrained, closed}                                                                 | `reduce_interest`             | `priority_5a_low_confidence_constrained_env`         |
+| 5b  | `deepen_due_diligence` + valuation confidence < 0.5 + firm pressure ≥ 0.5                                                | `reduce_interest`             | `priority_5b_due_diligence_pressure_low_confidence`  |
+| 6   | valuation confidence ≥ 0.6 + firm pressure < 0.4 + env ∈ {open, open_or_constructive, constructive} + intent ∈ {routine, engagement_watch} | `increase_interest`         | `priority_6_high_confidence_low_pressure_constructive` |
+| 7   | focus ∩ {firm_state, valuation, market_environment, market_condition} non-empty + no rule above                          | `rebalance_review`            | `priority_7_firm_valuation_market_focus`             |
+| 8   | default                                                                                                                 | `hold_review`                 | `priority_8_default`                                 |
+
+`status` is `"evidence_deficient"` (priority 1), `"default_fallback"` (priority 8), or `"classified"` (priorities 2–7). `confidence` is `0.0` (priority 1), `0.3` (priority 8), or `0.5 + 0.05 × evidence_count` clamped to `[0.5, 0.75]` (priorities 2–7) — higher when more evidence sources are present *and* a specific rule fires.
+
+### 115.3 Anti-claims
+
+The output `intent_direction_label` is rejected by closed-set membership unless it is in `INTENT_DIRECTION_LABELS` (= v1.15 `SAFE_INTENT_LABELS` ∪ `{"unknown"}`). The forbidden trade-instruction verbs (`buy` / `sell` / `order` / `target_weight` / `overweight` / `underweight` / `execution`) are **disjoint** from `INTENT_DIRECTION_LABELS` (pinned by a test) and additionally rejected by an explicit `FORBIDDEN_OUTPUT_LABELS` membership check on the result dataclass.
+
+The classifier accepts no kernel argument and so cannot mutate the `PriceBook` (or anything else). It is a pure function from closed-set / bounded-numeric inputs to a closed-set label. No softmax, no logistic regression, no random forest, no neural network, no LLM, no calibrated probability, no real-data lookup, no Japan calibration.
+
+### 115.4 Performance boundary
+
+v1.16.1 is a pure-function module with no living-world wiring. Per-period record count, per-run window, and `living_world_digest` are **unchanged** from v1.15.last (`bd7abdb9a62fb93a1001d3f760b76b3ab4a361313c3af936c8b860f5ab58baf8`). v1.16.2 will move the digest by design when it rewires the v1.15.5 phase to call the classifier.
+
+The test count moves from `3883 / 3883` (v1.15.last) to `3983 / 3983` (v1.16.1) — `+100` tests in the new `tests/test_market_intent_classifier.py`.
+
+### 115.5 Forward pointer
+
+v1.16.2 rewires the v1.15.5 living-world investor-market-intent phase to call `classify_market_intent_direction` (with evidence resolved from the per-period `(investor, firm, security)` context) instead of the four-cycle rotation. Default-fixture digest will move; record counts and the per-run window are expected to stay the same (no new records, only different labels). v1.16.3 closes the v1.12 → v1.15 attention loop. v1.16.last freezes the layer.
