@@ -280,8 +280,8 @@ once the v1.15 storage modules have shipped.
 | v1.14.last  | Corporate financing intent freeze (need → option → review → path)                          | Shipped                 |
 | v1.15.0     | Securities market intent aggregation design (this document)                                | Shipped (docs-only)     |
 | v1.15.1     | `world/securities.py` — `ListedSecurityRecord` + `MarketVenueRecord` + `SecurityMarketBook`| Shipped                 |
-| **v1.15.2** | **`world/market_intents.py`** — **`InvestorMarketIntentRecord` + `InvestorMarketIntentBook` + safe-label enforcement** | **Shipped**             |
-| v1.15.3     | `world/market_aggregation.py` — `AggregatedMarketInterestRecord` + book                    | Planned                 |
+| v1.15.2     | `world/market_intents.py` — `InvestorMarketIntentRecord` + `InvestorMarketIntentBook` + safe-label enforcement | Shipped                 |
+| **v1.15.3** | **`world/market_interest.py`** — **`AggregatedMarketInterestRecord` + `AggregatedMarketInterestBook` + `build_aggregated_market_interest` deterministic helper** | **Shipped**             |
 | v1.15.4     | `world/market_pressure.py` — `IndicativeMarketPressureRecord` + book                       | Planned                 |
 | v1.15.5     | Living-world integration — per-period venue × security aggregation; digest moves by design | Planned                 |
 | v1.15.6     | v1.14 feedback wiring — `CapitalStructureReviewCandidate` and `CorporateFinancingPathRecord` cite `IndicativeMarketPressureRecord` ids; `build_corporate_financing_path` gains an optional pressure-evidence kwarg | Planned                 |

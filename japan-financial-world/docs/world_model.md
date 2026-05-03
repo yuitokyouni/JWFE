@@ -8753,3 +8753,55 @@ v1.15.2 ships per-investor / per-security market interest. The next milestone is
 - **v1.15.5** — living-world integration (digest moves by design).
 - **v1.15.6** — v1.14 feedback wiring.
 - **v1.15.last** — freeze.
+
+## 109. v1.15.3 AggregatedMarketInterestRecord — per-venue / per-security market-interest aggregation
+
+§109 ships the third concrete code milestone in the v1.15 sequence. v1.15.3 is **storage + a deterministic aggregation helper**: an append-only `AggregatedMarketInterestBook` that holds immutable `AggregatedMarketInterestRecord` instances summarising one venue's set of cited `InvestorMarketIntentRecord` instances for one security at one date, plus a `build_aggregated_market_interest` helper that synthesises the record deterministically from cited ids. There is **no order submission, no order book, no order imbalance, no buy / sell labels, no bid / ask, no quote dissemination, no matching, no execution, no clearing, no settlement, no price formation, no target price, no expected return, no recommendation, no investment advice, no real data ingestion, no Japan calibration**.
+
+### 109.1 What v1.15.3 ships
+
+A new module `world/market_interest.py` containing:
+
+- `AggregatedMarketInterestRecord` (frozen dataclass) — fields: `aggregated_interest_id`, `venue_id`, `security_id`, `as_of_date`, **seven non-negative integer count fields** (`increased_interest_count` / `reduced_interest_count` / `neutral_or_hold_review_count` / `liquidity_watch_count` / `risk_reduction_review_count` / `engagement_linked_review_count` / `total_intent_count`; booleans rejected), four **closed-set-enforced** label fields (`net_interest_label` / `liquidity_interest_label` / `concentration_label` / `status`), `visibility`, `confidence` in `[0.0, 1.0]` (booleans rejected), two plain-id source-tuple slots (`source_market_intent_ids`, `source_market_environment_state_ids`), `metadata`. The `venue_id` and `security_id` are plain-id cross-references and not validated against any other book.
+- `AggregatedMarketInterestBook` (append-only) — `add_record` / `get_record` / `list_records` / `list_by_venue` / `list_by_security` / `list_by_date` / `list_by_net_interest` / `list_by_liquidity_interest` / `list_by_status` / `list_by_source_market_intent` / `snapshot`.
+- New ledger record type `AGGREGATED_MARKET_INTEREST_RECORDED`, emitted exactly once per `add_record` call with `source = venue_id` and `target = security_id` so the ledger graph reads as 'venue V aggregated market interest for security S'.
+- Wired into `WorldKernel.aggregated_market_interest`.
+- Deterministic builder `build_aggregated_market_interest(kernel, venue_id, security_id, as_of_date, source_market_intent_ids, …)` that synthesises one record from cited ids without iterating the intents book globally.
+
+Closed-set label vocabulary (enforced):
+
+- `net_interest_label` ∈ { `increased_interest`, `reduced_interest`, `balanced`, `mixed`, `insufficient_observations`, `unknown` }
+- `liquidity_interest_label` ∈ { `liquidity_attention_low`, `liquidity_attention_moderate`, `liquidity_attention_high`, `unknown` }
+- `concentration_label` ∈ { `dispersed`, `moderately_concentrated`, `concentrated`, `insufficient_observations`, `unknown` }
+- `status` ∈ { `draft`, `active`, `stale`, `superseded`, `archived`, `unknown` }
+
+### 109.2 Builder synthesis rules
+
+`build_aggregated_market_interest` is a deterministic pure-count synthesiser. The bucket mapping from `intent_direction_label` to count field is fixed (`increase_interest` → `increased_interest_count`, `reduce_interest` → `reduced_interest_count`, `hold_review` / `rebalance_review` / `unknown` → `neutral_or_hold_review_count`, `liquidity_watch` → `liquidity_watch_count`, `risk_reduction_review` → `risk_reduction_review_count`, `engagement_linked_review` → `engagement_linked_review_count`).
+
+- **Mismatch handling.** Any cited intent whose `security_id` does not match the helper's `security_id` is **ignored** and the count is recorded in metadata under `mismatched_security_id_count`. The design choice is to keep the count surface clean (no extra count field) while still recording the mismatch deterministically.
+- **Unresolved id handling.** Any cited id that fails to resolve (`get_intent` raises) is ignored and the count is recorded in metadata under `unresolved_market_intent_count`.
+- **No global scan.** The helper reads only the cited ids via `kernel.investor_market_intents.get_intent`; pinned by a trip-wire test that monkey-patches every `list_*` and `snapshot` on the cited book.
+- **`net_interest_label` rule.** `total == 0` → `insufficient_observations`; `increased > reduced` and `increased >= neutral` → `increased_interest`; `reduced > increased` and `reduced >= neutral` → `reduced_interest`; both `increased` and `reduced` non-zero with `abs(increased - reduced) <= 1` → `mixed`; otherwise → `balanced`.
+- **`liquidity_interest_label` rule.** `total == 0` → `unknown`; `liquidity_watch_count == 0` → `liquidity_attention_low`; `liquidity_watch_count * 2 < total` → `liquidity_attention_moderate`; otherwise → `liquidity_attention_high`.
+- **`concentration_label` rule.** `total < 2` → `insufficient_observations`; one occupied bucket → `concentrated`; 2–3 occupied buckets → `moderately_concentrated`; 4+ occupied buckets → `dispersed`.
+
+### 109.3 Anti-claims
+
+The record carries **no** `buy`, `sell`, `order`, `order_id`, `trade`, `trade_id`, `execution`, `bid`, `ask`, `quote`, `clearing`, `settlement`, `price`, `order_imbalance`, `target_price`, `expected_return`, `recommendation`, `investment_advice`, or `real_data_value` field. The full v1.14.x anti-field family is also rejected. Tests pin the absence on both the dataclass field set and the ledger payload key set.
+
+The book emits **only** `AGGREGATED_MARKET_INTEREST_RECORDED` records and refuses to mutate any other source-of-truth book. Cross-references (venue id, security id, every source tuple) are stored as plain ids per the v0/v1 cross-reference rule.
+
+### 109.4 Performance boundary
+
+v1.15.3 is storage + helper only and not yet wired into the orchestrator. Per-period record count, per-run window, and `living_world_digest` are **unchanged** from v1.14.last (`3df73fd4f152c16d1188f5c15b69bdc8a5cd6061b637ea35af671e86c6fa2d71`). The orchestrator integration arrives at v1.15.5.
+
+The test count moves from `3610 / 3610` (v1.15.2) to `3731 / 3731` (v1.15.3) — `+121` tests in the new `tests/test_market_interest.py` covering field validation, count-fields non-negative + bool/non-int rejection, closed-set enforcement on all four label axes (accept + reject + exact pin), bounded confidence + bool rejection, immutability, duplicate rejection (no extra ledger record), unknown lookup, every list/filter method including `list_by_source_market_intent`, snapshot determinism, exactly-one ledger emission with `source / target` carrying venue and security ids, no anti-field keys on dataclass or payload, kernel wiring, no-mutation invariant against every prior book (now including `investor_market_intents`), builder bucket-mapping for all seven `intent_direction_label` values (including `rebalance_review` and `unknown` falling into the neutral bucket per the helper-rule docs), builder net-interest / liquidity-interest / concentration rule variants, builder mismatched-security-id handling (metadata count), builder unresolved-id handling (metadata count), builder no-global-scan trip-wire, default-id format, builder determinism across fresh kernels, and jurisdiction-neutral identifier scans on both module and test file.
+
+### 109.5 Forward pointer
+
+v1.15.3 ships per-venue / per-security aggregation. The next milestone is **v1.15.4 `IndicativeMarketPressureRecord`** — per-security pressure summary that translates the v1.15.3 aggregation into compact pressure labels (`demand_pressure_label` / `liquidity_pressure_label` / `volatility_pressure_label` / `market_access_label`). The `market_access_label` shares the v1.14.3 `CapitalStructureReviewCandidate` vocabulary so the two layers compose cleanly. Subsequent milestones:
+
+- **v1.15.5** — living-world integration (digest moves by design).
+- **v1.15.6** — v1.14 feedback wiring (capital-structure-review and financing-path cite pressure ids).
+- **v1.15.last** — freeze.
