@@ -8502,3 +8502,55 @@ v1.14.3 reviews the implications of one or more `CorporateFinancingNeedRecord` a
 - **v1.14.4 cross-linking** — turns the three v1.14 layers (need → option → review) into a queryable subgraph on the ledger by adding cross-link helpers and replay-friendly traversal, without introducing any execution path.
 
 Orchestrator wiring (per-period sweep, `living_world_digest` impact) still lands at v1.14.5.
+
+## 103. v1.14.4 CorporateFinancingPathRecord — generic synthetic financing-subgraph storage
+
+§103 ships the fourth concrete code milestone in the v1.14 corporate-financing-intent sequence. v1.14.4 ships **storage only**: an append-only `CorporateFinancingPathBook` that holds immutable `CorporateFinancingPathRecord` instances connecting the three prior v1.14 storage layers — `CorporateFinancingNeedRecord` (v1.14.1), `FundingOptionCandidate` (v1.14.2), and `CapitalStructureReviewCandidate` (v1.14.3) — into an auditable financing subgraph for one firm at a point in time. There is **no choice of optimal option, no loan approval, no bond issuance, no equity issuance, no underwriting, no syndication, no bookbuilding, no pricing, no capital-structure optimisation, no investment recommendation, no real leverage / D/E / WACC calculation, no real data ingestion, no Japan calibration, no execution path**.
+
+A `CorporateFinancingPathRecord` is a **graph / audit object**. It makes the financing reasoning chain visible to UI, reports, LLM summaries, and (later) living-world per-period replay — without committing to any financing action.
+
+### 103.1 What v1.14.4 ships
+
+A new module `world/financing_paths.py` containing:
+
+- `CorporateFinancingPathRecord` (frozen dataclass) — fields: `financing_path_id`, `firm_id`, `as_of_date`, five label fields drawn from closed sets (`path_type_label` / `path_status_label` / `coherence_label` / `constraint_label` / `next_review_label`), `status`, `visibility`, `confidence` in `[0.0, 1.0]` (booleans rejected), seven plain-id tuple slots (`need_ids`, `funding_option_ids`, `capital_structure_review_ids`, `market_environment_state_ids`, `interbank_liquidity_state_ids`, `bank_credit_review_signal_ids`, `investor_intent_ids`), `metadata`. Closed-set membership is **enforced** at construction.
+- `CorporateFinancingPathBook` (append-only) — `add_path` / `get_path` / `list_paths` / `list_by_firm` / `list_by_path_type` / `list_by_path_status` / `list_by_coherence` / `list_by_constraint` / `list_by_status` / `list_by_date` / `list_by_need` / `list_by_funding_option` / `list_by_capital_structure_review` / `snapshot`.
+- New ledger record type `CORPORATE_FINANCING_PATH_RECORDED`, emitted exactly once per `add_path` call.
+- Wired into `WorldKernel.financing_paths`.
+- Deterministic builder `build_corporate_financing_path(kernel, firm_id, as_of_date, …)` that synthesises one path record from the cited ids. The builder reads only the explicitly cited ids (via `kernel.corporate_financing_needs.get_need` / `kernel.capital_structure_reviews.get_candidate`) and **never iterates the books globally** (a test trip-wires every `list_*` and `snapshot` on the cited books and asserts the helper does not touch them). The builder does not choose, approve, price, underwrite, or recommend — it only assigns small synthetic labels.
+
+Closed-set label vocabulary (enforced):
+
+- `path_type_label` ∈ { `refinancing_path`, `liquidity_buffer_path`, `capex_funding_path`, `acquisition_funding_path`, `balance_sheet_repair_path`, `working_capital_path`, `mixed_path`, `unknown` }
+- `path_status_label` ∈ { `draft`, `under_review`, `stale`, `superseded`, `archived`, `unknown` }
+- `coherence_label` ∈ { `coherent`, `partially_coherent`, `conflicting_evidence`, `insufficient_evidence`, `unknown` }
+- `constraint_label` ∈ { `market_access_constraint`, `liquidity_constraint`, `leverage_constraint`, `dilution_constraint`, `maturity_constraint`, `covenant_constraint`, `no_obvious_constraint`, `unknown` }
+- `next_review_label` ∈ { `monitor`, `revisit_next_period`, `request_more_evidence`, `compare_options`, `escalate_to_capital_structure_review`, `unknown` }
+
+### 103.2 Builder synthesis rules
+
+`build_corporate_financing_path` is a deterministic pure-label synthesiser:
+
+- `path_type_label` — derived from the `funding_purpose_label` of cited needs. One distinct purpose → mapped (`refinancing` → `refinancing_path`, `working_capital` → `working_capital_path`, `growth_capex` → `capex_funding_path`, `acquisition` → `acquisition_funding_path`, `restructuring` → `balance_sheet_repair_path`); multiple distinct purposes → `mixed_path`; no resolvable need → `unknown`.
+- `coherence_label` — `insufficient_evidence` if either `funding_option_ids` or `capital_structure_review_ids` is empty (or no review resolves); otherwise `coherent` if cited reviews share one `market_access_label`, else `partially_coherent`.
+- `constraint_label` — first-match priority over cited reviews: market_access ∈ {constrained, closed} → `market_access_constraint`, then `liquidity_pressure_label = stressed` → `liquidity_constraint`, then `leverage_pressure_label = high` → `leverage_constraint`, then `maturity_wall_label = concentrated` → `maturity_constraint`, then `covenant_headroom_label = tight` → `covenant_constraint`, then `dilution_concern_label = high` → `dilution_constraint`; `no_obvious_constraint` if no review trips a flag, `unknown` if no reviews resolved.
+- `next_review_label` — `request_more_evidence` if coherence is insufficient, else `compare_options` if partially coherent, else `escalate_to_capital_structure_review` if a real constraint was found, else `monitor`.
+- `path_status_label` — always `draft` at synthesis time.
+
+### 103.3 Anti-claims
+
+The record carries **no** `selected_option`, `optimal_option`, `approved`, `executed`, `commitment`, `underwriting`, `syndication`, `allocation`, `pricing`, `interest_rate`, `spread`, `coupon`, `fee`, `offering_price`, `target_price`, `expected_return`, `recommendation`, `investment_advice`, or `real_data_value` field. Tests pin the absence on both the dataclass field set and the ledger payload key set. `confidence` is a synthetic ordering in `[0.0, 1.0]`, **never** a calibrated probability of any external action.
+
+The book emits **only** `CORPORATE_FINANCING_PATH_RECORDED` records and refuses to mutate any other source-of-truth book — including the three v1.14 storage layers it cross-references. Cross-references are stored as plain ids and not validated against any other book per the v0/v1 cross-reference rule. An unresolved id is preserved on the record but skipped during label derivation.
+
+### 103.4 Performance boundary
+
+v1.14.4 is storage / audit / graph-linking only and not yet wired into the orchestrator. Per-period record count, per-run window, and `living_world_digest` are **unchanged** from v1.13.last. The orchestrator integration (per-period sweep, digest impact) is deferred until v1.14.5.
+
+The test count moves from `3270 / 3270` (v1.14.3) to `3376 / 3376` (v1.14.4) — `+106` tests in the new `tests/test_financing_paths.py` covering field validation, closed-set enforcement on all five label axes, plain-id citation of every cross-referenced layer, exactly-one ledger emission with no anti-field keys, no-mutation against every prior book, all 13 list/filter methods, snapshot determinism, builder determinism across fresh kernels, builder unresolved-id handling, builder no-global-scan trip-wire, and jurisdiction-neutral identifier scans on both module and test file.
+
+### 103.5 Forward pointer
+
+v1.14.4 closes the storage / audit phase of the v1.14 sequence. The next milestone is:
+
+- **v1.14.5 living-world financing integration** — wires the four-layer chain (`CorporateFinancingNeedBook` → `FundingOptionCandidateBook` → `CapitalStructureReviewBook` → `CorporateFinancingPathBook`) into the per-period living-world sweep so `living_world_manifest.v1` carries the financing-reasoning subgraph alongside the existing record stream. The orchestrator integration is when `living_world_digest` shifts; storage milestones up through v1.14.4 leave the digest byte-identical.
