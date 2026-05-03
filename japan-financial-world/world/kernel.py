@@ -13,6 +13,7 @@ from world.interbank_liquidity import InterbankLiquidityStateBook
 from world.central_bank_signals import CentralBankSignalBook
 from world.corporate_financing import CorporateFinancingNeedBook
 from world.funding_options import FundingOptionCandidateBook
+from world.capital_structure import CapitalStructureReviewBook
 from world.balance_sheet import BalanceSheetProjector
 from world.clock import Clock
 from world.constraints import ConstraintBook, ConstraintEvaluator
@@ -127,6 +128,9 @@ class WorldKernel:
     funding_options: FundingOptionCandidateBook = field(
         default_factory=FundingOptionCandidateBook
     )
+    capital_structure_reviews: CapitalStructureReviewBook = field(
+        default_factory=CapitalStructureReviewBook
+    )
     routine_engine: RoutineEngine | None = None
     observation_menu_builder: ObservationMenuBuilder | None = None
     # v1.12.3 — read-only evidence resolution service. Stateless;
@@ -169,6 +173,7 @@ class WorldKernel:
             self.central_bank_signals,
             self.corporate_financing_needs,
             self.funding_options,
+            self.capital_structure_reviews,
         ):
             if book.ledger is None:
                 book.ledger = self.ledger

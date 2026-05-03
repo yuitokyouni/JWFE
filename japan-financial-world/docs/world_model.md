@@ -8456,3 +8456,49 @@ v1.14.2 turns one `CorporateFinancingNeedRecord` into a *set of possible financi
 - **v1.14.4 cross-linking** — links the three v1.14 layers (need → option → review) by id, exposing the chain as a queryable subgraph on the ledger without introducing any execution path.
 
 Orchestrator wiring (per-period sweep, `living_world_digest` impact) lands at v1.14.5.
+
+## 102. v1.14.3 CapitalStructureReviewCandidate — generic synthetic capital-structure review storage
+
+§102 ships the third concrete code milestone in the v1.14 corporate-financing-intent sequence. v1.14.3 ships **storage only**: an append-only `CapitalStructureReviewBook` that holds immutable `CapitalStructureReviewCandidate` instances naming a structured review of balance-sheet / capital-structure implications for a firm at a point in time. There is **no optimal-capital-structure decision, no loan approval, no bond issuance, no equity issuance, no underwriting, no syndication, no pricing, no covenant enforcement, no rating model, no PD / LGD / EAD, no real leverage ratio, no real D/E, no WACC calculation, no investment advice, no real data ingestion, no Japan calibration**.
+
+A `CapitalStructureReviewCandidate` reviews financing implications without deciding anything. It reads `CorporateFinancingNeedRecord` ids and `FundingOptionCandidate` ids as plain id cross-references and posts a non-binding posture across eight small label axes.
+
+### 102.1 What v1.14.3 ships
+
+A new module `world/capital_structure.py` containing:
+
+- `CapitalStructureReviewCandidate` (frozen dataclass) — fields: `review_candidate_id`, `firm_id`, `as_of_date`, eight label fields drawn from closed sets (`review_type_label` / `leverage_pressure_label` / `liquidity_pressure_label` / `maturity_wall_label` / `dilution_concern_label` / `covenant_headroom_label` / `market_access_label` / `rating_perception_label`), `status`, `visibility`, `confidence` in `[0.0, 1.0]` (booleans rejected), seven `source_*_ids` plain-id tuples (need ids, funding option ids, firm state ids, market environment state ids, interbank liquidity state ids, bank credit review signal ids, investor intent ids), `metadata`. Closed-set membership is **enforced** at construction.
+- `CapitalStructureReviewBook` (append-only) — `add_candidate` / `get_candidate` / `list_candidates` / `list_by_firm` / `list_by_review_type` / `list_by_market_access` / `list_by_status` / `list_by_date` / `list_by_need` / `list_by_funding_option` / `snapshot`.
+- New ledger record type `CAPITAL_STRUCTURE_REVIEW_CANDIDATE_RECORDED`, emitted exactly once per `add_candidate` call.
+- Wired into `WorldKernel.capital_structure_reviews`.
+
+Closed-set label vocabulary (enforced):
+
+- `review_type_label` ∈ { `leverage_review`, `liquidity_review`, `refinancing_review`, `dilution_review`, `covenant_review`, `market_access_review`, `rating_perception_review`, `unknown` }
+- `leverage_pressure_label` ∈ { `low`, `moderate`, `elevated`, `high`, `unknown` }
+- `liquidity_pressure_label` ∈ { `low`, `moderate`, `elevated`, `stressed`, `unknown` }
+- `maturity_wall_label` ∈ { `none_visible`, `manageable`, `approaching`, `concentrated`, `unknown` }
+- `dilution_concern_label` ∈ { `not_applicable`, `low`, `moderate`, `high`, `unknown` }
+- `covenant_headroom_label` ∈ { `not_applicable`, `comfortable`, `limited`, `tight`, `unknown` }
+- `market_access_label` ∈ { `open`, `selective`, `constrained`, `closed`, `unknown` }
+- `rating_perception_label` ∈ { `stable`, `watch`, `negative_watch`, `stressed`, `unknown` }
+
+### 102.2 Anti-claims
+
+The record carries **no** `debt_amount`, `equity_amount`, `leverage_ratio`, `debt_to_equity`, `WACC`, `rating`, `PD`, `LGD`, `EAD`, `spread`, `coupon`, `fee`, `price`, `approval`, `execution`, `recommendation`, `investment_advice`, or `real_data_value` field — and none of the v1.14.x family's prior anti-fields (`amount`, `loan_amount`, `interest_rate`, `coupon_rate`, `yield`, `policy_rate`, `interest`, `tenor_years`, `default_probability`, `behavior_probability`, `internal_rating`, `decision_outcome`, `order`, `trade`, `forecast_value`, `actual_value`, `underwriting`, `syndication`, `commitment`, `allocation`, `offering_price`, `take_up_probability`, `expected_return`). Tests pin the absence on both the dataclass field set and the ledger payload key set. `confidence` is a synthetic ordering in `[0.0, 1.0]`, **never** a calibrated default probability.
+
+The book emits **only** `CAPITAL_STRUCTURE_REVIEW_CANDIDATE_RECORDED` records and refuses to mutate any other source-of-truth book — including `corporate_financing_needs` and `funding_options`. Cross-references (need ids, funding option ids, market environment ids, etc.) are stored as plain ids and not validated against any other book per the v0/v1 cross-reference rule.
+
+### 102.3 Performance boundary
+
+v1.14.3 is storage-only and not yet wired into the orchestrator. Per-period record count, per-run window, and `living_world_digest` are **unchanged** from v1.13.last. The orchestrator integration is deferred until v1.14.5 along with the rest of the v1.14 sequence.
+
+The test count moves from `3165 / 3165` (v1.14.2) to `3270 / 3270` (v1.14.3) — `+105` tests in the new `tests/test_capital_structure.py`.
+
+### 102.4 Forward pointer
+
+v1.14.3 reviews the implications of one or more `CorporateFinancingNeedRecord` and `FundingOptionCandidate` ids without deciding or executing anything. The next milestone is:
+
+- **v1.14.4 cross-linking** — turns the three v1.14 layers (need → option → review) into a queryable subgraph on the ledger by adding cross-link helpers and replay-friendly traversal, without introducing any execution path.
+
+Orchestrator wiring (per-period sweep, `living_world_digest` impact) still lands at v1.14.5.
