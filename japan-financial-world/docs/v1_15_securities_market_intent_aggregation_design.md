@@ -7,6 +7,25 @@ the missing broker / exchange / market-venue abstraction between
 investor intent and price formation** without implementing any
 of it.
 
+> **Naming amendment (v1.15.2).** The per-investor / per-security
+> record originally named `InvestorMarketIntentRecord` in this
+> design note ships under `InvestorMarketIntentRecord` instead.
+> Public FWE deliberately models *market interest / market intent*
+> before *trading*; "trading" reads as order / execution language
+> that the substrate explicitly does not implement. The label
+> vocabulary is unchanged from this design — `intent_direction_label`
+> stays on the v1.15 `SAFE_INTENT_LABELS` set (`increase_interest` /
+> `reduce_interest` / `hold_review` / `liquidity_watch` /
+> `rebalance_review` / `risk_reduction_review` /
+> `engagement_linked_review`) plus `unknown`. The shipped module is
+> `world/market_intents.py`; the shipped book is
+> `InvestorMarketIntentBook`; the shipped ledger event is
+> `investor_market_intent_recorded`. Other naming in this document
+> (`AggregatedMarketInterestRecord`, `IndicativeMarketPressureRecord`,
+> `ListedSecurityRecord`, `MarketVenueRecord`) ships under the
+> design names. References below have been updated to the shipped
+> name.
+
 ## Purpose
 
 v1.12.1 records what individual investors are paying attention
@@ -25,7 +44,7 @@ aggregation layer:
 
 ```
 investor_intent_signal_added           (v1.12.1, per investor / firm)
-  → InvestorTradingIntentRecord        (v1.15, per investor / security)
+  → InvestorMarketIntentRecord        (v1.15, per investor / security)
   → AggregatedMarketInterestRecord     (v1.15, per venue / security)
   → IndicativeMarketPressureRecord     (v1.15, per security)
   → feedback into capital_structure_review / financing_path  (v1.14.x)
@@ -85,46 +104,57 @@ that the v1.15 aggregation runs against.
   no listing-fee numeric. Real-venue calibration is private
   JFWE territory (v2 / v3 only).
 
-### 3. `InvestorTradingIntentRecord`
+### 3. `InvestorMarketIntentRecord`
 
-A per-investor, per-security, **non-binding** trading-interest
+A per-investor, per-security, **non-binding** *market-interest*
 posture. Strictly distinct from `investor_intent_signal_added`
 (v1.12.1), which is per-investor / per-*firm* posture in
 *review* terms; v1.15's record is per-investor / per-*security*
-posture in *trading-interest* terms — but neither is an order.
+posture in *market-interest* terms — but neither is an order.
 
-- **Identity:** `trading_intent_id`, `investor_id`,
+> **Naming amendment.** v1.15.0 originally called this record
+> `InvestorTradingIntentRecord`; v1.15.2 ships it as
+> `InvestorMarketIntentRecord`. Public FWE models *market
+> interest* before *trading*; the rest of this section uses
+> the shipped name.
+
+- **Identity:** `market_intent_id`, `investor_id`,
   `security_id`, `as_of_date`, `confidence` (synthetic
   `[0,1]` ordering), `status`, `visibility`, `metadata`.
 - **Closed-set safe labels (binding):**
   - `intent_direction_label` ∈ { `increase_interest`,
     `reduce_interest`, `hold_review`, `liquidity_watch`,
     `rebalance_review`, `risk_reduction_review`,
-    `engagement_linked_review`, `unknown` }
+    `engagement_linked_review`, `unknown` } — exactly the
+    v1.15 `SAFE_INTENT_LABELS` set ∪ `unknown`.
   - `intensity_label` ∈ { `low`, `moderate`, `elevated`,
-    `unknown` }
-  - `horizon_label` ∈ { `near_term`, `medium_term`,
-    `long_term`, `unknown` }
+    `high`, `unknown` }
+  - `horizon_label` ∈ { `intraperiod`, `near_term`,
+    `medium_term`, `long_term`, `unknown` }
+  - `status` ∈ { `draft`, `active`, `stale`, `superseded`,
+    `archived`, `unknown` }
 - **Provenance (plain-id cross-references):**
   - `evidence_investor_intent_ids` (v1.12.1)
   - `evidence_valuation_ids` (v1.9.5 / v1.12.5)
   - `evidence_market_environment_state_ids` (v1.12.2)
+  - `evidence_firm_state_ids` (v1.12.0)
+  - `evidence_security_ids` (v1.15.1)
+  - `evidence_venue_ids` (v1.15.1)
 - **Forbidden labels (binding):** the record **must not** carry
   `buy`, `sell`, `order`, `target_weight`, `overweight`,
   `underweight`, `execution`, `submit`, `cancel`, `fill`,
   `match` — neither in the label vocabulary nor in metadata
-  keys. The label set is deliberately phrased to read as
-  *review posture about a security*, not as a trade
-  instruction. Tests will pin the absence of every forbidden
-  word on both the dataclass field set and the ledger payload
-  key set.
+  keys. Closed-set membership on `intent_direction_label`
+  rejects each forbidden verb at construction; tests pin the
+  rejection.
 - **Anti-fields (binding):** no `quantity`, no `notional`, no
   `target_price`, no `expected_return`, no `recommendation`,
-  no `investment_advice`, no `real_data_value`.
+  no `investment_advice`, no `real_data_value`. The full
+  v1.14.x anti-field family is also rejected.
 
 ### 4. `AggregatedMarketInterestRecord`
 
-A per-venue / per-security aggregation of investor trading
+A per-venue / per-security aggregation of investor market
 intents in one period. Audit / count object only — never an
 order book, never a quote, never a fill.
 
@@ -134,14 +164,14 @@ order book, never a quote, never a fill.
 - **Counts:** `positive_interest_count`,
   `negative_interest_count`, `neutral_interest_count` (each is
   a non-negative integer; the trio sums to the count of cited
-  trading intents).
+  market intents).
 - **Closed-set labels (proposed):**
   - `net_interest_label` ∈ { `net_positive`, `net_negative`,
     `balanced`, `insufficient_evidence`, `unknown` }
   - `liquidity_interest_label` ∈ { `improving`, `steady`,
     `thinning`, `stressed`, `unknown` }
 - **Provenance (plain-id):**
-  - `source_trading_intent_ids` — the per-investor trading
+  - `source_market_intent_ids` — the per-investor market
     intents this venue/security aggregation read.
 - **Anti-fields (binding):** no `volume`, no `notional`, no
   `bid`, no `ask`, no `mid`, no `vwap`, no `last_trade`, no
@@ -212,7 +242,7 @@ once the v1.15 storage modules have shipped.
 
 - **Not order submission.** No `OrderSubmittedRecord`, no
   `order_submitted` ledger event, no quantity, no notional, no
-  side, no order id flowing from the trading-intent record.
+  side, no order id flowing from the market-intent record.
 - **Not order matching.** No order book, no bid / ask / mid /
   spread, no match engine, no fill report, no execution
   notice.
@@ -227,7 +257,7 @@ once the v1.15 storage modules have shipped.
   benchmark fixing, no NAV, no index level, no last-trade.
 - **Not target prices, expected returns, or recommendations.**
   The vocabulary is deliberately phrased to make a
-  trading-intent-as-recommendation reading impossible.
+  market-intent-as-recommendation reading impossible.
 - **Not a Japan calibration.** All venue ids, security ids,
   and labels are jurisdiction-neutral and synthetic.
   Real-venue calibration (JPX / TSE / OSE / NEX / etc.) is
@@ -248,9 +278,9 @@ once the v1.15 storage modules have shipped.
 | Milestone   | What                                                                                       | Status                  |
 | ----------- | ------------------------------------------------------------------------------------------ | ----------------------- |
 | v1.14.last  | Corporate financing intent freeze (need → option → review → path)                          | Shipped                 |
-| **v1.15.0** | **Securities market intent aggregation design (this document)**                            | **Docs-only (planned)** |
-| v1.15.1     | `world/listed_securities.py` — `ListedSecurityRecord` + `MarketVenueRecord` + books        | Planned                 |
-| v1.15.2     | `world/trading_intent.py` — `InvestorTradingIntentRecord` + book + safe-label enforcement  | Planned                 |
+| v1.15.0     | Securities market intent aggregation design (this document)                                | Shipped (docs-only)     |
+| v1.15.1     | `world/securities.py` — `ListedSecurityRecord` + `MarketVenueRecord` + `SecurityMarketBook`| Shipped                 |
+| **v1.15.2** | **`world/market_intents.py`** — **`InvestorMarketIntentRecord` + `InvestorMarketIntentBook` + safe-label enforcement** | **Shipped**             |
 | v1.15.3     | `world/market_aggregation.py` — `AggregatedMarketInterestRecord` + book                    | Planned                 |
 | v1.15.4     | `world/market_pressure.py` — `IndicativeMarketPressureRecord` + book                       | Planned                 |
 | v1.15.5     | Living-world integration — per-period venue × security aggregation; digest moves by design | Planned                 |
@@ -262,7 +292,8 @@ each milestone ships one record + one book + one (or two)
 ledger event(s), passes a closed-set label test, passes the
 forbidden-label / forbidden-payload-key scan, and integrates
 into the living world only at v1.15.5. Through v1.15.4 the
-`living_world_digest` is unchanged from v1.14.5.
+`living_world_digest` is unchanged from v1.14.5
+(`3df73fd4f152c16d1188f5c15b69bdc8a5cd6061b637ea35af671e86c6fa2d71`).
 
 ## Boundary recap
 
