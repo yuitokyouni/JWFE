@@ -991,6 +991,32 @@
       font-family: var(--font-mono);
     }
 
+    /* v1.18.4 — long plain-id citations (template / application /
+       context shift ids in the scenario trace cards) can be 80+
+       characters long. Force wrap so a Run mock that fills these
+       cells does not push the table — and therefore the page —
+       wider than the viewport. */
+    #card-scenario-trace td,
+    #card-scenario-summary td,
+    #card-timeline-scenario td {
+      word-break: break-word;
+      overflow-wrap: anywhere;
+    }
+    #card-scenario-trace,
+    #card-scenario-summary,
+    #card-timeline-scenario {
+      overflow-x: hidden;
+    }
+    #card-scenario-trace table,
+    #card-timeline-scenario table {
+      table-layout: fixed;
+      width: 100%;
+    }
+    #card-scenario-trace table td:first-child,
+    #card-timeline-scenario table td:first-child {
+      width: 220px;
+    }
+
     /* ------------------------------------------------------------------ */
     /* Output / chart blocks                                              */
     /* ------------------------------------------------------------------ */
@@ -1344,6 +1370,80 @@
                     <td class="status-cell">internal_only</td>
                   </tr>
                 </table>
+              </section>
+
+              <!-- v1.18.4 — Scenario selector (static fixture only) -->
+              <section class="card" id="card-scenario-selector">
+                <div class="section-rule"></div>
+                <h3 class="card-title">Scenario driver <span class="tag">v1.18.4 selector mock</span></h3>
+                <div class="regime-selector" role="radiogroup" aria-label="Scenario driver">
+                  <button class="regime-pill active scenario-pill" data-scenario="none_baseline" type="button" role="radio"
+                    aria-checked="true">
+                    <span class="label">scenario</span>Baseline
+                  </button>
+                  <button class="regime-pill scenario-pill" data-scenario="rate_repricing_driver" type="button" role="radio"
+                    aria-checked="false">
+                    <span class="label">scenario</span>Rate repricing
+                  </button>
+                  <button class="regime-pill scenario-pill" data-scenario="credit_tightening_driver" type="button" role="radio"
+                    aria-checked="false">
+                    <span class="label">scenario</span>Credit tightening
+                  </button>
+                  <button class="regime-pill scenario-pill" data-scenario="funding_window_closure_driver" type="button" role="radio"
+                    aria-checked="false">
+                    <span class="label">scenario</span>Funding window closure
+                  </button>
+                  <button class="regime-pill scenario-pill" data-scenario="liquidity_stress_driver" type="button" role="radio"
+                    aria-checked="false">
+                    <span class="label">scenario</span>Liquidity stress
+                  </button>
+                  <button class="regime-pill scenario-pill" data-scenario="information_gap_driver" type="button" role="radio"
+                    aria-checked="false">
+                    <span class="label">scenario</span>Information gap
+                  </button>
+                  <button class="regime-pill scenario-pill" data-scenario="no_direct_shift_fallback" type="button" role="radio"
+                    aria-checked="false">
+                    <span class="label">scenario</span>Unmapped fallback
+                  </button>
+                </div>
+                <div class="note-box" style="margin-top:12px;">
+                  Selecting a scenario picks a synthetic
+                  <code>ScenarioDriverTemplate</code> from the v1.18.1
+                  library and renders the v1.18.2 / v1.18.3 append-only
+                  application chain
+                  (<code>template → application → context_shift →
+                  event_annotation → causal_annotation</code>) into the
+                  Overview, Timeline, and Scenario trace cards. The
+                  scenario driver is the <em>stimulus</em>, never the
+                  <em>response</em>. Click <strong>Run mock</strong> to
+                  apply the selection across the workbench.
+                </div>
+                <table style="margin-top:10px;">
+                  <tr>
+                    <td>Active</td>
+                    <td class="status-cell" id="scenario-active">none_baseline</td>
+                  </tr>
+                  <tr>
+                    <td>Reasoning mode</td>
+                    <td class="status-cell">rule_based_fallback</td>
+                  </tr>
+                  <tr>
+                    <td>Reasoning slot</td>
+                    <td class="status-cell">future_llm_compatible</td>
+                  </tr>
+                  <tr>
+                    <td>LLM execution</td>
+                    <td class="status-cell">OFF</td>
+                  </tr>
+                </table>
+                <div class="boundary-box" style="margin-top:10px;">
+                  Reasoning mode: <code>rule_based_fallback</code>.
+                  Reasoning slot: <code>future_llm_compatible</code>.
+                  No LLM execution in this prototype. Context shifts are
+                  append-only — no pre-existing context record is
+                  mutated. No actor decision, no price, no trade, no
+                  forecast, no advice.
+                </div>
               </section>
 
               <section class="card">
@@ -1854,6 +1954,67 @@
               </table>
             </section>
 
+            <!-- v1.18.4 — Scenario event annotation row + Scenario trace. -->
+            <section class="card" id="card-timeline-scenario" style="margin-top:14px;">
+              <h3 class="card-title">Scenario event annotation <span class="tag">v1.18.4 selector mock</span></h3>
+              <div class="meta-row">selected · <strong id="tl-scenario-selected">none_baseline</strong>
+                · family <span id="tl-scenario-family">—</span>
+                · group <span id="tl-scenario-group">—</span></div>
+              <div class="event-row">
+                <div class="event-chip" id="tl-scenario-chip">
+                  <div class="event-date" id="tl-scenario-date">—</div>
+                  <strong id="tl-scenario-annotation-type">synthetic_event</strong><br />
+                  <span id="tl-scenario-annotation-label">no scenario applied</span>
+                </div>
+              </div>
+              <div class="muted small" style="margin-top:8px;">
+                Causal summary: <span id="tl-scenario-causal-summary">no scenario · baseline</span>
+              </div>
+              <div class="boundary-box" id="tl-scenario-fallback-callout" style="margin-top:10px; display:none;">
+                No direct context shift emitted beyond
+                <code>fallback/no_direct_shift</code>. This is not an
+                error. The template is stored but not yet mapped to a
+                concrete context surface.
+              </div>
+              <table style="margin-top:10px;">
+                <tr>
+                  <td>Template id</td>
+                  <td class="status-cell mono" id="tl-scenario-template-id">—</td>
+                </tr>
+                <tr>
+                  <td>Application id</td>
+                  <td class="status-cell mono" id="tl-scenario-application-id">—</td>
+                </tr>
+                <tr>
+                  <td>Context shift id</td>
+                  <td class="status-cell mono" id="tl-scenario-shift-id">—</td>
+                </tr>
+                <tr>
+                  <td>Context surface</td>
+                  <td class="status-cell" id="tl-scenario-context-surface">—</td>
+                </tr>
+                <tr>
+                  <td>Shift direction</td>
+                  <td class="status-cell" id="tl-scenario-shift-direction">—</td>
+                </tr>
+                <tr>
+                  <td>Reasoning mode</td>
+                  <td class="status-cell">rule_based_fallback</td>
+                </tr>
+                <tr>
+                  <td>Reasoning slot</td>
+                  <td class="status-cell">future_llm_compatible</td>
+                </tr>
+              </table>
+              <div class="boundary-box" style="margin-top:10px;">
+                Scenario driver is the stimulus, never the response.
+                Context shifts are append-only — no pre-existing context
+                record is mutated. No actor decision, no price, no
+                trade, no forecast, no advice. No LLM execution in this
+                prototype.
+              </div>
+            </section>
+
             <section class="card" style="margin-top:14px;">
               <h3 class="card-title">Stylized facts <span class="tag">secondary</span></h3>
               <table>
@@ -2125,6 +2286,76 @@
                 <div class="note">no live engine execution · use `python -m pytest` to verify</div>
               </div>
             </div>
+
+            <!-- v1.18.4 — Scenario summary + Scenario trace cards. -->
+            <section class="card" id="card-scenario-summary" style="margin-top:14px;">
+              <h3 class="card-title">Scenario driver <span class="tag">v1.18.4 selector mock</span></h3>
+              <div class="meta-row">selected · <strong id="ov-scenario-selected">none_baseline</strong>
+                · family <span id="ov-scenario-family">—</span>
+                · group <span id="ov-scenario-group">—</span></div>
+              <div class="effect" id="ov-scenario-summary">
+                Baseline view — no synthetic scenario driver applied.
+                The Overview / Timeline render the v1.16 closed loop on
+                its own.
+              </div>
+              <div class="boundary-box" style="margin-top:10px;" id="ov-scenario-fallback-callout">
+                Scenario driver is the stimulus, never the response.
+                Every context shift is append-only — no pre-existing
+                context record is mutated. No actor decision, no price,
+                no trade, no forecast, no advice. Reasoning mode:
+                <code>rule_based_fallback</code> · slot:
+                <code>future_llm_compatible</code> · no LLM execution.
+              </div>
+            </section>
+
+            <section class="card" id="card-scenario-trace" style="margin-top:14px;">
+              <h3 class="card-title">Scenario trace <span class="tag">append-only</span></h3>
+              <div class="muted small" style="margin-bottom:8px;">
+                <code>ScenarioDriverTemplate → ScenarioDriverApplicationRecord →
+                ScenarioContextShiftRecord → EventAnnotationRecord →
+                CausalTimelineAnnotation</code>. v1.18.2 application is
+                append-only; v1.18.3 renders the chain through plain-id
+                citations.
+              </div>
+              <table id="table-scenario-trace">
+                <tr>
+                  <td>Template id</td>
+                  <td class="status-cell mono" id="ov-scenario-template-id">—</td>
+                </tr>
+                <tr>
+                  <td>Application id</td>
+                  <td class="status-cell mono" id="ov-scenario-application-id">—</td>
+                </tr>
+                <tr>
+                  <td>Context shift id</td>
+                  <td class="status-cell mono" id="ov-scenario-shift-id">—</td>
+                </tr>
+                <tr>
+                  <td>Context surface</td>
+                  <td class="status-cell" id="ov-scenario-context-surface">—</td>
+                </tr>
+                <tr>
+                  <td>Shift direction</td>
+                  <td class="status-cell" id="ov-scenario-shift-direction">—</td>
+                </tr>
+                <tr>
+                  <td>Expected annotation type</td>
+                  <td class="status-cell" id="ov-scenario-expected-annotation-type">—</td>
+                </tr>
+                <tr>
+                  <td>Reasoning mode</td>
+                  <td class="status-cell" id="ov-scenario-reasoning-mode">rule_based_fallback</td>
+                </tr>
+                <tr>
+                  <td>Reasoning slot</td>
+                  <td class="status-cell" id="ov-scenario-reasoning-slot">future_llm_compatible</td>
+                </tr>
+                <tr>
+                  <td>Boundary flags</td>
+                  <td class="status-cell" id="ov-scenario-boundary-flags">no_actor_decision · no_llm_execution · no_price_formation · no_trading · no_financing_execution · no_investment_advice · synthetic_only</td>
+                </tr>
+              </table>
+            </section>
 
             <div class="boundary-callout">
               <strong>Closed-loop inspection view.</strong> This page is a
@@ -3361,7 +3592,186 @@
         ]
       }
     ]
-  }
+  },
+  "scenario_selector": {
+    "selected_scenario": "none_baseline",
+    "options": [
+      "none_baseline",
+      "rate_repricing_driver",
+      "credit_tightening_driver",
+      "funding_window_closure_driver",
+      "liquidity_stress_driver",
+      "information_gap_driver",
+      "no_direct_shift_fallback"
+    ],
+    "fixture_kind": "sample_fixture",
+    "fixture_note": "v1.18.4 selector mock — fixture switching only. Python engine NOT invoked from the UI.",
+    "reasoning_mode": "rule_based_fallback",
+    "reasoning_slot": "future_llm_compatible",
+    "boundary_flags": {
+      "no_actor_decision": true,
+      "no_llm_execution": true,
+      "no_price_formation": true,
+      "no_trading": true,
+      "no_financing_execution": true,
+      "no_investment_advice": true,
+      "synthetic_only": true
+    }
+  },
+  "scenario_fixtures": {
+    "none_baseline": {
+      "label_text": "Baseline (no scenario applied)",
+      "scenario_family_label": "—",
+      "driver_group_label": "—",
+      "scenario_driver_template_id": "—",
+      "scenario_application_id": "—",
+      "scenario_context_shift_id": "—",
+      "context_surface_label": "—",
+      "shift_direction_label": "—",
+      "expected_annotation_type_label": "—",
+      "severity_label": "—",
+      "affected_actor_scope_label": "—",
+      "summary": "Baseline view — no synthetic scenario driver applied. The Overview / Timeline render the v1.16 closed loop on its own.",
+      "annotation_label": "no scenario applied",
+      "annotation_type_label": "synthetic_event",
+      "annotation_severity_label": "unknown",
+      "causal_summary_label": "no scenario · baseline",
+      "annotation_date": "2026-03-31",
+      "is_no_direct_shift_fallback": false
+    },
+    "rate_repricing_driver": {
+      "label_text": "Rate repricing",
+      "scenario_family_label": "rate_repricing_driver",
+      "driver_group_label": "macro_rates",
+      "scenario_driver_template_id": "scenario_driver:rate_repricing:reference",
+      "scenario_application_id": "scenario_application:scenario_driver:rate_repricing:reference:2026-03-31",
+      "scenario_context_shift_id": "scenario_context_shift:scenario_application:scenario_driver:rate_repricing:reference:2026-03-31:00",
+      "context_surface_label": "market_environment",
+      "shift_direction_label": "tighten",
+      "expected_annotation_type_label": "market_environment_change",
+      "severity_label": "medium",
+      "affected_actor_scope_label": "market_wide",
+      "summary": "Synthetic rising-rate context shift on the market environment surface. Stimulus only — no rate, no price, no actor decision.",
+      "annotation_label": "rate_repricing_driver · macro_rates · market_environment · tighten · market_environment_change",
+      "annotation_type_label": "market_environment_change",
+      "annotation_severity_label": "medium",
+      "causal_summary_label": "market_environment_change",
+      "annotation_date": "2026-03-31",
+      "is_no_direct_shift_fallback": false
+    },
+    "credit_tightening_driver": {
+      "label_text": "Credit tightening",
+      "scenario_family_label": "credit_tightening_driver",
+      "driver_group_label": "credit_liquidity",
+      "scenario_driver_template_id": "scenario_driver:credit_tightening:reference",
+      "scenario_application_id": "scenario_application:scenario_driver:credit_tightening:reference:2026-03-31",
+      "scenario_context_shift_id": "scenario_context_shift:scenario_application:scenario_driver:credit_tightening:reference:2026-03-31:01",
+      "context_surface_label": "financing_review_surface",
+      "shift_direction_label": "tighten",
+      "expected_annotation_type_label": "financing_constraint",
+      "severity_label": "high",
+      "affected_actor_scope_label": "market_wide",
+      "summary": "Synthetic credit-tightening context shift across market environment + financing review surfaces. Stimulus only — no spread, no price, no lending decision.",
+      "annotation_label": "credit_tightening_driver · credit_liquidity · financing_review_surface · tighten · financing_constraint",
+      "annotation_type_label": "financing_constraint",
+      "annotation_severity_label": "high",
+      "causal_summary_label": "financing_constraint",
+      "annotation_date": "2026-03-31",
+      "is_no_direct_shift_fallback": false
+    },
+    "funding_window_closure_driver": {
+      "label_text": "Funding window closure",
+      "scenario_family_label": "funding_window_closure_driver",
+      "driver_group_label": "credit_liquidity",
+      "scenario_driver_template_id": "scenario_driver:funding_window_closure:reference",
+      "scenario_application_id": "scenario_application:scenario_driver:funding_window_closure:reference:2026-03-31",
+      "scenario_context_shift_id": "scenario_context_shift:scenario_application:scenario_driver:funding_window_closure:reference:2026-03-31:00",
+      "context_surface_label": "financing_review_surface",
+      "shift_direction_label": "deteriorate",
+      "expected_annotation_type_label": "financing_constraint",
+      "severity_label": "high",
+      "affected_actor_scope_label": "firms_only",
+      "summary": "Synthetic primary-market access narrowing on the financing review surface. Stimulus only — no issuance, no underwriting, no offering.",
+      "annotation_label": "funding_window_closure_driver · credit_liquidity · financing_review_surface · deteriorate · financing_constraint",
+      "annotation_type_label": "financing_constraint",
+      "annotation_severity_label": "high",
+      "causal_summary_label": "financing_constraint",
+      "annotation_date": "2026-03-31",
+      "is_no_direct_shift_fallback": false
+    },
+    "liquidity_stress_driver": {
+      "label_text": "Liquidity stress",
+      "scenario_family_label": "liquidity_stress_driver",
+      "driver_group_label": "credit_liquidity",
+      "scenario_driver_template_id": "scenario_driver:liquidity_stress:reference",
+      "scenario_application_id": "scenario_application:scenario_driver:liquidity_stress:reference:2026-03-31",
+      "scenario_context_shift_id": "scenario_context_shift:scenario_application:scenario_driver:liquidity_stress:reference:2026-03-31:00",
+      "context_surface_label": "interbank_liquidity",
+      "shift_direction_label": "deteriorate",
+      "expected_annotation_type_label": "market_environment_change",
+      "severity_label": "stress",
+      "affected_actor_scope_label": "banks_only",
+      "summary": "Synthetic interbank-liquidity tightening across interbank + market environment surfaces. Stimulus only — no settlement, no clearing, no central-bank decision.",
+      "annotation_label": "liquidity_stress_driver · credit_liquidity · interbank_liquidity · deteriorate · market_environment_change",
+      "annotation_type_label": "market_environment_change",
+      "annotation_severity_label": "high",
+      "causal_summary_label": "market_environment_change",
+      "annotation_date": "2026-03-31",
+      "is_no_direct_shift_fallback": false
+    },
+    "information_gap_driver": {
+      "label_text": "Information gap",
+      "scenario_family_label": "information_gap_driver",
+      "driver_group_label": "information_attention",
+      "scenario_driver_template_id": "scenario_driver:information_gap:reference",
+      "scenario_application_id": "scenario_application:scenario_driver:information_gap:reference:2026-03-31",
+      "scenario_context_shift_id": "scenario_context_shift:scenario_application:scenario_driver:information_gap:reference:2026-03-31:00",
+      "context_surface_label": "attention_surface",
+      "shift_direction_label": "information_gap",
+      "expected_annotation_type_label": "attention_shift",
+      "severity_label": "low",
+      "affected_actor_scope_label": "all_actors",
+      "summary": "Synthetic evidence-deficient situation that widens the attention surface only. Stimulus only — no actor response asserted by the scenario.",
+      "annotation_label": "information_gap_driver · information_attention · attention_surface · information_gap · attention_shift",
+      "annotation_type_label": "attention_shift",
+      "annotation_severity_label": "low",
+      "causal_summary_label": "attention_shift",
+      "annotation_date": "2026-03-31",
+      "is_no_direct_shift_fallback": false
+    },
+    "no_direct_shift_fallback": {
+      "label_text": "Unmapped fallback",
+      "scenario_family_label": "thematic_attention_driver",
+      "driver_group_label": "information_attention",
+      "scenario_driver_template_id": "scenario_driver:thematic_attention:reference",
+      "scenario_application_id": "scenario_application:scenario_driver:thematic_attention:reference:2026-03-31",
+      "scenario_context_shift_id": "scenario_context_shift:scenario_application:scenario_driver:thematic_attention:reference:2026-03-31:00",
+      "context_surface_label": "unknown",
+      "shift_direction_label": "no_direct_shift",
+      "expected_annotation_type_label": "attention_shift",
+      "severity_label": "low",
+      "affected_actor_scope_label": "market_wide",
+      "summary": "No direct context shift emitted beyond fallback/no_direct_shift. This is not an error. The template is stored but not yet mapped to a concrete context surface.",
+      "annotation_label": "thematic_attention_driver · information_attention · unknown · no_direct_shift · attention_shift",
+      "annotation_type_label": "synthetic_event",
+      "annotation_severity_label": "low",
+      "causal_summary_label": "synthetic_event · no_direct_shift",
+      "annotation_date": "2026-03-31",
+      "is_no_direct_shift_fallback": true
+    }
+  },
+  "scenario_trace": {
+    "chain": [
+      "ScenarioDriverTemplate",
+      "ScenarioDriverApplicationRecord",
+      "ScenarioContextShiftRecord",
+      "EventAnnotationRecord",
+      "CausalTimelineAnnotation"
+    ],
+    "fixture_kind": "sample_fixture",
+    "fixture_note": "v1.18.2 application is append-only (never mutates a pre-existing context record); v1.18.3 renders the chain through plain-id citations."
+  },
+  "selected_scenario": "none_baseline"
 }
 </script>
 
@@ -3430,9 +3840,16 @@
 
     // -----------------------------------------------------------------
     // Settings: regime selector mock (no run is triggered)
+    //
+    // v1.18.4 — selector groups are scoped so the regime pills and the
+    // scenario pills do not collide. The scenario pills carry the
+    // additional ``.scenario-pill`` class; this regime handler matches
+    // ``.regime-pill:not(.scenario-pill)`` only.
     // -----------------------------------------------------------------
     (function () {
-      var pills = Array.prototype.slice.call(document.querySelectorAll('.regime-pill'));
+      var pills = Array.prototype.slice.call(
+        document.querySelectorAll('.regime-pill:not(.scenario-pill)')
+      );
       var active = document.getElementById('regime-active');
       pills.forEach(function (pill) {
         pill.addEventListener('click', function () {
@@ -3441,6 +3858,32 @@
             p.setAttribute('aria-checked', p === pill ? 'true' : 'false');
           });
           if (active) active.textContent = pill.dataset.regime;
+        });
+      });
+    })();
+
+    // -----------------------------------------------------------------
+    // v1.18.4 — Settings: scenario selector mock (no run is triggered)
+    //
+    // The scenario pills carry both ``.regime-pill`` (so they share
+    // the existing pill style) and ``.scenario-pill`` (so the regime
+    // handler above ignores them). Selecting a pill updates the
+    // visible "Active" cell only — scenario fixture rendering is
+    // deferred to the next ``Run mock`` click, mirroring the regime
+    // selector's no-jump discipline.
+    // -----------------------------------------------------------------
+    (function () {
+      var pills = Array.prototype.slice.call(
+        document.querySelectorAll('.scenario-pill')
+      );
+      var active = document.getElementById('scenario-active');
+      pills.forEach(function (pill) {
+        pill.addEventListener('click', function () {
+          pills.forEach(function (p) {
+            p.classList.toggle('active', p === pill);
+            p.setAttribute('aria-checked', p === pill ? 'true' : 'false');
+          });
+          if (active) active.textContent = pill.dataset.scenario;
         });
       });
     })();
@@ -3918,9 +4361,223 @@
       }
 
       function selectedRegime() {
-        var active = document.querySelector('.regime-pill.active');
+        var active = document.querySelector(
+          '.regime-pill.active:not(.scenario-pill)'
+        );
         return active ? active.dataset.regime : 'constrained';
       }
+
+      function selectedScenario() {
+        var active = document.querySelector(
+          '.scenario-pill.active'
+        );
+        return active ? active.dataset.scenario : 'none_baseline';
+      }
+
+      // v1.18.4 — Scenario fixtures.
+      //
+      // Mirror of the inline JSON manifest's ``scenario_fixtures`` block
+      // (id="fwe-sample-manifest"). Two ``Run mock`` clicks with the
+      // same (regime, scenario) pair produce the same UI state. The
+      // fixture is **synthetic display only** — selecting a scenario
+      // does not invoke the Python engine, does not apply a scenario
+      // to the living world, does not mutate any source-of-truth
+      // record, and does not move the default-fixture
+      // ``living_world_digest`` of a separately seeded default sweep.
+      var SCENARIO_FIXTURES = {
+        none_baseline: {
+          label_text: 'Baseline (no scenario applied)',
+          scenario_family_label: '—',
+          driver_group_label: '—',
+          scenario_driver_template_id: '—',
+          scenario_application_id: '—',
+          scenario_context_shift_id: '—',
+          context_surface_label: '—',
+          shift_direction_label: '—',
+          expected_annotation_type_label: '—',
+          severity_label: '—',
+          affected_actor_scope_label: '—',
+          summary:
+            'Baseline view — no synthetic scenario driver applied. ' +
+            'The Overview / Timeline render the v1.16 closed loop on ' +
+            'its own.',
+          annotation_label: 'no scenario applied',
+          annotation_type_label: 'synthetic_event',
+          annotation_severity_label: 'unknown',
+          causal_summary_label: 'no scenario · baseline',
+          annotation_date: '2026-03-31',
+          is_no_direct_shift_fallback: false
+        },
+        rate_repricing_driver: {
+          label_text: 'Rate repricing',
+          scenario_family_label: 'rate_repricing_driver',
+          driver_group_label: 'macro_rates',
+          scenario_driver_template_id:
+            'scenario_driver:rate_repricing:reference',
+          scenario_application_id:
+            'scenario_application:scenario_driver:rate_repricing:reference:2026-03-31',
+          scenario_context_shift_id:
+            'scenario_context_shift:scenario_application:scenario_driver:rate_repricing:reference:2026-03-31:00',
+          context_surface_label: 'market_environment',
+          shift_direction_label: 'tighten',
+          expected_annotation_type_label: 'market_environment_change',
+          severity_label: 'medium',
+          affected_actor_scope_label: 'market_wide',
+          summary:
+            'Synthetic rising-rate context shift on the market ' +
+            'environment surface. Stimulus only — no rate, no price, ' +
+            'no actor decision.',
+          annotation_label:
+            'rate_repricing_driver · macro_rates · market_environment ' +
+            '· tighten · market_environment_change',
+          annotation_type_label: 'market_environment_change',
+          annotation_severity_label: 'medium',
+          causal_summary_label: 'market_environment_change',
+          annotation_date: '2026-03-31',
+          is_no_direct_shift_fallback: false
+        },
+        credit_tightening_driver: {
+          label_text: 'Credit tightening',
+          scenario_family_label: 'credit_tightening_driver',
+          driver_group_label: 'credit_liquidity',
+          scenario_driver_template_id:
+            'scenario_driver:credit_tightening:reference',
+          scenario_application_id:
+            'scenario_application:scenario_driver:credit_tightening:reference:2026-03-31',
+          scenario_context_shift_id:
+            'scenario_context_shift:scenario_application:scenario_driver:credit_tightening:reference:2026-03-31:01',
+          context_surface_label: 'financing_review_surface',
+          shift_direction_label: 'tighten',
+          expected_annotation_type_label: 'financing_constraint',
+          severity_label: 'high',
+          affected_actor_scope_label: 'market_wide',
+          summary:
+            'Synthetic credit-tightening context shift across market ' +
+            'environment + financing review surfaces. Stimulus only ' +
+            '— no spread, no price, no lending decision.',
+          annotation_label:
+            'credit_tightening_driver · credit_liquidity · ' +
+            'financing_review_surface · tighten · financing_constraint',
+          annotation_type_label: 'financing_constraint',
+          annotation_severity_label: 'high',
+          causal_summary_label: 'financing_constraint',
+          annotation_date: '2026-03-31',
+          is_no_direct_shift_fallback: false
+        },
+        funding_window_closure_driver: {
+          label_text: 'Funding window closure',
+          scenario_family_label: 'funding_window_closure_driver',
+          driver_group_label: 'credit_liquidity',
+          scenario_driver_template_id:
+            'scenario_driver:funding_window_closure:reference',
+          scenario_application_id:
+            'scenario_application:scenario_driver:funding_window_closure:reference:2026-03-31',
+          scenario_context_shift_id:
+            'scenario_context_shift:scenario_application:scenario_driver:funding_window_closure:reference:2026-03-31:00',
+          context_surface_label: 'financing_review_surface',
+          shift_direction_label: 'deteriorate',
+          expected_annotation_type_label: 'financing_constraint',
+          severity_label: 'high',
+          affected_actor_scope_label: 'firms_only',
+          summary:
+            'Synthetic primary-market access narrowing on the ' +
+            'financing review surface. Stimulus only — no issuance, ' +
+            'no underwriting, no offering.',
+          annotation_label:
+            'funding_window_closure_driver · credit_liquidity · ' +
+            'financing_review_surface · deteriorate · financing_constraint',
+          annotation_type_label: 'financing_constraint',
+          annotation_severity_label: 'high',
+          causal_summary_label: 'financing_constraint',
+          annotation_date: '2026-03-31',
+          is_no_direct_shift_fallback: false
+        },
+        liquidity_stress_driver: {
+          label_text: 'Liquidity stress',
+          scenario_family_label: 'liquidity_stress_driver',
+          driver_group_label: 'credit_liquidity',
+          scenario_driver_template_id:
+            'scenario_driver:liquidity_stress:reference',
+          scenario_application_id:
+            'scenario_application:scenario_driver:liquidity_stress:reference:2026-03-31',
+          scenario_context_shift_id:
+            'scenario_context_shift:scenario_application:scenario_driver:liquidity_stress:reference:2026-03-31:00',
+          context_surface_label: 'interbank_liquidity',
+          shift_direction_label: 'deteriorate',
+          expected_annotation_type_label: 'market_environment_change',
+          severity_label: 'stress',
+          affected_actor_scope_label: 'banks_only',
+          summary:
+            'Synthetic interbank-liquidity tightening across ' +
+            'interbank + market environment surfaces. Stimulus only ' +
+            '— no settlement, no clearing, no central-bank decision.',
+          annotation_label:
+            'liquidity_stress_driver · credit_liquidity · ' +
+            'interbank_liquidity · deteriorate · market_environment_change',
+          annotation_type_label: 'market_environment_change',
+          annotation_severity_label: 'high',
+          causal_summary_label: 'market_environment_change',
+          annotation_date: '2026-03-31',
+          is_no_direct_shift_fallback: false
+        },
+        information_gap_driver: {
+          label_text: 'Information gap',
+          scenario_family_label: 'information_gap_driver',
+          driver_group_label: 'information_attention',
+          scenario_driver_template_id:
+            'scenario_driver:information_gap:reference',
+          scenario_application_id:
+            'scenario_application:scenario_driver:information_gap:reference:2026-03-31',
+          scenario_context_shift_id:
+            'scenario_context_shift:scenario_application:scenario_driver:information_gap:reference:2026-03-31:00',
+          context_surface_label: 'attention_surface',
+          shift_direction_label: 'information_gap',
+          expected_annotation_type_label: 'attention_shift',
+          severity_label: 'low',
+          affected_actor_scope_label: 'all_actors',
+          summary:
+            'Synthetic evidence-deficient situation that widens the ' +
+            'attention surface only. Stimulus only — no actor ' +
+            'response asserted by the scenario.',
+          annotation_label:
+            'information_gap_driver · information_attention · ' +
+            'attention_surface · information_gap · attention_shift',
+          annotation_type_label: 'attention_shift',
+          annotation_severity_label: 'low',
+          causal_summary_label: 'attention_shift',
+          annotation_date: '2026-03-31',
+          is_no_direct_shift_fallback: false
+        },
+        no_direct_shift_fallback: {
+          label_text: 'Unmapped fallback',
+          scenario_family_label: 'thematic_attention_driver',
+          driver_group_label: 'information_attention',
+          scenario_driver_template_id:
+            'scenario_driver:thematic_attention:reference',
+          scenario_application_id:
+            'scenario_application:scenario_driver:thematic_attention:reference:2026-03-31',
+          scenario_context_shift_id:
+            'scenario_context_shift:scenario_application:scenario_driver:thematic_attention:reference:2026-03-31:00',
+          context_surface_label: 'unknown',
+          shift_direction_label: 'no_direct_shift',
+          expected_annotation_type_label: 'attention_shift',
+          severity_label: 'low',
+          affected_actor_scope_label: 'market_wide',
+          summary:
+            'No direct context shift emitted beyond ' +
+            'fallback/no_direct_shift. This is not an error. The ' +
+            'template is stored but not yet mapped to a concrete ' +
+            'context surface.',
+          annotation_label:
+            'thematic_attention_driver · information_attention · ' +
+            'unknown · no_direct_shift · attention_shift',
+          annotation_type_label: 'synthetic_event',
+          annotation_severity_label: 'low',
+          causal_summary_label: 'synthetic_event · no_direct_shift',
+          annotation_date: '2026-03-31',
+          is_no_direct_shift_fallback: true
+        }
+      };
 
       // SAMPLE_RUNS is a static, deterministic UI fixture. The values
       // are illustrative — they do NOT come from running the Python
@@ -4238,11 +4895,63 @@
         setText('diff-reinforced', fixture.diff_reinforced);
         setText('diff-why',        fixture.diff_why);
 
+        // v1.18.4 — scenario selector mock (static fixture only).
+        var scenarioId = selectedScenario();
+        var scenario = SCENARIO_FIXTURES[scenarioId]
+          || SCENARIO_FIXTURES.none_baseline;
+        // Inputs · Active row.
+        setText('scenario-active', scenarioId);
+        // Overview · scenario summary card.
+        setText('ov-scenario-selected', scenarioId);
+        setText('ov-scenario-family',   scenario.scenario_family_label);
+        setText('ov-scenario-group',    scenario.driver_group_label);
+        setText('ov-scenario-summary',  scenario.summary);
+        // Overview · scenario trace card.
+        setText('ov-scenario-template-id',     scenario.scenario_driver_template_id);
+        setText('ov-scenario-application-id',  scenario.scenario_application_id);
+        setText('ov-scenario-shift-id',        scenario.scenario_context_shift_id);
+        setText('ov-scenario-context-surface', scenario.context_surface_label);
+        setText('ov-scenario-shift-direction', scenario.shift_direction_label);
+        setText(
+          'ov-scenario-expected-annotation-type',
+          scenario.expected_annotation_type_label
+        );
+        // Timeline · scenario event annotation row.
+        setText('tl-scenario-selected',           scenarioId);
+        setText('tl-scenario-family',             scenario.scenario_family_label);
+        setText('tl-scenario-group',              scenario.driver_group_label);
+        setText('tl-scenario-date',               scenario.annotation_date);
+        setText(
+          'tl-scenario-annotation-type',
+          scenario.annotation_type_label
+        );
+        setText(
+          'tl-scenario-annotation-label',
+          scenario.annotation_label
+        );
+        setText(
+          'tl-scenario-causal-summary',
+          scenario.causal_summary_label
+        );
+        setText('tl-scenario-template-id',     scenario.scenario_driver_template_id);
+        setText('tl-scenario-application-id',  scenario.scenario_application_id);
+        setText('tl-scenario-shift-id',        scenario.scenario_context_shift_id);
+        setText('tl-scenario-context-surface', scenario.context_surface_label);
+        setText('tl-scenario-shift-direction', scenario.shift_direction_label);
+        // Timeline · no_direct_shift fallback callout (show / hide).
+        var fallbackCallout = $id('tl-scenario-fallback-callout');
+        if (fallbackCallout) {
+          fallbackCallout.style.display = (
+            scenario.is_no_direct_shift_fallback ? '' : 'none'
+          );
+        }
+
         // No flash, no scrollIntoView, no focus(), no
         // location.hash mutation. The user sees confirmation in
         // the top-ribbon status only.
         setStatus(
           'mock UI run · ' + fixture.regime_label
+          + ' · ' + scenarioId
           + ' · static fixture · no engine execution',
           'ok'
         );
@@ -4355,6 +5064,128 @@
         // i) Evidence-trail CTA present.
         if (!document.querySelector('.evidence-cta button.linkish[data-go-to="ledger"]')) {
           failures.push('evidence-trail CTA (See Ledger) missing');
+        }
+        // i.1) v1.18.4 scenario selector + trace surfaces.
+        if (!$id('card-scenario-selector')) {
+          failures.push('scenario selector card missing');
+        }
+        if (!$id('card-scenario-summary')) {
+          failures.push('scenario summary card (Overview) missing');
+        }
+        if (!$id('card-scenario-trace')) {
+          failures.push('scenario trace card (Overview) missing');
+        }
+        if (!$id('card-timeline-scenario')) {
+          failures.push('scenario annotation card (Timeline) missing');
+        }
+        var scenarioPills = document.querySelectorAll('.scenario-pill');
+        if (scenarioPills.length < 7) {
+          failures.push(
+            'scenario selector has ' + scenarioPills.length
+              + ' option(s); expected ≥ 7'
+          );
+        }
+        var requiredScenarioOptions = [
+          'none_baseline',
+          'rate_repricing_driver',
+          'credit_tightening_driver',
+          'funding_window_closure_driver',
+          'liquidity_stress_driver',
+          'information_gap_driver',
+          'no_direct_shift_fallback'
+        ];
+        var seenScenarios = {};
+        Array.prototype.forEach.call(scenarioPills, function (p) {
+          if (p.dataset.scenario) seenScenarios[p.dataset.scenario] = true;
+        });
+        requiredScenarioOptions.forEach(function (opt) {
+          if (!seenScenarios[opt]) {
+            failures.push(
+              'scenario option missing: ' + opt
+            );
+          }
+        });
+        if (typeof SCENARIO_FIXTURES !== 'object'
+          || !SCENARIO_FIXTURES) {
+          failures.push('SCENARIO_FIXTURES object missing');
+        } else {
+          var requiredFixtureKeys = [
+            'label_text',
+            'scenario_family_label',
+            'driver_group_label',
+            'scenario_driver_template_id',
+            'scenario_application_id',
+            'scenario_context_shift_id',
+            'context_surface_label',
+            'shift_direction_label',
+            'expected_annotation_type_label',
+            'annotation_label',
+            'annotation_type_label',
+            'annotation_severity_label',
+            'causal_summary_label',
+            'is_no_direct_shift_fallback'
+          ];
+          requiredScenarioOptions.forEach(function (opt) {
+            var f = SCENARIO_FIXTURES[opt];
+            if (!f) {
+              failures.push(
+                'SCENARIO_FIXTURES missing entry: ' + opt
+              );
+              return;
+            }
+            requiredFixtureKeys.forEach(function (k) {
+              if (!(k in f)) {
+                failures.push(
+                  'SCENARIO_FIXTURES.' + opt + ' missing field: ' + k
+                );
+              }
+            });
+          });
+          var fb = SCENARIO_FIXTURES.no_direct_shift_fallback;
+          if (fb && fb.is_no_direct_shift_fallback !== true) {
+            failures.push(
+              'no_direct_shift_fallback fixture must have '
+                + 'is_no_direct_shift_fallback=true'
+            );
+          }
+          if (fb && (fb.summary || '').indexOf('not an error') === -1) {
+            failures.push(
+              'no_direct_shift_fallback summary must contain '
+                + '"not an error" callout text'
+            );
+          }
+        }
+        // i.2) Standalone JSON (sample_living_world_manifest.json):
+        //      we cannot fetch under file://, but the inline
+        //      manifest mirrors it; check the inline copy carries
+        //      the v1.18.4 keys.
+        try {
+          var manifestNode = $id('fwe-sample-manifest');
+          if (manifestNode) {
+            var parsed = JSON.parse(manifestNode.textContent || '{}');
+            if (!parsed.scenario_selector) {
+              failures.push(
+                'inline JSON missing key: scenario_selector'
+              );
+            }
+            if (!parsed.scenario_fixtures) {
+              failures.push(
+                'inline JSON missing key: scenario_fixtures'
+              );
+            }
+            if (!parsed.scenario_trace) {
+              failures.push(
+                'inline JSON missing key: scenario_trace'
+              );
+            }
+            if (typeof parsed.selected_scenario !== 'string') {
+              failures.push(
+                'inline JSON missing key: selected_scenario'
+              );
+            }
+          }
+        } catch (e) {
+          // already reported above by the inline JSON parse check
         }
         // j) Run mock no-jump invariant: dry-run the handler
         //    and confirm the active sheet id and scroll position

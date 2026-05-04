@@ -367,9 +367,72 @@ active at once**. None ships as live behavior in the current
 public prototype. Selecting one would not enable trading,
 ordering, or price formation.
 
+## v1.18.4 — scenario selector mock
+
+The Inputs tab now carries a **scenario driver selector** card
+with seven static fixture options:
+
+- `none_baseline`              · Baseline (no scenario applied)
+- `rate_repricing_driver`      · Rate repricing
+- `credit_tightening_driver`   · Credit tightening
+- `funding_window_closure_driver` · Funding window closure
+- `liquidity_stress_driver`    · Liquidity stress
+- `information_gap_driver`     · Information gap
+- `no_direct_shift_fallback`   · Unmapped fallback
+
+Selecting a scenario and clicking **Run mock** updates the top
+ribbon status (`mock UI run · <regime> · <scenario> · static
+fixture · no engine execution`), the Overview *scenario
+summary* and *scenario trace* cards, and the Timeline *scenario
+event annotation* card with a fixture-only rendering of the
+v1.18.2 / v1.18.3 chain:
+
+```
+ScenarioDriverTemplate
+  → ScenarioDriverApplicationRecord
+  → ScenarioContextShiftRecord
+  → EventAnnotationRecord
+  → CausalTimelineAnnotation
+```
+
+Picking the **`no_direct_shift_fallback`** option surfaces the
+v1.18.2 fallback callout verbatim — *"No direct context shift
+emitted beyond fallback/no_direct_shift. This is not an error.
+The template is stored but not yet mapped to a concrete context
+surface."* — under the Timeline scenario card. This is the v1.18
+design intent (rule-based-fallback only at v1.18.2; future
+audited reasoning policies can replace the rule table) made
+visible to a reader.
+
+Every scenario card carries a small future-LLM-compatibility
+note: **Reasoning mode: `rule_based_fallback`. Reasoning slot:
+`future_llm_compatible`. No LLM execution in this prototype.**
+
+The selector is **fixture switching only — the Python engine is
+not invoked from the UI**. Same `(regime, scenario)` pair → same
+visible state. The no-jump discipline pinned at v1.17.4 is
+preserved verbatim: Run mock does not call `scrollIntoView`,
+does not change `location.hash`, does not change the active
+sheet, does not change browser zoom, and does not change scroll
+position. The scenario tables use `table-layout: fixed` +
+`overflow-wrap: anywhere` so long plain-id citations cannot
+push the page wider than the viewport.
+
+The inline JSON (`#fwe-sample-manifest`) and the standalone
+[`sample_living_world_manifest.json`](sample_living_world_manifest.json)
+both gain four top-level keys: `scenario_selector`,
+`scenario_fixtures` (one entry per option), `scenario_trace`
+(the chain pointer), and `selected_scenario`. **Validate**
+checks every key, every required fixture field, the
+`no_direct_shift` callout text, and the scenario selector
+↔ trace card bijection.
+
 ## Hard boundary
 
 No price prediction. No price formation. No trading. No order
 matching. No lending decisions. No portfolio allocation. No
 investment advice. No real data. No Japan calibration. No LLM
-execution. No behavior probabilities.
+execution. No behavior probabilities. **Scenario selector is
+the stimulus, never the response. Context shifts are
+append-only; no pre-existing context record is mutated. No
+actor decision is asserted by the scenario picker.**
