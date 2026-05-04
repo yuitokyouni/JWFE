@@ -76,8 +76,19 @@ from typing import Any, Mapping, Sequence
 # tuples (not enums) because they are CLI-facing label strings, not
 # closed-set vocabularies (those live in ``world.run_export``).
 SUPPORTED_PROFILE: str = "quarterly_default"
-DESIGNED_BUT_NOT_EXECUTABLE_PROFILES: tuple[str, ...] = (
+# v1.19.3.1 reconciliation: extended ``EXECUTABLE_PROFILES`` to
+# include ``monthly_reference``. The earlier v1.19.2 ship listed
+# ``monthly_reference`` under ``DESIGNED_BUT_NOT_EXECUTABLE_PROFILES``;
+# v1.19.3 landed the runtime profile in ``world.reference_living_world``,
+# and v1.19.3.1 is the explicit follow-up commit that wires it
+# into the CLI. The other three profile labels remain
+# designed-but-not-executable (no scenario application from the
+# CLI; no display-only run; no daily full simulation).
+EXECUTABLE_PROFILES: tuple[str, ...] = (
+    "quarterly_default",
     "monthly_reference",
+)
+DESIGNED_BUT_NOT_EXECUTABLE_PROFILES: tuple[str, ...] = (
     "scenario_monthly",
     "daily_display_only",
     "future_daily_full_simulation",
@@ -173,13 +184,13 @@ def _build_argument_parser() -> argparse.ArgumentParser:
 
 
 def _validate_profile(profile: str) -> None:
-    """Reject any profile other than the v1.19.2 supported one.
+    """Reject any profile not in ``EXECUTABLE_PROFILES``.
 
     Designed-but-not-executable profiles get a specific message
     making the design intent visible; anything outside the
     closed v1.19.1 RUN_PROFILE_LABELS gets a generic rejection.
     """
-    if profile == SUPPORTED_PROFILE:
+    if profile in EXECUTABLE_PROFILES:
         return
     if profile in DESIGNED_BUT_NOT_EXECUTABLE_PROFILES:
         raise SystemExit(
@@ -188,8 +199,8 @@ def _validate_profile(profile: str) -> None:
         )
     raise SystemExit(
         f"profile {profile!r} is not a recognized run profile; "
-        f"supported in v1.19.2: {SUPPORTED_PROFILE!r} (executable); "
-        f"designed-but-not-executable: "
+        f"executable: " + ", ".join(repr(p) for p in EXECUTABLE_PROFILES)
+        + "; designed-but-not-executable: "
         + ", ".join(repr(p) for p in DESIGNED_BUT_NOT_EXECUTABLE_PROFILES)
     )
 
@@ -318,6 +329,68 @@ def _build_metadata(*, indent: int) -> dict[str, Any]:
     }
 
 
+# v1.19.3.1 — information arrival summary builder for the
+# ``monthly_reference`` profile. Reads only label fields from the
+# kernel's append-only ``information_releases`` book; carries no
+# real values, no real institutional names, no real dates beyond
+# the synthetic month-end fixture produced by v1.19.3.
+def _build_information_arrival_summary(*, kernel: Any) -> dict[str, Any]:
+    """Compact summary of the information arrivals emitted under
+    the ``monthly_reference`` profile.
+
+    Output:
+
+    - ``calendar_count``: number of registered calendars
+      (``1`` for the default fixture).
+    - ``scheduled_release_count``: total scheduled releases.
+    - ``arrival_count``: total information arrivals across all
+      months.
+    - ``per_indicator_family``: mapping from
+      :class:`IndicatorFamilyLabel` value to arrival count.
+    - ``per_release_importance``: mapping from
+      :class:`ReleaseImportanceLabel` value to arrival count.
+    - ``per_arrival_status``: mapping from
+      :class:`ArrivalStatusLabel` value to arrival count.
+
+    No real value, no real date, no real institutional identifier.
+    Mirrors the v1.19.0 / v1.19.3 jurisdiction-neutral discipline.
+    """
+    book = getattr(kernel, "information_releases", None)
+    if book is None:
+        return {
+            "calendar_count": 0,
+            "scheduled_release_count": 0,
+            "arrival_count": 0,
+            "per_indicator_family": {},
+            "per_release_importance": {},
+            "per_arrival_status": {},
+        }
+    arrivals = list(book.list_arrivals())
+    by_family: dict[str, int] = {}
+    by_importance: dict[str, int] = {}
+    by_status: dict[str, int] = {}
+    for a in arrivals:
+        by_family[a.indicator_family_label] = (
+            by_family.get(a.indicator_family_label, 0) + 1
+        )
+        by_importance[a.release_importance_label] = (
+            by_importance.get(a.release_importance_label, 0) + 1
+        )
+        by_status[a.arrival_status_label] = (
+            by_status.get(a.arrival_status_label, 0) + 1
+        )
+    return {
+        "calendar_count": len(book.list_calendars()),
+        "scheduled_release_count": len(book.list_scheduled_releases()),
+        "arrival_count": len(arrivals),
+        # Sort the per-* mappings to keep the rendered JSON
+        # byte-identical irrespective of arrival insertion order.
+        "per_indicator_family": dict(sorted(by_family.items())),
+        "per_release_importance": dict(sorted(by_importance.items())),
+        "per_arrival_status": dict(sorted(by_status.items())),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Top-level CLI driver
 # ---------------------------------------------------------------------------
@@ -388,6 +461,95 @@ def _build_bundle_for_quarterly_default(
     return bundle, snapshot.digest
 
 
+# v1.19.3.1 — monthly_reference bundle builder. Mirrors the
+# quarterly_default builder shape but runs the v1.19.3
+# ``run_living_reference_world(profile="monthly_reference")``
+# path and pulls a deterministic digest from
+# ``examples.reference_world.living_world_replay.living_world_digest``.
+# The bundle adds an ``information_arrival_summary`` section so a
+# reader can see the v1.19.3 release-calendar coverage without
+# crawling the ledger excerpt.
+def _build_bundle_for_monthly_reference(
+    *, regime: str, scenario: str, indent: int
+) -> tuple[Any, str]:
+    """Run the v1.19.3 monthly_reference profile on a fresh kernel
+    and build the bundle. Returns ``(bundle, digest)``."""
+    from examples.reference_world.living_world_replay import (
+        living_world_digest,
+    )
+    from examples.reference_world.regime_comparison_report import (
+        _DEFAULT_BANK_IDS,
+        _DEFAULT_FIRM_IDS,
+        _DEFAULT_INVESTOR_IDS,
+        _seed_kernel,
+        extract_regime_run_snapshot,
+    )
+    from world.reference_living_world import (
+        _DEFAULT_MONTHLY_PERIOD_DATES,
+        run_living_reference_world,
+    )
+    from world.run_export import build_run_export_bundle
+
+    kernel = _seed_kernel()
+    result = run_living_reference_world(
+        kernel,
+        firm_ids=_DEFAULT_FIRM_IDS,
+        investor_ids=_DEFAULT_INVESTOR_IDS,
+        bank_ids=_DEFAULT_BANK_IDS,
+        period_dates=_DEFAULT_MONTHLY_PERIOD_DATES,
+        market_regime=regime,
+        profile="monthly_reference",
+    )
+    snapshot = extract_regime_run_snapshot(
+        regime_id=regime, kernel=kernel, result=result
+    )
+    digest = living_world_digest(kernel, result)
+
+    period_count = len(_DEFAULT_MONTHLY_PERIOD_DATES)
+    bundle_id = (
+        f"run_bundle:cli:monthly_reference:{regime}:{scenario}"
+    )
+
+    bundle = build_run_export_bundle(
+        bundle_id=bundle_id,
+        run_profile_label="monthly_reference",
+        regime_label=regime,
+        selected_scenario_label=scenario,
+        period_count=period_count,
+        digest=digest,
+        manifest=_build_manifest(
+            profile="monthly_reference",
+            regime=regime,
+            scenario=scenario,
+            period_count=period_count,
+        ),
+        overview=_build_overview(regime=regime, snapshot=snapshot),
+        timeline={
+            "calendar": "monthly",
+            "display_path_kind": "indicative_pressure_path",
+            "boundary_note": (
+                "synthetic context only — no price formation, "
+                "no forecast, no investment advice"
+            ),
+            "event_annotation_count": len(snapshot.event_annotations),
+            "causal_annotation_count": len(snapshot.causal_annotations),
+        },
+        regime_compare={},
+        scenario_trace=_build_scenario_trace(scenario=scenario),
+        attention_diff={},
+        market_intent={},
+        financing={},
+        ledger_excerpt=_build_ledger_excerpt(kernel=kernel),
+        metadata={
+            **_build_metadata(indent=indent),
+            "information_arrival_summary": (
+                _build_information_arrival_summary(kernel=kernel)
+            ),
+        },
+    )
+    return bundle, digest
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI entry point.
 
@@ -402,11 +564,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     _validate_regime(args.regime)
     _validate_scenario(args.scenario)
 
-    bundle, digest = _build_bundle_for_quarterly_default(
-        regime=args.regime,
-        scenario=args.scenario,
-        indent=args.indent,
-    )
+    if args.profile == "monthly_reference":
+        bundle, digest = _build_bundle_for_monthly_reference(
+            regime=args.regime,
+            scenario=args.scenario,
+            indent=args.indent,
+        )
+    else:
+        bundle, digest = _build_bundle_for_quarterly_default(
+            regime=args.regime,
+            scenario=args.scenario,
+            indent=args.indent,
+        )
 
     out_path = Path(args.out)
     # Local import keeps ``write_run_export_bundle`` invocation
@@ -442,6 +611,7 @@ def _module_text() -> str:
 # CLI bound. Keep stable; tests pin the names.
 __all__ = [
     "DESIGNED_BUT_NOT_EXECUTABLE_PROFILES",
+    "EXECUTABLE_PROFILES",
     "LEDGER_EXCERPT_LIMIT",
     "SUPPORTED_PROFILE",
     "SUPPORTED_REGIMES",

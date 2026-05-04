@@ -10074,6 +10074,26 @@ The orchestrator extension:
 
 `+88` tests in [`tests/test_information_release.py`](../tests/test_information_release.py); `+13` tests in [`tests/test_living_reference_world.py`](../tests/test_living_reference_world.py); `+3` tests in [`tests/test_living_reference_world_performance_boundary.py`](../tests/test_living_reference_world_performance_boundary.py). After reconciling both v1.19.2 (+20 tests, parallel branch) and v1.19.3 (+104 tests) into main, the test_inventory total moves from **102 / 4390** to **104 / 4514**.
 
-### 128.16 Forward pointer
+### 128.16 v1.19.3.1 — monthly_reference enabled in the CLI exporter
+
+§128.16 ships a **post-merge reconciliation** that wires the v1.19.3 `monthly_reference` profile into the v1.19.2 CLI exporter. v1.19.2 originally listed `monthly_reference` under `DESIGNED_BUT_NOT_EXECUTABLE_PROFILES`; v1.19.3 landed the runtime profile in `world.reference_living_world`; v1.19.3.1 is the explicit follow-up commit that promotes `monthly_reference` from designed-but-not-executable to executable in the CLI.
+
+The CLI now ships:
+
+- `EXECUTABLE_PROFILES = ("quarterly_default", "monthly_reference")` — the v1.19.2 single-profile constant `SUPPORTED_PROFILE = "quarterly_default"` is retained for the canonical default.
+- A new `_build_bundle_for_monthly_reference(...)` helper that calls `run_living_reference_world(profile="monthly_reference")` on a fresh kernel, computes a deterministic digest via `examples.reference_world.living_world_replay.living_world_digest`, and adds an `information_arrival_summary` section under `metadata`. The summary records calendar / scheduled-release / arrival counts plus per-`indicator_family_label` / per-`release_importance_label` / per-`arrival_status_label` histograms — **labels and counts only**, no real values, no real release dates, no real institutional identifiers.
+- A branch in `main()` that picks the matching builder by profile.
+
+The three remaining `DESIGNED_BUT_NOT_EXECUTABLE_PROFILES` are now `scenario_monthly`, `daily_display_only`, and `future_daily_full_simulation`. They continue to exit non-zero with the v1.19.2 message.
+
+Determinism rules carry forward verbatim: same `(profile, regime, scenario)` arguments → byte-identical JSON file. The `information_arrival_summary` per-family / per-importance / per-status sub-mappings are sorted at construction so insertion-order drift cannot leak into the rendered JSON.
+
+`+8` tests in [`tests/test_run_export_cli.py`](../tests/test_run_export_cli.py) covering: monthly_reference writes parsable JSON; two consecutive monthly_reference runs produce byte-identical bytes; `information_arrival_summary` carries the seven default-fixture indicator families and the 51-arrival default count; bundle text contains no real-value tokens (`real_indicator_value` / `cpi_value` / `gdp_value` / `policy_rate` / `real_release_date` / `llm_output` / `llm_prose` / `prompt_text`) and no bare `japan_calibration` field (word-boundary regex correctly excludes the `no_japan_calibration` boundary flag); no ISO wall-clock timestamp in the monthly bundle; no absolute path in the monthly bundle; running the monthly_reference CLI does **not** move the canonical `quarterly_default` `living_world_digest` of a separately seeded default sweep; the success line for monthly_reference includes `profile=monthly_reference`; `EXECUTABLE_PROFILES` constant pins the post-reconciliation closed set.
+
+Test inventory total moves from **104 / 4514** to **104 / 4522** (no new test file — the v1.19.3.1 tests are appended to the existing `tests/test_run_export_cli.py`).
+
+The canonical `quarterly_default` digest stays byte-identical at **`f93bdf3f4203c20d4a58e956160b0bb1004dcdecf0648a92cc961401b705897c`** — a separately seeded default sweep is unaffected by CLI invocations, regardless of profile.
+
+### 128.17 Forward pointer
 
 v1.19.4 will land the static UI's read-only **Load local run bundle** affordance (and an optional stub local server). v1.19.last will freeze the v1.19 sequence (docs-only).
