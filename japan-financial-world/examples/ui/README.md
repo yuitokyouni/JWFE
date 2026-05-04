@@ -367,6 +367,47 @@ active at once**. None ships as live behavior in the current
 public prototype. Selecting one would not enable trading,
 ordering, or price formation.
 
+## v1.20.0 forward pointer — Monthly Scenario Reference Universe design
+
+The next planned milestone, **v1.20.0** (docs-only — see
+[`../../docs/v1_20_monthly_scenario_reference_universe_design.md`](../../docs/v1_20_monthly_scenario_reference_universe_design.md)),
+is a **realism / granularity** layer that introduces a new
+opt-in profile **`scenario_monthly_reference_universe`** —
+combining the v1.19.3 12-month cadence with a generic 11-sector
+/ 11-firm synthetic universe and the v1.18.2 scenario chain.
+
+By the end of the v1.20 sequence the static workbench (this
+folder) will gain four new surfaces (v1.20.5):
+
+- a **universe view** — 11-sector grid, 11-firm grid, sector
+  sensitivity heatmap, selected-scenario impact by sector;
+- a **monthly timeline** — 12 months, information arrivals,
+  scenario application month callout, context shifts,
+  attention / pressure / financing deltas;
+- a **sector comparison** — impacted-sector ranking,
+  financing-pressure firm ranking, market-intent histogram,
+  bank-watch-label histogram;
+- an always-visible **boundary statement** — *synthetic
+  reference universe; not real companies; not real data; not
+  investment advice; not Japan calibration*.
+
+The v1.19.4 file-input loader carries forward verbatim. The
+new bundle profile (`scenario_monthly_reference_universe`)
+will be added to `BUNDLE_EXECUTABLE_PROFILES`. **Read-only
+static viewer** — no engine execution from the browser, no
+backend, no fetch / XHR, no file-system write. The `_like`
+suffix on every sector label means the rendered view contains
+**no real company names, no real sector index membership, no
+licensed taxonomy dependency** — and the v1.19.4 boundary
+checks already in `Validate` will be extended to pin the
+absence of bare `GICS` / `MSCI` / `S&P` / `FactSet` /
+`Bloomberg` / `Refinitiv` / `TOPIX` / `Nikkei` / `JPX` tokens
+in the rendered text.
+
+The canonical `quarterly_default` and `monthly_reference`
+digests stay byte-identical unless the new profile is
+explicitly invoked.
+
 ## v1.19.last — Local Run Bundle and Monthly Reference freeze (shipped, docs-only)
 
 v1.19.last closes the v1.19 sequence as the **first FWE
