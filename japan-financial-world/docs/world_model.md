@@ -9686,3 +9686,75 @@ Only when `apply_scenario_driver(...)` is explicitly invoked does the kernel led
 ### 125.5 Forward pointer
 
 v1.18.3 wires the v1.18.2 application output into the v1.17.2 / v1.17.3 inspection layer (regime comparison + causal annotations) so a reader can see scenario-driven runs side-by-side with the unscenario'd default. v1.18.4 adds a non-destructive UI scenario selector. v1.18.last freezes the scenario-driver layer (docs-only).
+
+§126 ships the third concrete code milestone in the v1.18 sequence: **scenario report and causal timeline integration**. v1.18.3 makes the v1.18.2 append-only `ScenarioDriverApplicationRecord` and `ScenarioContextShiftRecord` records inspectable through the v1.17.1 display layer — turning *templates / applications / shifts* into the same `EventAnnotationRecord` / `CausalTimelineAnnotation` shapes the v1.17.3 closed-loop helpers produce — without mutating any pre-existing context record, without emitting a ledger event, and without moving the default-fixture `living_world_digest` of a *separately seeded* default sweep.
+
+The module ships:
+
+- three pure-function helpers in [`world/display_timeline.py`](../world/display_timeline.py): `build_event_annotations_from_scenario_shifts(...)`, `build_causal_timeline_annotations_from_scenario_shifts(...)`, and `render_scenario_application_markdown(...)`. The first two mirror the v1.17.3 closed-loop helpers' duck-typed-input discipline: inputs are anonymous record-like objects accessed via `getattr`; the helpers import no source-of-truth book and emit no ledger record;
+- a kernel-reading driver at [`examples/reference_world/scenario_report.py`](../examples/reference_world/scenario_report.py) with a deterministic six-template default fixture (`rate_repricing_driver` / `credit_tightening_driver` / `funding_window_closure_driver` / `liquidity_stress_driver` / `information_gap_driver` + a `thematic_attention_driver` to exercise the `no_direct_shift` fallback) that constructs a *fresh* kernel, registers each template via `kernel.scenario_drivers.add_template`, applies each via `apply_scenario_driver(...)`, walks the read-only book interface, and renders a deterministic markdown report;
+- an explicit visible callout for the `no_direct_shift` fallback path: shifts emitted by unmapped families render as `synthetic_event` event annotations and the markdown report tags them with "this is not an error — the template is stored but not yet mapped to a concrete context surface". This makes the v1.18 design intent (rule-based-fallback only at v1.18.2; future audited reasoning policies can replace the rule table) visible at the report surface.
+
+### 126.1 Surface → annotation-type mapping
+
+The mapping is deterministic and minimal. Same shift inputs → byte-identical annotation tuple.
+
+| `context_surface_label`           | `annotation_type_label` (v1.17.1 vocab) |
+| --------------------------------- | --------------------------------------- |
+| `market_environment`              | `market_environment_change`             |
+| `interbank_liquidity`             | `market_environment_change`             |
+| `industry_condition`              | `market_environment_change`             |
+| `firm_financial_state`            | `market_environment_change`             |
+| `market_pressure_surface`         | `market_pressure_change`                |
+| `financing_review_surface`        | `financing_constraint`                  |
+| `attention_surface`               | `attention_shift`                       |
+| `display_annotation_surface`      | `synthetic_event`                       |
+| `unknown` / any unmapped surface  | `synthetic_event`                       |
+| (any shift with `shift_direction_label = no_direct_shift`) | `synthetic_event` (overrides the surface mapping)        |
+
+Severity coercion: v1.18.2's `stress` (an extra rung beyond the v1.17.1 annotation `SEVERITY_LABELS = {low, medium, high, unknown}`) is mapped to `high` so the higher rung is preserved without inventing a new label.
+
+### 126.2 Causal annotation shape
+
+Each emitted causal annotation cites the template id and the application id as `source_record_ids` and the shift id as `downstream_record_ids`:
+
+```
+ScenarioDriverTemplate          (source 1)
+ScenarioDriverApplicationRecord (source 2)
+       │
+       ▼
+ScenarioContextShiftRecord      (downstream)
+```
+
+The annotation does **not** invent an "actor decision" arrow. It does **not** assert any downstream economic effect on a pre-existing context record. It carries the v1.18.0 audit-metadata block (`reasoning_mode = "rule_based_fallback"` binding · `reasoning_policy_id` · `reasoning_slot = "future_llm_compatible"` · `boundary_flags`).
+
+### 126.3 No-mutation invariants pinned at v1.18.3
+
+1. The display helpers do not import any source-of-truth book or the kernel — pinned by a module-text test that scans for forbidden imports (`from world.kernel`, `from world.prices`, `from world.scenario_drivers`, `from world.scenario_applications`, etc.).
+2. Calling the helpers does not emit any ledger record.
+3. Calling the helpers does not mutate the `PriceBook` or any other source-of-truth book.
+4. Running the v1.18.3 driver on its own fresh kernel does not move the default-fixture `living_world_digest` of a *separately seeded* default sweep — `f93bdf3f4203c20d4a58e956160b0bb1004dcdecf0648a92cc961401b705897c` stays byte-identical.
+5. The v1.18.3 driver's own kernel ledger gains only `scenario_driver_template_recorded` / `scenario_driver_application_recorded` / `scenario_context_shift_recorded` records — no `order_submitted` / `trade_executed` / `price_updated` / `clearing_completed` / `settlement_completed` / `loan_approved` / `security_issued` / `underwriting_executed` / `investor_action_taken` / `firm_decision_recorded` / `bank_approval_recorded` event types.
+6. The rendered markdown carries no v1.17.0 forbidden display name (`market_price` / `predicted_index` / `forecast_path` / `expected_return` / `target_price` / `recommendation` / `investment_advice` / `nav` / `index_value` / `benchmark_value` / `valuation_target` / etc.) and no v1.18.0 forbidden actor-decision token (`firm_decision` / `investor_action` / `bank_approval` / `trading_decision` / `optimal_capital_structure`).
+
+### 126.4 Test inventory delta
+
+`+23` tests in [`tests/test_display_timeline.py`](../tests/test_display_timeline.py); `+18` tests in [`tests/test_scenario_report.py`](../tests/test_scenario_report.py); test_inventory total moves from **100 / 4293** to **101 / 4334**.
+
+### 126.5 Performance boundary
+
+The default sweep without any scenario applied is unchanged from v1.18.2 / v1.17.last:
+
+| Surface                                                               | Value (v1.18.3 = v1.17.last when no scenario applied)                       |
+| --------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Per-period record count (default fixture, no scenario applied)        | **108** (period 0) / **110** (periods 1+)                                    |
+| Per-run window (default 4-period fixture)                             | **`[432, 480]`**                                                              |
+| Default 4-period sweep                                                | **460 records**                                                              |
+| Integration-test `living_world_digest` (default, no scenario applied) | **`f93bdf3f4203c20d4a58e956160b0bb1004dcdecf0648a92cc961401b705897c`**       |
+| Test count (`pytest -q`)                                              | **4334 / 4334**                                                              |
+
+v1.18.3 is **report / display integration only**. The v1.18 chain stays append-only and stimulus-only at every milestone.
+
+### 126.6 Forward pointer
+
+v1.18.4 wires the v1.18.3 markdown report into the static analyst workbench at [`examples/ui/fwe_workbench_mockup.html`](../examples/ui/fwe_workbench_mockup.html) as a non-destructive scenario picker (fixture switching only — Python engine NOT invoked from the UI). v1.18.last freezes the scenario-driver layer (docs-only).
