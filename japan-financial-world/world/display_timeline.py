@@ -2447,3 +2447,679 @@ def render_regime_comparison_markdown(
 
     lines.append("")
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# v1.18.3 — scenario report / causal timeline integration
+#
+# Pure-function helpers that turn v1.18.2
+# :class:`ScenarioDriverApplicationRecord` and
+# :class:`ScenarioContextShiftRecord` outputs into the v1.17
+# inspection layer's :class:`EventAnnotationRecord` /
+# :class:`CausalTimelineAnnotation` shapes.
+#
+# Binding constraints carried forward from v1.18.0 / v1.18.2:
+#
+# - The helpers read only the records passed in. They do not
+#   touch the kernel, do not mutate any record, do not emit
+#   ledger records, and do not move the default-fixture
+#   ``living_world_digest``.
+# - Same input records → byte-identical output tuples /
+#   markdown.
+# - The annotation surface is purely descriptive: every emitted
+#   record cites the scenario template / application / shift via
+#   plain ids. The helpers do not invent actor decisions, do not
+#   assert prices / forecasts / advice / real data, do not
+#   execute any LLM, and do not move the default-fixture digest.
+# - Forbidden ``no_direct_shift`` shifts (the v1.18.2 fallback
+#   for unmapped families) **do** produce annotations — they are
+#   visibly tagged with ``synthetic_event`` so a reader can see
+#   that the template is stored but not yet mapped to a concrete
+#   context surface.
+# ---------------------------------------------------------------------------
+
+
+# Map from v1.18.2 ``ScenarioContextShiftRecord.context_surface_label``
+# to a v1.17.1 ``EventAnnotationRecord.annotation_type_label`` (which
+# must lie in ``ANNOTATION_TYPE_LABELS``).
+_SCENARIO_SURFACE_TO_ANNOTATION_TYPE: dict[str, str] = {
+    "market_environment":           "market_environment_change",
+    "interbank_liquidity":           "market_environment_change",
+    "industry_condition":            "market_environment_change",
+    "firm_financial_state":          "market_environment_change",
+    "market_pressure_surface":       "market_pressure_change",
+    "financing_review_surface":      "financing_constraint",
+    "attention_surface":             "attention_shift",
+    "display_annotation_surface":    "synthetic_event",
+    "unknown":                       "synthetic_event",
+}
+
+
+# Severity coercion. v1.18.2 scenario records may carry the
+# ``stress`` severity; the v1.17.1 annotation severity vocabulary
+# (``SEVERITY_LABELS`` above — ``low`` / ``medium`` / ``high`` /
+# ``unknown``) does not include ``stress``. Map ``stress`` →
+# ``high`` so the higher rung is preserved without inventing a
+# new label.
+_SCENARIO_SEVERITY_TO_ANNOTATION_SEVERITY: dict[str, str] = {
+    "low":     "low",
+    "medium":  "medium",
+    "high":    "high",
+    "stress":  "high",
+    "unknown": "unknown",
+}
+
+
+def _scenario_surface_to_annotation_type(
+    context_surface_label: str,
+) -> str:
+    return _SCENARIO_SURFACE_TO_ANNOTATION_TYPE.get(
+        context_surface_label, "synthetic_event"
+    )
+
+
+def _scenario_severity_to_annotation_severity(
+    severity_label: str,
+) -> str:
+    return _SCENARIO_SEVERITY_TO_ANNOTATION_SEVERITY.get(
+        severity_label, "unknown"
+    )
+
+
+def _snap_to_calendar(
+    iso_date: str,
+    reporting_calendar: ReportingCalendar | None,
+) -> str:
+    """Snap an ISO date to the nearest date in the reporting
+    calendar's ``date_points``. If no calendar is supplied, or
+    its ``date_points`` is empty, return the original date.
+
+    "Nearest" is the smallest absolute date-distance; ties break
+    in favour of the *earlier* date (deterministic)."""
+    if reporting_calendar is None:
+        return iso_date
+    points = tuple(reporting_calendar.date_points)
+    if not points:
+        return iso_date
+    target = date.fromisoformat(iso_date)
+    best = points[0]
+    best_distance = abs(
+        (date.fromisoformat(best) - target).days
+    )
+    for candidate in points[1:]:
+        distance = abs(
+            (date.fromisoformat(candidate) - target).days
+        )
+        if distance < best_distance or (
+            distance == best_distance and candidate < best
+        ):
+            best = candidate
+            best_distance = distance
+    return best
+
+
+def build_event_annotations_from_scenario_shifts(
+    *,
+    scenario_application_records: Iterable[Any] = (),
+    scenario_context_shift_records: Iterable[Any] = (),
+    reporting_calendar: ReportingCalendar | None = None,
+    annotation_id_prefix: str = "scenario_event_annotation",
+) -> tuple[EventAnnotationRecord, ...]:
+    """Render v1.18.2 scenario-driver application output into a
+    deterministic tuple of :class:`EventAnnotationRecord`
+    instances.
+
+    Inputs are anonymous record-like objects accessed via
+    ``getattr``; the helper imports no source-of-truth book and
+    is therefore safe under the v1.17.0 standalone-display
+    discipline. Records that lack an ``as_of_date`` or
+    ``scenario_context_shift_id`` are silently skipped — there
+    is nothing to render.
+
+    One annotation is emitted per
+    :class:`ScenarioContextShiftRecord`. ``no_direct_shift``
+    shifts (the v1.18.2 fallback for unmapped families) **are
+    rendered** as ``synthetic_event`` annotations so a reader
+    can see that the template is stored but not yet mapped to a
+    concrete context surface.
+
+    The annotation's metadata carries the v1.18.0 audit shape
+    (``reasoning_mode`` / ``reasoning_policy_id`` /
+    ``reasoning_slot`` / ``boundary_flags``) verbatim from the
+    shift record. ``scenario_application_records`` is consumed
+    only to enrich the per-shift metadata's
+    ``application_status_label`` when the shift cites a known
+    application id.
+
+    Same inputs → byte-identical tuple.
+    """
+    application_status_by_id: dict[str, str] = {}
+    for app in scenario_application_records:
+        app_id = getattr(app, "scenario_application_id", None)
+        status = getattr(app, "application_status_label", None)
+        if isinstance(app_id, str) and app_id and isinstance(
+            status, str
+        ) and status:
+            application_status_by_id[app_id] = status
+
+    annotations: list[EventAnnotationRecord] = []
+    for shift in scenario_context_shift_records:
+        shift_id = getattr(
+            shift, "scenario_context_shift_id", None
+        )
+        shift_date = _coerce_iso_or_none(
+            getattr(shift, "as_of_date", None)
+        )
+        if (
+            not isinstance(shift_id, str)
+            or not shift_id
+            or shift_date is None
+        ):
+            continue
+        template_id = getattr(
+            shift, "scenario_driver_template_id", "unknown"
+        )
+        application_id = getattr(
+            shift, "scenario_application_id", "unknown"
+        )
+        scenario_family = getattr(
+            shift, "scenario_family_label", "unknown"
+        )
+        driver_group = getattr(
+            shift, "driver_group_label", "unknown"
+        )
+        context_surface = getattr(
+            shift, "context_surface_label", "unknown"
+        )
+        shift_direction = getattr(
+            shift, "shift_direction_label", "unknown"
+        )
+        expected_annotation_type = getattr(
+            shift, "expected_annotation_type_label", "unknown"
+        )
+        severity = getattr(shift, "severity_label", "unknown")
+        affected_actor_scope = getattr(
+            shift, "affected_actor_scope_label", "unknown"
+        )
+        affected_context_record_ids = tuple(
+            getattr(shift, "affected_context_record_ids", ())
+        )
+        reasoning_mode = getattr(
+            shift, "reasoning_mode", "unknown"
+        )
+        reasoning_policy_id = getattr(
+            shift, "reasoning_policy_id", "unknown"
+        )
+        reasoning_slot = getattr(
+            shift, "reasoning_slot", "unknown"
+        )
+        boundary_flags = dict(
+            getattr(shift, "boundary_flags", {}) or {}
+        )
+
+        annotation_type = (
+            "synthetic_event"
+            if shift_direction == "no_direct_shift"
+            else _scenario_surface_to_annotation_type(
+                context_surface
+            )
+        )
+        annotation_severity = (
+            _scenario_severity_to_annotation_severity(severity)
+        )
+        annotation_date = _snap_to_calendar(
+            shift_date, reporting_calendar
+        )
+        annotation_label = (
+            f"{scenario_family} · {driver_group} · "
+            f"{context_surface} · {shift_direction} · "
+            f"{expected_annotation_type}"
+        )
+        application_status_label = (
+            application_status_by_id.get(
+                application_id, "unknown"
+            )
+        )
+        source_record_ids: tuple[str, ...] = (shift_id,)
+        if isinstance(template_id, str) and template_id:
+            source_record_ids = source_record_ids + (template_id,)
+        if (
+            isinstance(application_id, str)
+            and application_id
+        ):
+            source_record_ids = source_record_ids + (
+                application_id,
+            )
+        source_record_ids = (
+            source_record_ids + affected_context_record_ids
+        )
+
+        annotations.append(
+            EventAnnotationRecord(
+                annotation_id=(
+                    f"{annotation_id_prefix}:{shift_id}"
+                ),
+                annotation_date=annotation_date,
+                annotation_label=annotation_label,
+                annotation_type_label=annotation_type,
+                severity_label=annotation_severity,
+                source_record_ids=source_record_ids,
+                display_lane_label="scenario",
+                metadata={
+                    "scenario_family_label": scenario_family,
+                    "driver_group_label": driver_group,
+                    "context_surface_label": context_surface,
+                    "shift_direction_label": shift_direction,
+                    "expected_annotation_type_label": (
+                        expected_annotation_type
+                    ),
+                    "affected_actor_scope_label": (
+                        affected_actor_scope
+                    ),
+                    "scenario_driver_template_id": (
+                        template_id
+                        if isinstance(template_id, str)
+                        else "unknown"
+                    ),
+                    "scenario_application_id": (
+                        application_id
+                        if isinstance(application_id, str)
+                        else "unknown"
+                    ),
+                    "application_status_label": (
+                        application_status_label
+                    ),
+                    "reasoning_mode": reasoning_mode,
+                    "reasoning_policy_id": reasoning_policy_id,
+                    "reasoning_slot": reasoning_slot,
+                    "boundary_flags": boundary_flags,
+                },
+            )
+        )
+
+    return tuple(annotations)
+
+
+def build_causal_timeline_annotations_from_scenario_shifts(
+    *,
+    scenario_application_records: Iterable[Any] = (),
+    scenario_context_shift_records: Iterable[Any] = (),
+    reporting_calendar: ReportingCalendar | None = None,
+    annotation_id_prefix: str = "scenario_causal_annotation",
+) -> tuple[CausalTimelineAnnotation, ...]:
+    """Render v1.18.2 scenario-driver application output into a
+    deterministic tuple of :class:`CausalTimelineAnnotation`
+    arrows.
+
+    For each :class:`ScenarioContextShiftRecord` one causal
+    annotation is emitted that cites the
+    ``ScenarioDriverTemplate`` id and
+    ``ScenarioDriverApplicationRecord`` id as
+    ``source_record_ids`` and the
+    :class:`ScenarioContextShiftRecord` id as
+    ``downstream_record_ids`` — i.e. it traces the v1.18 chain
+    *template → application → context shift* through the plain-id
+    citations the v1.18.2 helper already emits. The
+    ``causal_summary_label`` is derived from the shift's
+    ``context_surface_label`` via the same mapping the event
+    annotations use.
+
+    The helper does **not** invent an "actor decision" arrow.
+    It does **not** assert any downstream economic effect on a
+    pre-existing context record. Same inputs → byte-identical
+    tuple.
+    """
+    # ``scenario_application_records`` is currently consumed for
+    # the audit metadata block; it is accepted as an explicit
+    # argument so callers do not have to scan a kernel book to
+    # populate the metadata.
+    application_metadata_by_id: dict[str, dict[str, Any]] = {}
+    for app in scenario_application_records:
+        app_id = getattr(app, "scenario_application_id", None)
+        if not isinstance(app_id, str) or not app_id:
+            continue
+        application_metadata_by_id[app_id] = {
+            "application_status_label": getattr(
+                app, "application_status_label", "unknown"
+            ),
+            "reasoning_mode": getattr(
+                app, "reasoning_mode", "unknown"
+            ),
+            "reasoning_policy_id": getattr(
+                app, "reasoning_policy_id", "unknown"
+            ),
+            "reasoning_slot": getattr(
+                app, "reasoning_slot", "unknown"
+            ),
+            "boundary_flags": dict(
+                getattr(app, "boundary_flags", {}) or {}
+            ),
+        }
+
+    annotations: list[CausalTimelineAnnotation] = []
+    for shift in scenario_context_shift_records:
+        shift_id = getattr(
+            shift, "scenario_context_shift_id", None
+        )
+        shift_date = _coerce_iso_or_none(
+            getattr(shift, "as_of_date", None)
+        )
+        if (
+            not isinstance(shift_id, str)
+            or not shift_id
+            or shift_date is None
+        ):
+            continue
+        template_id = getattr(
+            shift, "scenario_driver_template_id", "unknown"
+        )
+        application_id = getattr(
+            shift, "scenario_application_id", "unknown"
+        )
+        scenario_family = getattr(
+            shift, "scenario_family_label", "unknown"
+        )
+        driver_group = getattr(
+            shift, "driver_group_label", "unknown"
+        )
+        context_surface = getattr(
+            shift, "context_surface_label", "unknown"
+        )
+        shift_direction = getattr(
+            shift, "shift_direction_label", "unknown"
+        )
+        causal_summary = (
+            "synthetic_event"
+            if shift_direction == "no_direct_shift"
+            else _scenario_surface_to_annotation_type(
+                context_surface
+            )
+        )
+        source_ids: tuple[str, ...] = ()
+        if isinstance(template_id, str) and template_id:
+            source_ids = source_ids + (template_id,)
+        if (
+            isinstance(application_id, str)
+            and application_id
+        ):
+            source_ids = source_ids + (application_id,)
+        # Carry the application metadata if it was supplied so
+        # the rendered arrow keeps the v1.18.0 audit shape.
+        app_metadata = application_metadata_by_id.get(
+            application_id
+            if isinstance(application_id, str)
+            else "",
+            None,
+        )
+        if app_metadata is None:
+            app_metadata = {
+                "application_status_label": "unknown",
+                "reasoning_mode": getattr(
+                    shift, "reasoning_mode", "unknown"
+                ),
+                "reasoning_policy_id": getattr(
+                    shift, "reasoning_policy_id", "unknown"
+                ),
+                "reasoning_slot": getattr(
+                    shift, "reasoning_slot", "unknown"
+                ),
+                "boundary_flags": dict(
+                    getattr(shift, "boundary_flags", {}) or {}
+                ),
+            }
+        annotation_date = _snap_to_calendar(
+            shift_date, reporting_calendar
+        )
+        annotations.append(
+            CausalTimelineAnnotation(
+                causal_annotation_id=(
+                    f"{annotation_id_prefix}:scenario_to_shift:"
+                    f"{shift_id}"
+                ),
+                annotation_date=annotation_date,
+                event_label=(
+                    f"scenario driver -> context shift "
+                    f"({scenario_family} · {driver_group} · "
+                    f"{context_surface} · {shift_direction})"
+                ),
+                affected_actor_ids=(),
+                source_record_ids=source_ids,
+                downstream_record_ids=(shift_id,),
+                causal_summary_label=causal_summary,
+                metadata={
+                    "scenario_family_label": scenario_family,
+                    "driver_group_label": driver_group,
+                    "context_surface_label": context_surface,
+                    "shift_direction_label": shift_direction,
+                    "scenario_driver_template_id": (
+                        template_id
+                        if isinstance(template_id, str)
+                        else "unknown"
+                    ),
+                    "scenario_application_id": (
+                        application_id
+                        if isinstance(application_id, str)
+                        else "unknown"
+                    ),
+                    "application_status_label": app_metadata[
+                        "application_status_label"
+                    ],
+                    "reasoning_mode": app_metadata[
+                        "reasoning_mode"
+                    ],
+                    "reasoning_policy_id": app_metadata[
+                        "reasoning_policy_id"
+                    ],
+                    "reasoning_slot": app_metadata[
+                        "reasoning_slot"
+                    ],
+                    "boundary_flags": app_metadata[
+                        "boundary_flags"
+                    ],
+                },
+            )
+        )
+
+    return tuple(annotations)
+
+
+_MAX_SCENARIO_RECORDS_IN_MARKDOWN: int = 8
+
+
+def _format_scenario_template_row(template: Any) -> str:
+    return (
+        f"- `{getattr(template, 'scenario_driver_template_id', 'unknown')}` · "
+        f"{getattr(template, 'scenario_family_label', 'unknown')} · "
+        f"{getattr(template, 'driver_group_label', 'unknown')} · "
+        f"severity={getattr(template, 'severity_label', 'unknown')} · "
+        f"actor_scope={getattr(template, 'affected_actor_scope_label', 'unknown')}"
+    )
+
+
+def _format_scenario_application_row(application: Any) -> str:
+    return (
+        f"- `{getattr(application, 'scenario_application_id', 'unknown')}` · "
+        f"{getattr(application, 'application_status_label', 'unknown')} · "
+        f"as_of={getattr(application, 'as_of_date', 'unknown')} · "
+        f"unresolved_refs={getattr(application, 'unresolved_ref_count', 0)} · "
+        f"shifts={len(getattr(application, 'emitted_context_shift_ids', ()))}"
+    )
+
+
+def _format_scenario_shift_row(shift: Any) -> str:
+    return (
+        f"- `{getattr(shift, 'scenario_context_shift_id', 'unknown')}` · "
+        f"{getattr(shift, 'context_surface_label', 'unknown')} × "
+        f"{getattr(shift, 'shift_direction_label', 'unknown')} × "
+        f"{getattr(shift, 'expected_annotation_type_label', 'unknown')} "
+        f"({getattr(shift, 'scenario_family_label', 'unknown')}, "
+        f"{getattr(shift, 'severity_label', 'unknown')})"
+    )
+
+
+def render_scenario_application_markdown(
+    *,
+    panel_id: str,
+    scenario_driver_templates: Iterable[Any] = (),
+    scenario_application_records: Iterable[Any] = (),
+    scenario_context_shift_records: Iterable[Any] = (),
+    event_annotations: Iterable[EventAnnotationRecord] | None = None,
+    causal_annotations: Iterable[CausalTimelineAnnotation] | None = None,
+    reporting_calendar: ReportingCalendar | None = None,
+) -> str:
+    """Render a deterministic markdown report for a v1.18.2
+    scenario-driver application sweep.
+
+    The report renders four sections — template summary,
+    application summary, emitted context shifts, event /
+    causal-timeline annotations — followed by a binding
+    boundary statement that pins the v1.18.0 / v1.18.2
+    discipline (scenario driver is stimulus / not response;
+    context shift is append-only; no actor decision; no price /
+    trade / forecast / advice / real data).
+
+    If ``event_annotations`` / ``causal_annotations`` are not
+    supplied, the helper computes them from the provided shifts
+    via :func:`build_event_annotations_from_scenario_shifts` /
+    :func:`build_causal_timeline_annotations_from_scenario_shifts`
+    using the same ``reporting_calendar``. Same inputs →
+    byte-identical markdown string.
+    """
+    templates_tuple = tuple(scenario_driver_templates)
+    applications_tuple = tuple(scenario_application_records)
+    shifts_tuple = tuple(scenario_context_shift_records)
+    if event_annotations is None:
+        events_tuple = build_event_annotations_from_scenario_shifts(
+            scenario_application_records=applications_tuple,
+            scenario_context_shift_records=shifts_tuple,
+            reporting_calendar=reporting_calendar,
+        )
+    else:
+        events_tuple = tuple(event_annotations)
+    if causal_annotations is None:
+        causal_tuple = (
+            build_causal_timeline_annotations_from_scenario_shifts(
+                scenario_application_records=applications_tuple,
+                scenario_context_shift_records=shifts_tuple,
+                reporting_calendar=reporting_calendar,
+            )
+        )
+    else:
+        causal_tuple = tuple(causal_annotations)
+
+    lines: list[str] = [
+        f"## Scenario application — {panel_id}",
+        "",
+    ]
+
+    lines.append("### Scenario templates")
+    lines.append("")
+    if not templates_tuple:
+        lines.append("_No scenario_driver_templates supplied._")
+    else:
+        for tmpl in templates_tuple[
+            :_MAX_SCENARIO_RECORDS_IN_MARKDOWN
+        ]:
+            lines.append(_format_scenario_template_row(tmpl))
+    lines.append("")
+
+    lines.append("### Scenario applications")
+    lines.append("")
+    if not applications_tuple:
+        lines.append("_No scenario_application_records supplied._")
+    else:
+        for app in applications_tuple[
+            :_MAX_SCENARIO_RECORDS_IN_MARKDOWN
+        ]:
+            lines.append(_format_scenario_application_row(app))
+    lines.append("")
+
+    lines.append("### Emitted context shifts")
+    lines.append("")
+    if not shifts_tuple:
+        lines.append(
+            "_No scenario_context_shift_records supplied._"
+        )
+    else:
+        no_direct_shifts = tuple(
+            s
+            for s in shifts_tuple
+            if getattr(s, "shift_direction_label", "")
+            == "no_direct_shift"
+        )
+        for shift in shifts_tuple[
+            :_MAX_SCENARIO_RECORDS_IN_MARKDOWN
+        ]:
+            lines.append(_format_scenario_shift_row(shift))
+        if no_direct_shifts:
+            lines.append("")
+            lines.append(
+                "_No direct context shift emitted beyond "
+                "fallback/no_direct_shift for "
+                f"{len(no_direct_shifts)} shift(s) — this is "
+                "not an error. The template is stored but not "
+                "yet mapped to a concrete context surface._"
+            )
+    lines.append("")
+
+    lines.append("### Event annotations")
+    lines.append("")
+    if not events_tuple:
+        lines.append("_No event annotations._")
+    else:
+        for ev in events_tuple[
+            :_MAX_SCENARIO_RECORDS_IN_MARKDOWN
+        ]:
+            src = (
+                ev.source_record_ids[0]
+                if ev.source_record_ids
+                else "—"
+            )
+            lines.append(
+                f"- {ev.annotation_date} · "
+                f"{ev.annotation_type_label} · "
+                f"{ev.severity_label} · `{src}` — "
+                f"{ev.annotation_label}"
+            )
+    lines.append("")
+
+    lines.append("### Causal timeline annotations")
+    lines.append("")
+    if not causal_tuple:
+        lines.append("_No causal timeline annotations._")
+    else:
+        for ca in causal_tuple[
+            :_MAX_SCENARIO_RECORDS_IN_MARKDOWN
+        ]:
+            first_src = (
+                ca.source_record_ids[0]
+                if ca.source_record_ids
+                else "—"
+            )
+            first_dst = (
+                ca.downstream_record_ids[0]
+                if ca.downstream_record_ids
+                else "—"
+            )
+            lines.append(
+                f"- {ca.annotation_date} · "
+                f"{ca.causal_summary_label} · "
+                f"`{first_src}` → `{first_dst}` — "
+                f"{ca.event_label}"
+            )
+    lines.append("")
+
+    lines.append("### Boundary statement")
+    lines.append("")
+    lines.append(
+        "_Scenario driver is the stimulus, never the response. "
+        "Every context shift is append-only — no pre-existing "
+        "context record is mutated. No actor decision is made "
+        "by the scenario driver. No price formation, no trading, "
+        "no financing execution, no investment advice, no "
+        "forecast, no real data, no Japan calibration, no LLM "
+        "execution. Synthetic display only._"
+    )
+    lines.append("")
+
+    return "\n".join(lines)

@@ -2024,3 +2024,668 @@ def test_regime_comparison_markdown_with_events_no_forbidden_display_names():
         assert forbidden not in md, (
             f"forbidden display name {forbidden!r} in event-enriched markdown"
         )
+
+
+# ---------------------------------------------------------------------------
+# v1.18.3 — scenario report / causal timeline integration
+# ---------------------------------------------------------------------------
+
+
+from dataclasses import dataclass as _v1_18_3_dataclass  # noqa: E402
+
+from world.display_timeline import (  # noqa: E402
+    build_causal_timeline_annotations_from_scenario_shifts,
+    build_event_annotations_from_scenario_shifts,
+    render_scenario_application_markdown,
+)
+
+
+@_v1_18_3_dataclass(frozen=True)
+class _FakeScenarioApplication:
+    scenario_application_id: str
+    scenario_driver_template_id: str
+    as_of_date: str
+    application_status_label: str = "applied_as_context_shift"
+    reasoning_mode: str = "rule_based_fallback"
+    reasoning_policy_id: str = (
+        "v1.18.2:scenario_application:rule_based_fallback"
+    )
+    reasoning_slot: str = "future_llm_compatible"
+    boundary_flags: tuple = (
+        ("no_actor_decision", True),
+        ("no_llm_execution", True),
+        ("no_price_formation", True),
+        ("no_trading", True),
+        ("no_financing_execution", True),
+        ("no_investment_advice", True),
+        ("synthetic_only", True),
+    )
+    emitted_context_shift_ids: tuple = ()
+    unresolved_ref_count: int = 0
+
+
+@_v1_18_3_dataclass(frozen=True)
+class _FakeScenarioShift:
+    scenario_context_shift_id: str
+    scenario_application_id: str
+    scenario_driver_template_id: str
+    as_of_date: str
+    context_surface_label: str
+    driver_group_label: str
+    scenario_family_label: str
+    shift_direction_label: str
+    severity_label: str = "medium"
+    affected_actor_scope_label: str = "market_wide"
+    affected_context_record_ids: tuple = ()
+    expected_annotation_type_label: str = (
+        "market_environment_change"
+    )
+    reasoning_mode: str = "rule_based_fallback"
+    reasoning_policy_id: str = (
+        "v1.18.2:scenario_application:rule_based_fallback"
+    )
+    reasoning_slot: str = "future_llm_compatible"
+    boundary_flags: tuple = (
+        ("no_actor_decision", True),
+        ("no_llm_execution", True),
+        ("no_price_formation", True),
+        ("no_trading", True),
+        ("no_financing_execution", True),
+        ("no_investment_advice", True),
+        ("synthetic_only", True),
+    )
+
+
+def _fake_app(
+    *,
+    application_id: str = "scenario_application:rate:1",
+    template_id: str = "scenario_driver:rate:1",
+) -> _FakeScenarioApplication:
+    return _FakeScenarioApplication(
+        scenario_application_id=application_id,
+        scenario_driver_template_id=template_id,
+        as_of_date="2026-03-31",
+        boundary_flags={
+            "no_actor_decision": True,
+            "no_llm_execution": True,
+            "no_price_formation": True,
+            "no_trading": True,
+            "no_financing_execution": True,
+            "no_investment_advice": True,
+            "synthetic_only": True,
+        },
+    )
+
+
+def _fake_shift(
+    *,
+    shift_id: str = "scenario_context_shift:rate:1:00",
+    application_id: str = "scenario_application:rate:1",
+    template_id: str = "scenario_driver:rate:1",
+    context_surface: str = "market_environment",
+    driver_group: str = "macro_rates",
+    family: str = "rate_repricing_driver",
+    direction: str = "tighten",
+    severity: str = "medium",
+    expected_annotation_type: str = "market_environment_change",
+    affected: tuple = ("synthetic:env:1",),
+) -> _FakeScenarioShift:
+    return _FakeScenarioShift(
+        scenario_context_shift_id=shift_id,
+        scenario_application_id=application_id,
+        scenario_driver_template_id=template_id,
+        as_of_date="2026-03-31",
+        context_surface_label=context_surface,
+        driver_group_label=driver_group,
+        scenario_family_label=family,
+        shift_direction_label=direction,
+        severity_label=severity,
+        affected_context_record_ids=affected,
+        expected_annotation_type_label=expected_annotation_type,
+        boundary_flags={
+            "no_actor_decision": True,
+            "no_llm_execution": True,
+            "no_price_formation": True,
+            "no_trading": True,
+            "no_financing_execution": True,
+            "no_investment_advice": True,
+            "synthetic_only": True,
+        },
+    )
+
+
+# -- mapping coverage --------------------------------------------------------
+
+
+def test_scenario_event_annotation_rate_repricing_to_market_environment_change():
+    shifts = (_fake_shift(),)
+    apps = (_fake_app(),)
+    events = build_event_annotations_from_scenario_shifts(
+        scenario_application_records=apps,
+        scenario_context_shift_records=shifts,
+    )
+    assert len(events) == 1
+    e = events[0]
+    assert e.annotation_type_label == "market_environment_change"
+    assert e.severity_label == "medium"
+    assert e.display_lane_label == "scenario"
+    assert "rate_repricing_driver" in e.annotation_label
+    assert "macro_rates" in e.annotation_label
+    assert "market_environment" in e.annotation_label
+    assert "tighten" in e.annotation_label
+
+
+def test_scenario_event_annotation_credit_tightening_to_financing_constraint():
+    shifts = (
+        _fake_shift(
+            shift_id="scenario_context_shift:credit:1:00",
+            template_id="scenario_driver:credit:1",
+            application_id="scenario_application:credit:1",
+            context_surface="financing_review_surface",
+            driver_group="credit_liquidity",
+            family="credit_tightening_driver",
+            direction="tighten",
+            expected_annotation_type="financing_constraint",
+        ),
+    )
+    events = build_event_annotations_from_scenario_shifts(
+        scenario_context_shift_records=shifts,
+    )
+    assert events[0].annotation_type_label == (
+        "financing_constraint"
+    )
+
+
+def test_scenario_event_annotation_funding_window_closure():
+    shifts = (
+        _fake_shift(
+            shift_id="scenario_context_shift:funding:1:00",
+            template_id="scenario_driver:funding:1",
+            application_id="scenario_application:funding:1",
+            context_surface="financing_review_surface",
+            driver_group="credit_liquidity",
+            family="funding_window_closure_driver",
+            direction="deteriorate",
+            severity="high",
+            expected_annotation_type="financing_constraint",
+        ),
+    )
+    events = build_event_annotations_from_scenario_shifts(
+        scenario_context_shift_records=shifts,
+    )
+    assert events[0].annotation_type_label == (
+        "financing_constraint"
+    )
+    assert events[0].severity_label == "high"
+
+
+def test_scenario_event_annotation_liquidity_stress_to_market_environment_change():
+    shifts = (
+        _fake_shift(
+            shift_id="scenario_context_shift:liq:1:00",
+            template_id="scenario_driver:liq:1",
+            application_id="scenario_application:liq:1",
+            context_surface="interbank_liquidity",
+            driver_group="credit_liquidity",
+            family="liquidity_stress_driver",
+            direction="deteriorate",
+            severity="stress",
+        ),
+    )
+    events = build_event_annotations_from_scenario_shifts(
+        scenario_context_shift_records=shifts,
+    )
+    assert events[0].annotation_type_label == (
+        "market_environment_change"
+    )
+    # stress -> high (annotation severity vocabulary has no `stress`)
+    assert events[0].severity_label == "high"
+
+
+def test_scenario_event_annotation_information_gap_to_attention_shift():
+    shifts = (
+        _fake_shift(
+            shift_id="scenario_context_shift:info:1:00",
+            template_id="scenario_driver:info:1",
+            application_id="scenario_application:info:1",
+            context_surface="attention_surface",
+            driver_group="information_attention",
+            family="information_gap_driver",
+            direction="information_gap",
+            severity="low",
+            expected_annotation_type="attention_shift",
+        ),
+    )
+    events = build_event_annotations_from_scenario_shifts(
+        scenario_context_shift_records=shifts,
+    )
+    assert events[0].annotation_type_label == "attention_shift"
+    assert events[0].severity_label == "low"
+
+
+def test_scenario_event_annotation_no_direct_shift_falls_back_to_synthetic_event():
+    shifts = (
+        _fake_shift(
+            shift_id="scenario_context_shift:fallback:1:00",
+            template_id="scenario_driver:thematic:1",
+            application_id="scenario_application:thematic:1",
+            context_surface="unknown",
+            driver_group="information_attention",
+            family="thematic_attention_driver",
+            direction="no_direct_shift",
+            expected_annotation_type="attention_shift",
+        ),
+    )
+    events = build_event_annotations_from_scenario_shifts(
+        scenario_context_shift_records=shifts,
+    )
+    assert events[0].annotation_type_label == "synthetic_event"
+    assert "no_direct_shift" in events[0].annotation_label
+
+
+def test_scenario_event_annotation_metadata_carries_audit_block():
+    shifts = (_fake_shift(),)
+    events = build_event_annotations_from_scenario_shifts(
+        scenario_application_records=(_fake_app(),),
+        scenario_context_shift_records=shifts,
+    )
+    md = events[0].metadata
+    assert md["reasoning_mode"] == "rule_based_fallback"
+    assert (
+        md["reasoning_policy_id"]
+        == "v1.18.2:scenario_application:rule_based_fallback"
+    )
+    assert md["reasoning_slot"] == "future_llm_compatible"
+    assert md["boundary_flags"] == {
+        "no_actor_decision": True,
+        "no_llm_execution": True,
+        "no_price_formation": True,
+        "no_trading": True,
+        "no_financing_execution": True,
+        "no_investment_advice": True,
+        "synthetic_only": True,
+    }
+    assert (
+        md["application_status_label"]
+        == "applied_as_context_shift"
+    )
+
+
+def test_scenario_event_annotation_skips_records_with_missing_id_or_date():
+    shifts = (
+        _fake_shift(shift_id=""),
+        _fake_shift(shift_id="scenario_context_shift:ok:1:00"),
+    )
+    events = build_event_annotations_from_scenario_shifts(
+        scenario_context_shift_records=shifts,
+    )
+    assert len(events) == 1
+
+
+def test_scenario_event_annotation_deterministic_byte_identical():
+    shifts = (
+        _fake_shift(),
+        _fake_shift(
+            shift_id="scenario_context_shift:rate:1:01",
+            severity="high",
+        ),
+    )
+    apps = (_fake_app(),)
+    a = build_event_annotations_from_scenario_shifts(
+        scenario_application_records=apps,
+        scenario_context_shift_records=shifts,
+    )
+    b = build_event_annotations_from_scenario_shifts(
+        scenario_application_records=apps,
+        scenario_context_shift_records=shifts,
+    )
+    assert tuple(e.to_dict() for e in a) == tuple(
+        e.to_dict() for e in b
+    )
+
+
+# -- causal helper -----------------------------------------------------------
+
+
+def test_scenario_causal_annotation_cites_template_and_application():
+    shifts = (_fake_shift(),)
+    apps = (_fake_app(),)
+    causal = (
+        build_causal_timeline_annotations_from_scenario_shifts(
+            scenario_application_records=apps,
+            scenario_context_shift_records=shifts,
+        )
+    )
+    assert len(causal) == 1
+    c = causal[0]
+    assert c.source_record_ids == (
+        "scenario_driver:rate:1",
+        "scenario_application:rate:1",
+    )
+    assert c.downstream_record_ids == (
+        "scenario_context_shift:rate:1:00",
+    )
+    assert c.causal_summary_label == (
+        "market_environment_change"
+    )
+    assert "scenario driver -> context shift" in c.event_label
+
+
+def test_scenario_causal_annotation_no_direct_shift_falls_back_to_synthetic_event():
+    shifts = (
+        _fake_shift(
+            shift_id="scenario_context_shift:fallback:1:00",
+            context_surface="unknown",
+            direction="no_direct_shift",
+        ),
+    )
+    causal = (
+        build_causal_timeline_annotations_from_scenario_shifts(
+            scenario_context_shift_records=shifts,
+        )
+    )
+    assert causal[0].causal_summary_label == "synthetic_event"
+
+
+def test_scenario_causal_annotation_metadata_carries_audit_block():
+    shifts = (_fake_shift(),)
+    apps = (_fake_app(),)
+    causal = (
+        build_causal_timeline_annotations_from_scenario_shifts(
+            scenario_application_records=apps,
+            scenario_context_shift_records=shifts,
+        )
+    )
+    md = causal[0].metadata
+    assert md["reasoning_mode"] == "rule_based_fallback"
+    assert (
+        md["reasoning_policy_id"]
+        == "v1.18.2:scenario_application:rule_based_fallback"
+    )
+    assert md["reasoning_slot"] == "future_llm_compatible"
+    assert md["boundary_flags"] == {
+        "no_actor_decision": True,
+        "no_llm_execution": True,
+        "no_price_formation": True,
+        "no_trading": True,
+        "no_financing_execution": True,
+        "no_investment_advice": True,
+        "synthetic_only": True,
+    }
+
+
+def test_scenario_causal_annotation_deterministic():
+    shifts = (
+        _fake_shift(),
+        _fake_shift(
+            shift_id="scenario_context_shift:rate:1:01",
+            context_surface="financing_review_surface",
+            direction="tighten",
+            expected_annotation_type="financing_constraint",
+        ),
+    )
+    apps = (_fake_app(),)
+    a = build_causal_timeline_annotations_from_scenario_shifts(
+        scenario_application_records=apps,
+        scenario_context_shift_records=shifts,
+    )
+    b = build_causal_timeline_annotations_from_scenario_shifts(
+        scenario_application_records=apps,
+        scenario_context_shift_records=shifts,
+    )
+    assert tuple(c.to_dict() for c in a) == tuple(
+        c.to_dict() for c in b
+    )
+
+
+# -- reporting calendar snap -------------------------------------------------
+
+
+def test_scenario_event_annotation_snaps_to_reporting_calendar_when_provided():
+    cal = build_reporting_calendar(
+        calendar_id="cal:1",
+        start_date=date(2026, 1, 31),
+        end_date=date(2026, 12, 31),
+        frequency_label="monthly",
+    )
+    shifts = (
+        _fake_shift(
+            shift_id="scenario_context_shift:snap:1:00",
+            # 2026-03-31 — should snap to the nearest cal point
+        ),
+    )
+    events_no_cal = build_event_annotations_from_scenario_shifts(
+        scenario_context_shift_records=shifts,
+    )
+    events_cal = build_event_annotations_from_scenario_shifts(
+        scenario_context_shift_records=shifts,
+        reporting_calendar=cal,
+    )
+    assert events_no_cal[0].annotation_date == "2026-03-31"
+    # The snapped date must be a calendar point.
+    assert events_cal[0].annotation_date in cal.date_points
+
+
+# -- markdown report ---------------------------------------------------------
+
+
+def test_render_scenario_application_markdown_basic_structure():
+    shifts = (_fake_shift(),)
+    apps = (_fake_app(),)
+    md = render_scenario_application_markdown(
+        panel_id="v1.18.3:test",
+        scenario_application_records=apps,
+        scenario_context_shift_records=shifts,
+    )
+    assert "## Scenario application — v1.18.3:test" in md
+    assert "### Scenario applications" in md
+    assert "### Emitted context shifts" in md
+    assert "### Event annotations" in md
+    assert "### Causal timeline annotations" in md
+    assert "### Boundary statement" in md
+    assert "stimulus, never the response" in md
+    assert "append-only" in md
+
+
+def test_render_scenario_application_markdown_shows_no_direct_shift_callout():
+    shifts = (
+        _fake_shift(
+            shift_id="scenario_context_shift:fallback:1:00",
+            context_surface="unknown",
+            direction="no_direct_shift",
+        ),
+    )
+    md = render_scenario_application_markdown(
+        panel_id="v1.18.3:fallback_test",
+        scenario_context_shift_records=shifts,
+    )
+    assert "no_direct_shift" in md
+    assert "not an error" in md
+
+
+def test_render_scenario_application_markdown_deterministic():
+    shifts = (
+        _fake_shift(),
+        _fake_shift(
+            shift_id="scenario_context_shift:rate:1:01",
+            context_surface="financing_review_surface",
+            direction="tighten",
+            expected_annotation_type="financing_constraint",
+        ),
+    )
+    apps = (_fake_app(),)
+    a = render_scenario_application_markdown(
+        panel_id="v1.18.3:det",
+        scenario_application_records=apps,
+        scenario_context_shift_records=shifts,
+    )
+    b = render_scenario_application_markdown(
+        panel_id="v1.18.3:det",
+        scenario_application_records=apps,
+        scenario_context_shift_records=shifts,
+    )
+    assert a == b
+
+
+def test_render_scenario_application_markdown_no_forbidden_display_names():
+    shifts = (
+        _fake_shift(),
+        _fake_shift(
+            shift_id="scenario_context_shift:fallback:1:00",
+            context_surface="unknown",
+            direction="no_direct_shift",
+        ),
+    )
+    md = render_scenario_application_markdown(
+        panel_id="v1.18.3:no_forbidden_test",
+        scenario_context_shift_records=shifts,
+    ).lower()
+    for forbidden in FORBIDDEN_DISPLAY_NAMES:
+        assert forbidden not in md, (
+            f"forbidden display name {forbidden!r} in scenario "
+            "report markdown"
+        )
+
+
+# -- no-mutation / ledger / module-import discipline ------------------------
+
+
+def test_scenario_helpers_do_not_import_kernel_or_source_books():
+    """The v1.17.0 standalone-display discipline carries forward
+    to v1.18.3: ``world.display_timeline`` must not import any
+    source-of-truth book or the kernel. The v1.17.1 module-text
+    test pins the same; this test re-pins the v1.18.3 helpers
+    are inside the same module."""
+    text = _MODULE_PATH.read_text(encoding="utf-8")
+    forbidden_imports = (
+        "from world.kernel",
+        "from world.prices",
+        "from world.market_environment",
+        "from world.firm_state",
+        "from world.interbank_liquidity",
+        "from world.financing_paths",
+        "from world.market_intents",
+        "from world.scenario_drivers",
+        "from world.scenario_applications",
+    )
+    for imp in forbidden_imports:
+        assert imp not in text, (
+            f"display_timeline.py imports {imp!r} — v1.17.0 / "
+            "v1.18.3 standalone-display discipline broken"
+        )
+
+
+def test_scenario_helpers_do_not_emit_ledger_records():
+    from world.clock import Clock
+    from world.kernel import WorldKernel
+    from world.ledger import Ledger
+    from world.registry import Registry
+    from world.scheduler import Scheduler
+    from world.state import State
+
+    kernel = WorldKernel(
+        registry=Registry(),
+        clock=Clock(current_date=date(2026, 3, 31)),
+        scheduler=Scheduler(),
+        ledger=Ledger(),
+        state=State(),
+    )
+    before = len(kernel.ledger.records)
+    shifts = (_fake_shift(),)
+    apps = (_fake_app(),)
+    build_event_annotations_from_scenario_shifts(
+        scenario_application_records=apps,
+        scenario_context_shift_records=shifts,
+    )
+    build_causal_timeline_annotations_from_scenario_shifts(
+        scenario_application_records=apps,
+        scenario_context_shift_records=shifts,
+    )
+    render_scenario_application_markdown(
+        panel_id="v1.18.3:ledger_test",
+        scenario_application_records=apps,
+        scenario_context_shift_records=shifts,
+    )
+    assert len(kernel.ledger.records) == before
+
+
+def test_scenario_helpers_do_not_mutate_pricebook():
+    from world.clock import Clock
+    from world.kernel import WorldKernel
+    from world.ledger import Ledger
+    from world.registry import Registry
+    from world.scheduler import Scheduler
+    from world.state import State
+
+    kernel = WorldKernel(
+        registry=Registry(),
+        clock=Clock(current_date=date(2026, 3, 31)),
+        scheduler=Scheduler(),
+        ledger=Ledger(),
+        state=State(),
+    )
+    snap_before = kernel.prices.snapshot()
+    shifts = (_fake_shift(),)
+    apps = (_fake_app(),)
+    build_event_annotations_from_scenario_shifts(
+        scenario_application_records=apps,
+        scenario_context_shift_records=shifts,
+    )
+    build_causal_timeline_annotations_from_scenario_shifts(
+        scenario_application_records=apps,
+        scenario_context_shift_records=shifts,
+    )
+    render_scenario_application_markdown(
+        panel_id="v1.18.3:pricebook_test",
+        scenario_application_records=apps,
+        scenario_context_shift_records=shifts,
+    )
+    assert kernel.prices.snapshot() == snap_before
+
+
+def test_scenario_helpers_do_not_move_default_living_world_digest():
+    """Building scenario annotations on its own kernel must not
+    move the default-fixture ``living_world_digest`` of a
+    *separately seeded* default sweep."""
+    from examples.reference_world.living_world_replay import (
+        living_world_digest,
+    )
+    from test_living_reference_world import (
+        _run_default,
+        _seed_kernel,
+    )
+
+    shifts = (_fake_shift(),)
+    apps = (_fake_app(),)
+    build_event_annotations_from_scenario_shifts(
+        scenario_application_records=apps,
+        scenario_context_shift_records=shifts,
+    )
+    build_causal_timeline_annotations_from_scenario_shifts(
+        scenario_application_records=apps,
+        scenario_context_shift_records=shifts,
+    )
+    render_scenario_application_markdown(
+        panel_id="v1.18.3:digest_test",
+        scenario_application_records=apps,
+        scenario_context_shift_records=shifts,
+    )
+    k = _seed_kernel()
+    r = _run_default(k)
+    assert (
+        living_world_digest(k, r)
+        == "f93bdf3f4203c20d4a58e956160b0bb1004dcdecf0648a92cc961401b705897c"
+    )
+
+
+def test_scenario_event_annotation_metadata_keys_have_no_forbidden_display_names():
+    shifts = (_fake_shift(),)
+    events = build_event_annotations_from_scenario_shifts(
+        scenario_context_shift_records=shifts,
+    )
+    keys = set(events[0].metadata.keys())
+    for forbidden in FORBIDDEN_DISPLAY_NAMES:
+        assert forbidden not in keys, (
+            f"v1.18.3 annotation metadata carries forbidden "
+            f"display name {forbidden!r}"
+        )

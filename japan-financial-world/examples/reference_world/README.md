@@ -517,3 +517,36 @@ If you have not seen FWE before:
    for the design rationale.
 5. [`../../docs/v1_release_summary.md`](../../docs/v1_release_summary.md)
    for the broader v1 freeze surface.
+
+## v1.18.3 addendum — scenario report
+
+`scenario_report.py` ships the v1.18.3 deterministic markdown
+report driver. It applies a synthetic scenario fixture (one
+template per v1.18.2-mapped family — `rate_repricing_driver` /
+`credit_tightening_driver` / `funding_window_closure_driver` /
+`liquidity_stress_driver` / `information_gap_driver` — plus a
+`thematic_attention_driver` to exercise the `no_direct_shift`
+fallback) on a *fresh* kernel and renders the resulting
+`ScenarioDriverApplicationRecord` / `ScenarioContextShiftRecord`
+chain through the v1.18.3 display helpers in
+`world/display_timeline.py` (`build_event_annotations_from_scenario_shifts`
+/ `build_causal_timeline_annotations_from_scenario_shifts` /
+`render_scenario_application_markdown`).
+
+```
+python examples/reference_world/scenario_report.py
+```
+
+prints the markdown. Same fixture + same `as_of_date` →
+byte-identical markdown. The driver builds its own kernel —
+running it does **not** move the default-fixture
+`living_world_digest` of a separately seeded default sweep.
+
+The report is **report / display integration only**. No
+mutation of `MarketEnvironmentBook` / `FirmFinancialStateBook` /
+`InterbankLiquidityStateBook` / `CorporateFinancingPathBook` /
+`InvestorMarketIntentBook`. No actor decisions. No LLM
+execution. No price formation. No trading. No financing
+execution. No investment advice. No forecast. No real data. No
+Japan calibration. The `Boundary statement` section in the
+rendered markdown re-pins these invariants verbatim.
