@@ -518,6 +518,70 @@ If you have not seen FWE before:
 5. [`../../docs/v1_release_summary.md`](../../docs/v1_release_summary.md)
    for the broader v1 freeze surface.
 
+## v1.20.0 forward pointer — Monthly Scenario Reference Universe design
+
+The next planned milestone, **v1.20.0** (docs-only — see
+[`../../docs/v1_20_monthly_scenario_reference_universe_design.md`](../../docs/v1_20_monthly_scenario_reference_universe_design.md)),
+is a **realism / granularity** layer that combines the v1.19.3
+12-month `monthly_reference` cadence with a **generic 11-sector
+/ 11-firm synthetic reference universe** (4 investor archetypes
++ 3 bank archetypes) under a new opt-in profile
+**`scenario_monthly_reference_universe`**.
+
+The universe is **synthetic / generic / jurisdiction-neutral**:
+
+- 11 sector labels with the `_like` suffix (e.g.
+  `information_technology_like`, `financials_like`,
+  `real_estate_like`) so the public-FWE module text + tests
+  pin the absence of bare `GICS` / `MSCI` / `S&P` / `FactSet`
+  / `Bloomberg` / `Refinitiv` / `TOPIX` / `Nikkei` / `JPX`
+  tokens — **no licensed taxonomy dependency**;
+- 11 representative firms with jurisdiction-neutral plain-id
+  pattern `firm:reference_<sector>_a` — **no real company
+  names, no real financial statement values, no real market
+  caps, no real leverage ratios**;
+- 4 investor archetypes (`benchmark_sensitive_institutional`
+  / `active_fund_like` / `liquidity_sensitive_investor` /
+  `stewardship_oriented_investor`) and 3 bank archetypes
+  (`relationship_bank_like` / `credit_conservative_bank` /
+  `market_liquidity_sensitive_bank`) — **no real
+  institutions**;
+- a deterministic scenario-to-sector impact map where each
+  scenario family targets sectors / firms by sensitivity
+  label (e.g. `rate_repricing_driver` shifts sectors with
+  `rate_sensitivity_label ∈ {high, very_high}`;
+  `credit_tightening_driver` shifts sectors / firms with high
+  credit / funding sensitivity) — **this is context / evidence
+  preparation, not actor decision logic**.
+
+The default test fixture applies one scenario driver
+(`credit_tightening_driver`) at month 4. An opt-in
+multi-scenario demo fixture exercises 4 scenarios across
+months 3 / 4 / 6 / 8.
+
+Bounded performance budget: 12 periods × 11 firms × 4
+investors × 3 banks × 11 sectors × 51 arrivals; target
+2400-3360 records / run; **upper guardrail 4000 records**.
+
+The new profile is **opt-in** — the canonical
+`quarterly_default` digest stays at
+**`f93bdf3f4203c20d4a58e956160b0bb1004dcdecf0648a92cc961401b705897c`**
+and the `monthly_reference` digest stays at
+**`75a91cfa35cbbc29d321ffab045eb07ce4d2ba77dc4514a009bb4e596c91879d`**
+unless the caller explicitly invokes
+`--profile scenario_monthly_reference_universe`.
+
+Per-milestone roadmap: v1.20.1 storage / v1.20.2 scenario
+schedule / v1.20.3 run profile / v1.20.4 CLI export / v1.20.5
+UI rendering / v1.20.last freeze.
+
+The v1.20 design does **not** unlock daily full economic
+simulation, price formation, trading, financing execution, LLM
+execution, real data ingestion, or Japan calibration. It does
+**not** introduce a SaaS or backend; the v1.19.4 read-only
+file-input loader continues to be the only browser-side
+loading surface.
+
 ## v1.19.last — Local Run Bundle and Monthly Reference freeze (shipped, docs-only)
 
 v1.19.last closes the v1.19 sequence as the **first FWE
