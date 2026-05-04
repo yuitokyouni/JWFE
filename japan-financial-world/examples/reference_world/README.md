@@ -602,6 +602,36 @@ v1.19.2 ships **CLI export only**:
 The next milestone in this folder will be **v1.19.3** — the
 `monthly_reference` run profile + `world/information_release.py`.
 
+## v1.19.3 — `monthly_reference` profile + `InformationReleaseCalendar` layer (shipped)
+
+The v1.19.3 milestone ships [`world/information_release.py`](../../world/information_release.py) and extends the orchestrator with a `profile` keyword arg, so the canonical demo can run on either the canonical 4-period quarterly schedule (default, byte-identical to v1.18.last) or a 12-period monthly schedule with synthetic public-information arrivals.
+
+```
+# default — quarterly_default profile (unchanged from v1.18.last)
+run_living_reference_world(kernel, firm_ids=..., investor_ids=..., bank_ids=...)
+
+# new — monthly_reference profile (12 monthly periods, 51 synthetic
+# information arrivals across 7 indicator families, no real values, no
+# real institutional names)
+run_living_reference_world(
+    kernel,
+    firm_ids=...,
+    investor_ids=...,
+    bank_ids=...,
+    profile="monthly_reference",
+)
+```
+
+The `monthly_reference` profile reads a default jurisdiction-neutral synthetic calendar (12 months, 7 indicator families: `central_bank_policy` / `inflation` / `labor_market` / `production_supply` / `consumption_demand` / `gdp_national_accounts` / `market_liquidity`), emits one `InformationArrivalRecord` per scheduled release for each month, then runs the existing v1.16 closed loop on the same monthly cadence. The arrival records carry the v1.18.0 reasoning-mode audit shape (`reasoning_mode = "rule_based_fallback"`, `reasoning_slot = "future_llm_compatible"`) and the v1.19.0 default boundary-flag set verbatim.
+
+**Bounded scale:** 3-5 arrivals per month, total 51 across 12 months for the default fixture (within the [36, 60] design budget). The arrival count is exactly the difference from a "naive 12x quarterly" loop — running the canonical loop 12 times with no calendar would emit identical content per month, while the calendar layer makes adjacent months **visibly different** (April carries a `central_bank_policy` arrival; March / June / September / December carry quarterly-cluster arrivals; etc.).
+
+**Information arrival is not data ingestion.** No real indicator values, no real release dates, no real institutional identifiers. Japan release cadence is a **design reference only**, never encoded as canonical data. The v1.19.3 hard naming boundary `FORBIDDEN_INFORMATION_RELEASE_FIELD_NAMES` rejects any field / payload / metadata key in `{real_indicator_value, cpi_value, gdp_value, policy_rate, real_release_date, boj, fomc, ecb, ...}` at construction.
+
+**Determinism:** the `monthly_reference` `living_world_digest` is pinned at `75a91cfa35cbbc29d321ffab045eb07ce4d2ba77dc4514a009bb4e596c91879d` (`tests/test_living_reference_world.py::test_v1_19_3_monthly_reference_living_world_digest_is_pinned`). The default `quarterly_default` digest stays byte-identical at `f93bdf3f4203c20d4a58e956160b0bb1004dcdecf0648a92cc961401b705897c` because the new `InformationReleaseBook` is empty by default (`tests/test_information_release.py::test_empty_information_releases_does_not_move_default_living_world_digest`).
+
+The next milestone in this folder will be **v1.19.4** — the static UI's read-only **Load local run bundle** affordance (and an optional stub local server).
+
 ## v1.19.1 — RunExportBundle dataclass + JSON writer (shipped)
 
 The first concrete code milestone of the v1.19 local-run-bridge

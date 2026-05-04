@@ -182,6 +182,14 @@ from world.market_pressure import (
 from world.market_intent_classifier import (
     classify_market_intent_direction,
 )
+from world.information_release import (
+    DuplicateInformationArrivalError,
+    DuplicateInformationReleaseCalendarError,
+    DuplicateScheduledIndicatorReleaseError,
+    InformationArrivalRecord,
+    InformationReleaseCalendar,
+    ScheduledIndicatorRelease,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -359,6 +367,17 @@ class LivingReferencePeriodSummary:
     indicative_market_pressure_ids: tuple[str, ...] = field(
         default_factory=tuple
     )
+    # v1.19.3 additive: synthetic information-release citations for
+    # the monthly_reference run profile. Both tuples are empty for
+    # the default quarterly_default profile so the v1.18.last
+    # canonical view stays byte-identical. ``scheduled_release_ids``
+    # carries the calendar entries scheduled for this period;
+    # ``information_arrival_ids`` carries the arrival records
+    # emitted during this period (one per scheduled release that
+    # arrived). Storage / citation only — never an actor decision,
+    # never a price record.
+    scheduled_release_ids: tuple[str, ...] = field(default_factory=tuple)
+    information_arrival_ids: tuple[str, ...] = field(default_factory=tuple)
     record_count_created: int = 0
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
@@ -403,6 +422,8 @@ class LivingReferencePeriodSummary:
             "investor_market_intent_ids",
             "aggregated_market_interest_ids",
             "indicative_market_pressure_ids",
+            "scheduled_release_ids",
+            "information_arrival_ids",
         ):
             value = tuple(getattr(self, tuple_field_name))
             for entry in value:
@@ -513,6 +534,311 @@ _DEFAULT_QUARTER_END_DATES: tuple[str, ...] = (
     "2026-09-30",
     "2026-12-31",
 )
+
+
+# v1.19.3 — closed-set of run-profile labels accepted by the
+# orchestrator. Only ``quarterly_default`` and
+# ``monthly_reference`` are currently wired to engine machinery;
+# the other labels are reserved by v1.19.0 for future milestones.
+_SUPPORTED_RUN_PROFILE_LABELS: frozenset[str] = frozenset(
+    {"quarterly_default", "monthly_reference"}
+)
+
+
+# v1.19.3 — synthetic 12-month period schedule for the
+# ``monthly_reference`` profile. Month-end ISO strings, no real
+# release dates. Calendar year 2026 is a deterministic synthetic
+# choice mirroring v1.9 / v1.18 fixtures; it is not a forecast
+# horizon.
+_DEFAULT_MONTHLY_PERIOD_DATES: tuple[str, ...] = (
+    "2026-01-31",
+    "2026-02-28",
+    "2026-03-31",
+    "2026-04-30",
+    "2026-05-31",
+    "2026-06-30",
+    "2026-07-31",
+    "2026-08-31",
+    "2026-09-30",
+    "2026-10-31",
+    "2026-11-30",
+    "2026-12-31",
+)
+
+
+# v1.19.3 — default monthly information-release fixture. Each
+# entry is ``(indicator_family_label, release_cadence_label,
+# release_importance_label, scheduled_period_indices_1based,
+# expected_attention_surface_labels)``. Months use 1-based
+# indexing (1 = January) to match the v1.19.0 design table. Only
+# ``central_bank_policy`` / ``inflation`` / ``labor_market`` /
+# ``production_supply`` / ``consumption_demand`` /
+# ``gdp_national_accounts`` / ``market_liquidity`` families are
+# populated; ``capex_investment`` / ``fiscal_policy`` /
+# ``sector_specific`` / ``information_gap`` are intentionally
+# omitted from the default fixture so the per-month arrival count
+# stays in [3, 5] and the run total stays in [36, 60].
+#
+# Per-month arrival counts (with the default fixture):
+#   month 1 (Jan): inflation, labor_market, production_supply,
+#                  market_liquidity                       = 4
+#   month 2 (Feb): inflation, labor_market, production_supply,
+#                  market_liquidity                       = 4
+#   month 3 (Mar): inflation, labor_market, production_supply,
+#                  consumption_demand, gdp_national_accounts,
+#                  market_liquidity                       = 6  -> trim
+#   month 4 (Apr): central_bank_policy, inflation,
+#                  labor_market, production_supply,
+#                  market_liquidity                       = 5
+#   ...
+#
+# To respect the [3, 5] per-month bound we drop
+# ``production_supply`` from the four "quarterly closing" months
+# (3 / 6 / 9 / 12) where ``consumption_demand`` and
+# ``gdp_national_accounts`` already fire.
+_DefaultReleaseSpec = tuple[str, str, str, tuple[int, ...], tuple[str, ...]]
+
+_DEFAULT_MONTHLY_RELEASE_SPECS: tuple[_DefaultReleaseSpec, ...] = (
+    (
+        "central_bank_policy",
+        "meeting_based",
+        "regime_relevant",
+        (4, 8, 12),
+        ("market_environment", "attention_surface"),
+    ),
+    (
+        "inflation",
+        "monthly",
+        "regime_relevant",
+        (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12),
+        ("market_environment", "firm_financial_state"),
+    ),
+    (
+        "labor_market",
+        "monthly",
+        "routine",
+        # Trim months 3, 6, 9, 12 where the quarterly cluster
+        # already fires; per-month arrival count stays bounded
+        # at [3, 5].
+        (1, 2, 4, 5, 7, 8, 10, 11),
+        ("firm_financial_state",),
+    ),
+    (
+        "production_supply",
+        "monthly",
+        "routine",
+        # Trim months 3, 6, 9, 12 where the quarterly cluster
+        # already fires; per-month arrival count stays bounded
+        # at [3, 5].
+        (1, 2, 4, 5, 7, 8, 10, 11),
+        ("firm_financial_state",),
+    ),
+    (
+        "consumption_demand",
+        "monthly",
+        "routine",
+        (3, 6, 9, 12),
+        ("firm_financial_state",),
+    ),
+    (
+        "gdp_national_accounts",
+        "quarterly",
+        "high_attention",
+        (3, 6, 9, 12),
+        ("market_environment",),
+    ),
+    (
+        "market_liquidity",
+        "monthly",
+        "routine",
+        (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12),
+        ("market_environment",),
+    ),
+)
+
+
+_DEFAULT_INFORMATION_RELEASE_CALENDAR_ID: str = (
+    "calendar:reference_monthly_synthetic"
+)
+_DEFAULT_INFORMATION_RELEASE_CALENDAR_LABEL: str = (
+    "Reference monthly synthetic information-release calendar"
+)
+
+
+def _scheduled_release_id_for(
+    calendar_id: str,
+    indicator_family_label: str,
+    period_index_1based: int,
+) -> str:
+    return (
+        f"scheduled_release:{calendar_id}:"
+        f"{indicator_family_label}:period_{period_index_1based:02d}"
+    )
+
+
+def _information_arrival_id_for(
+    scheduled_release_id: str, as_of_date: str
+) -> str:
+    return f"arrival:{scheduled_release_id}:{as_of_date}"
+
+
+def _scheduled_month_label_for(period_index_1based: int) -> str:
+    return f"period_{period_index_1based:02d}"
+
+
+def _ensure_default_monthly_release_calendar(
+    kernel: Any,
+    *,
+    iso_dates: tuple[str, ...],
+    calendar_id: str = _DEFAULT_INFORMATION_RELEASE_CALENDAR_ID,
+) -> tuple[str, dict[int, tuple[ScheduledIndicatorRelease, ...]]]:
+    """Idempotently register the v1.19.3 default monthly release
+    calendar + scheduled releases on the kernel's
+    ``information_releases`` book. Returns
+    ``(calendar_id, releases_by_month_index_0based)`` where the
+    second element maps the 0-based period index for
+    ``iso_dates`` to the tuple of scheduled-release records due
+    in that month.
+
+    The number of monthly periods is whatever the caller passed
+    in. The default fixture pins 12 months; if the caller passes
+    fewer, only the matching prefix of scheduled releases is
+    registered. If the caller passes *more* than 12 months, the
+    extra months simply have no scheduled releases (the caller
+    is responsible for any extension).
+
+    Setup ledger events use ``iso_dates[0]`` as their
+    ``simulation_date`` so two kernels with the same fixture
+    produce byte-identical ledger slices.
+    """
+    setup_simulation_date = iso_dates[0] if iso_dates else None
+    try:
+        kernel.information_releases.add_calendar(
+            InformationReleaseCalendar(
+                calendar_id=calendar_id,
+                calendar_label=(
+                    _DEFAULT_INFORMATION_RELEASE_CALENDAR_LABEL
+                ),
+                jurisdiction_scope_label="jurisdiction_neutral",
+                release_cadence_labels=(
+                    "monthly",
+                    "quarterly",
+                    "meeting_based",
+                ),
+                indicator_family_labels=tuple(
+                    spec[0] for spec in _DEFAULT_MONTHLY_RELEASE_SPECS
+                ),
+                status="active",
+                visibility="internal_only",
+            ),
+            simulation_date=setup_simulation_date,
+        )
+    except DuplicateInformationReleaseCalendarError:
+        kernel.information_releases.get_calendar(calendar_id)
+
+    releases_by_period_idx_0based: dict[
+        int, list[ScheduledIndicatorRelease]
+    ] = {idx: [] for idx in range(len(iso_dates))}
+
+    for (
+        family_label,
+        cadence_label,
+        importance_label,
+        scheduled_months_1based,
+        attention_surface_labels,
+    ) in _DEFAULT_MONTHLY_RELEASE_SPECS:
+        for month_1based in scheduled_months_1based:
+            period_idx_0based = month_1based - 1
+            if period_idx_0based >= len(iso_dates):
+                continue
+            scheduled_id = _scheduled_release_id_for(
+                calendar_id, family_label, month_1based
+            )
+            try:
+                release = kernel.information_releases.add_scheduled_release(
+                    ScheduledIndicatorRelease(
+                        scheduled_release_id=scheduled_id,
+                        calendar_id=calendar_id,
+                        indicator_family_label=family_label,
+                        release_cadence_label=cadence_label,
+                        release_importance_label=importance_label,
+                        scheduled_month_label=(
+                            _scheduled_month_label_for(month_1based)
+                        ),
+                        scheduled_period_index=period_idx_0based,
+                        expected_attention_surface_labels=(
+                            attention_surface_labels
+                        ),
+                        status="active",
+                        visibility="internal_only",
+                    ),
+                    simulation_date=setup_simulation_date,
+                )
+            except DuplicateScheduledIndicatorReleaseError:
+                release = (
+                    kernel.information_releases.get_scheduled_release(
+                        scheduled_id
+                    )
+                )
+            releases_by_period_idx_0based[period_idx_0based].append(release)
+
+    return (
+        calendar_id,
+        {
+            idx: tuple(records)
+            for idx, records in releases_by_period_idx_0based.items()
+        },
+    )
+
+
+def _emit_period_information_arrivals(
+    kernel: Any,
+    *,
+    calendar_id: str,
+    iso_date: str,
+    scheduled_releases: tuple[ScheduledIndicatorRelease, ...],
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Emit one :class:`InformationArrivalRecord` per scheduled
+    release in the given month. Returns
+    ``(scheduled_release_ids, information_arrival_ids)`` —
+    parallel tuples in the same order.
+    """
+    scheduled_ids: list[str] = []
+    arrival_ids: list[str] = []
+    for release in scheduled_releases:
+        arrival_id = _information_arrival_id_for(
+            release.scheduled_release_id, iso_date
+        )
+        try:
+            kernel.information_releases.add_arrival(
+                InformationArrivalRecord(
+                    information_arrival_id=arrival_id,
+                    calendar_id=calendar_id,
+                    scheduled_release_id=release.scheduled_release_id,
+                    as_of_date=iso_date,
+                    indicator_family_label=(
+                        release.indicator_family_label
+                    ),
+                    release_cadence_label=release.release_cadence_label,
+                    release_importance_label=(
+                        release.release_importance_label
+                    ),
+                    arrival_status_label="arrived",
+                    affected_context_surface_labels=(
+                        release.expected_attention_surface_labels
+                    ),
+                    expected_attention_surface_labels=(
+                        release.expected_attention_surface_labels
+                    ),
+                    status="active",
+                    visibility="internal_only",
+                )
+            )
+        except DuplicateInformationArrivalError:
+            pass
+        scheduled_ids.append(release.scheduled_release_id)
+        arrival_ids.append(arrival_id)
+    return tuple(scheduled_ids), tuple(arrival_ids)
 
 
 # v1.10.5 — defaults for the engagement / strategic-response layer.
@@ -1270,6 +1596,7 @@ def run_living_reference_world(
         tuple[str, str, str, str, float, float, str]
     ] | None = None,
     market_regime: str | None = None,
+    profile: str = "quarterly_default",
 ) -> LivingReferenceWorldResult:
     """
     Sweep the v1.8 endogenous chain plus the v1.9.4 / v1.9.5 / v1.9.7
@@ -1361,8 +1688,19 @@ def run_living_reference_world(
     investors = _validate_id_list(investor_ids, name="investor_ids")
     banks = _validate_id_list(bank_ids, name="bank_ids")
 
+    if not isinstance(profile, str) or not profile:
+        raise ValueError("profile must be a non-empty string")
+    if profile not in _SUPPORTED_RUN_PROFILE_LABELS:
+        raise ValueError(
+            f"profile must be one of "
+            f"{sorted(_SUPPORTED_RUN_PROFILE_LABELS)!r}; got {profile!r}"
+        )
+
     if period_dates is None:
-        period_dates = _DEFAULT_QUARTER_END_DATES
+        if profile == "monthly_reference":
+            period_dates = _DEFAULT_MONTHLY_PERIOD_DATES
+        else:
+            period_dates = _DEFAULT_QUARTER_END_DATES
     raw_dates = list(period_dates)
     if len(raw_dates) == 0:
         raise ValueError("period_dates must not be empty")
@@ -1525,6 +1863,29 @@ def run_living_reference_world(
     unique_market_ids = tuple(seen_market_ids)
 
     # ------------------------------------------------------------------
+    # v1.19.3 — monthly_reference profile information-release setup.
+    # Quarterly_default skips this block entirely so the v1.18.last
+    # canonical view is byte-identical. For monthly_reference, we
+    # idempotently register the default synthetic calendar +
+    # scheduled releases on the kernel's
+    # ``information_releases`` book; the per-period sweep below
+    # then emits one ``InformationArrivalRecord`` per scheduled
+    # release for the matching month. Bounded budget: 3-5
+    # arrivals per month, total in [36, 60] for 12 months.
+    # ------------------------------------------------------------------
+    monthly_release_calendar_id: str | None = None
+    monthly_releases_by_period_idx: dict[
+        int, tuple[ScheduledIndicatorRelease, ...]
+    ] = {}
+    if profile == "monthly_reference":
+        (
+            monthly_release_calendar_id,
+            monthly_releases_by_period_idx,
+        ) = _ensure_default_monthly_release_calendar(
+            kernel, iso_dates=iso_dates
+        )
+
+    # ------------------------------------------------------------------
     # Per-period sweep
     # ------------------------------------------------------------------
     period_summaries: list[LivingReferencePeriodSummary] = []
@@ -1548,6 +1909,31 @@ def run_living_reference_world(
     for period_idx, iso_date in enumerate(iso_dates):
         period_id = f"period:{rid}:{iso_date}"
         period_start_idx = len(kernel.ledger.records)
+
+        # v1.19.3 — emit information arrivals first so any
+        # downstream per-period helper that wants to cite them
+        # (future milestone; v1.19.3 keeps the citation surface
+        # passive) sees them in the kernel before its own
+        # records land. For quarterly_default profile both
+        # tuples stay empty.
+        period_scheduled_release_ids: tuple[str, ...] = ()
+        period_information_arrival_ids: tuple[str, ...] = ()
+        if (
+            profile == "monthly_reference"
+            and monthly_release_calendar_id is not None
+        ):
+            scheduled_for_period = monthly_releases_by_period_idx.get(
+                period_idx, ()
+            )
+            (
+                period_scheduled_release_ids,
+                period_information_arrival_ids,
+            ) = _emit_period_information_arrivals(
+                kernel,
+                calendar_id=monthly_release_calendar_id,
+                iso_date=iso_date,
+                scheduled_releases=scheduled_for_period,
+            )
 
         corporate_run_ids: list[str] = []
         corporate_signal_ids: list[str] = []
@@ -3114,6 +3500,8 @@ def run_living_reference_world(
                 indicative_market_pressure_ids=tuple(
                     indicative_market_pressure_ids
                 ),
+                scheduled_release_ids=period_scheduled_release_ids,
+                information_arrival_ids=period_information_arrival_ids,
                 record_count_created=period_end_idx - period_start_idx,
                 metadata={
                     "period_index": period_idx,

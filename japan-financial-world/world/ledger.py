@@ -114,6 +114,13 @@ class RecordType(str, Enum):
     SCENARIO_CONTEXT_SHIFT_RECORDED = (
         "scenario_context_shift_recorded"
     )
+    INFORMATION_RELEASE_CALENDAR_RECORDED = (
+        "information_release_calendar_recorded"
+    )
+    SCHEDULED_INDICATOR_RELEASE_RECORDED = (
+        "scheduled_indicator_release_recorded"
+    )
+    INFORMATION_ARRIVAL_RECORDED = "information_arrival_recorded"
     STATE_SNAPSHOT_CREATED = "state_snapshot_created"
     WARNING = "warning"
     ERROR = "error"

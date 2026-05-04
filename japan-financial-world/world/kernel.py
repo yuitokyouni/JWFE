@@ -19,6 +19,7 @@ from world.securities import SecurityMarketBook
 from world.market_intents import InvestorMarketIntentBook
 from world.market_interest import AggregatedMarketInterestBook
 from world.market_pressure import IndicativeMarketPressureBook
+from world.information_release import InformationReleaseBook
 from world.scenario_applications import ScenarioApplicationBook
 from world.scenario_drivers import ScenarioDriverTemplateBook
 from world.balance_sheet import BalanceSheetProjector
@@ -172,6 +173,19 @@ class WorldKernel:
     scenario_applications: ScenarioApplicationBook = field(
         default_factory=ScenarioApplicationBook
     )
+    # v1.19.3 — information-release calendar storage. Empty by
+    # default; only populated when the v1.19.3
+    # ``monthly_reference`` profile (or a caller-supplied
+    # equivalent) registers calendars / scheduled releases /
+    # information arrivals. Storage / append-only — never
+    # mutates a pre-existing context record on any other
+    # source-of-truth book. Empty by default so the canonical
+    # view of a default ``quarterly_default`` sweep is
+    # byte-identical to v1.19.1 (no calendar registered → no
+    # ledger emission → no digest movement).
+    information_releases: InformationReleaseBook = field(
+        default_factory=InformationReleaseBook
+    )
     routine_engine: RoutineEngine | None = None
     observation_menu_builder: ObservationMenuBuilder | None = None
     # v1.12.3 — read-only evidence resolution service. Stateless;
@@ -222,6 +236,7 @@ class WorldKernel:
             self.indicative_market_pressure,
             self.scenario_drivers,
             self.scenario_applications,
+            self.information_releases,
         ):
             if book.ledger is None:
                 book.ledger = self.ledger
