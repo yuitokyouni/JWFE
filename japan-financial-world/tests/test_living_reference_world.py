@@ -4690,3 +4690,218 @@ def test_v1_16_3_pressure_focus_appears_when_period_zero_pressure_constrained():
         f"label despite period-0 pressure / path firing; "
         f"observed focus: {sorted(union_focus)}"
     )
+
+
+# ===========================================================================
+# v1.19.3 — monthly_reference profile + InformationReleaseCalendar
+# ===========================================================================
+
+
+_MONTHLY_REFERENCE_PINNED_DIGEST: str = (
+    "75a91cfa35cbbc29d321ffab045eb07ce4d2ba77dc4514a009bb4e596c91879d"
+)
+_MONTHLY_REFERENCE_VALID_CONTEXT_SURFACES: frozenset[str] = frozenset(
+    {
+        "market_environment",
+        "firm_financial_state",
+        "attention_surface",
+    }
+)
+
+
+def _run_monthly_reference(k: WorldKernel) -> "LivingReferenceWorldResult":
+    return run_living_reference_world(
+        k,
+        firm_ids=_FIRM_IDS,
+        investor_ids=_INVESTOR_IDS,
+        bank_ids=_BANK_IDS,
+        profile="monthly_reference",
+    )
+
+
+def test_v1_19_3_quarterly_default_digest_unchanged():
+    """The v1.18.last canonical digest must remain byte-identical
+    when the v1.19.3 ``InformationReleaseBook`` is wired empty
+    by default and no caller picks the monthly profile."""
+    from examples.reference_world.living_world_replay import (
+        living_world_digest,
+    )
+
+    k = _seed_kernel()
+    r = _run_default(k)
+    assert (
+        living_world_digest(k, r)
+        == "f93bdf3f4203c20d4a58e956160b0bb1004dcdecf0648a92cc961401b705897c"
+    )
+
+
+def test_v1_19_3_monthly_reference_produces_twelve_periods():
+    k = _seed_kernel()
+    r = _run_monthly_reference(k)
+    assert r.period_count == 12
+    assert len(r.per_period_summaries) == 12
+
+
+def test_v1_19_3_monthly_reference_arrival_count_in_36_to_60():
+    """Bounded budget: 3-5 arrivals per month, total in
+    [36, 60] for 12 months. Anything outside this window means
+    the default fixture has drifted into a denser loop."""
+    k = _seed_kernel()
+    r = _run_monthly_reference(k)
+    total = sum(
+        len(ps.information_arrival_ids) for ps in r.per_period_summaries
+    )
+    assert 36 <= total <= 60, (
+        f"monthly_reference produced {total} arrivals; expected "
+        f"[36, 60]"
+    )
+    for ps in r.per_period_summaries:
+        per_month = len(ps.information_arrival_ids)
+        assert 3 <= per_month <= 5, (
+            f"period {ps.period_id} produced {per_month} arrivals; "
+            f"expected per-month bound [3, 5]"
+        )
+
+
+def test_v1_19_3_monthly_reference_is_deterministic_across_two_kernels():
+    from examples.reference_world.living_world_replay import (
+        living_world_digest,
+    )
+
+    k1 = _seed_kernel()
+    r1 = _run_monthly_reference(k1)
+    k2 = _seed_kernel()
+    r2 = _run_monthly_reference(k2)
+    assert living_world_digest(k1, r1) == living_world_digest(k2, r2)
+
+
+def test_v1_19_3_monthly_reference_living_world_digest_is_pinned():
+    from examples.reference_world.living_world_replay import (
+        living_world_digest,
+    )
+
+    k = _seed_kernel()
+    r = _run_monthly_reference(k)
+    assert living_world_digest(k, r) == _MONTHLY_REFERENCE_PINNED_DIGEST
+
+
+def test_v1_19_3_monthly_reference_does_not_mutate_pricebook():
+    k = _seed_kernel()
+    snap_before = k.prices.snapshot()
+    _run_monthly_reference(k)
+    assert k.prices.snapshot() == snap_before
+
+
+def test_v1_19_3_monthly_reference_per_period_record_count_is_bounded():
+    """Per-period record count must remain bounded — no
+    daily-economic explosion. The monthly_reference profile
+    must produce at most ~120 records per period (well below
+    any quadratic loop)."""
+    k = _seed_kernel()
+    r = _run_monthly_reference(k)
+    for ps in r.per_period_summaries:
+        # 108 / 110 baseline + at most 5 arrivals per period.
+        assert ps.record_count_created <= 130, (
+            f"period {ps.period_id} produced "
+            f"{ps.record_count_created} records — exceeds the "
+            f"v1.19.3 bound; a hidden daily loop has crept in"
+        )
+
+
+def test_v1_19_3_monthly_reference_arrival_context_surface_labels_are_valid():
+    """Each arrival's ``affected_context_surface_labels`` must
+    reference only valid surfaces (the v1.12.x +
+    v1.16.x context layer)."""
+    k = _seed_kernel()
+    r = _run_monthly_reference(k)
+    for ps in r.per_period_summaries:
+        for arrival_id in ps.information_arrival_ids:
+            arrival = k.information_releases.get_arrival(arrival_id)
+            for surface in arrival.affected_context_surface_labels:
+                assert surface in _MONTHLY_REFERENCE_VALID_CONTEXT_SURFACES, (
+                    f"arrival {arrival_id} cites unknown surface "
+                    f"{surface!r}"
+                )
+
+
+def test_v1_19_3_monthly_reference_arrivals_carry_default_audit_shape():
+    """Every emitted arrival record must carry the v1.19.0
+    default reasoning_mode / reasoning_slot and the v1.19.0
+    default boundary-flag set."""
+    from world.information_release import (
+        DEFAULT_BOUNDARY_FLAGS,
+    )
+
+    k = _seed_kernel()
+    r = _run_monthly_reference(k)
+    seen_any = False
+    for ps in r.per_period_summaries:
+        for arrival_id in ps.information_arrival_ids:
+            arrival = k.information_releases.get_arrival(arrival_id)
+            assert arrival.reasoning_mode == "rule_based_fallback"
+            assert arrival.reasoning_slot == "future_llm_compatible"
+            assert dict(arrival.boundary_flags) == dict(
+                DEFAULT_BOUNDARY_FLAGS
+            )
+            seen_any = True
+    assert seen_any, "expected at least one arrival on monthly_reference"
+
+
+def test_v1_19_3_monthly_reference_scheduled_release_ids_resolve():
+    """Every period's scheduled_release_ids must resolve in the
+    kernel's information_releases book."""
+    k = _seed_kernel()
+    r = _run_monthly_reference(k)
+    for ps in r.per_period_summaries:
+        for sid in ps.scheduled_release_ids:
+            release = k.information_releases.get_scheduled_release(sid)
+            assert release.scheduled_release_id == sid
+
+
+def test_v1_19_3_quarterly_default_emits_no_information_arrival_records():
+    """The v1.18.last canonical sweep must not contain any
+    INFORMATION_ARRIVAL_RECORDED record types — quarterly_default
+    leaves the ``InformationReleaseBook`` empty."""
+    from world.ledger import RecordType as _RT
+
+    k = _seed_kernel()
+    _run_default(k)
+    assert k.information_releases.list_arrivals() == ()
+    assert k.information_releases.list_calendars() == ()
+    assert k.information_releases.list_scheduled_releases() == ()
+    types_seen = {rec.record_type for rec in k.ledger.records}
+    assert _RT.INFORMATION_ARRIVAL_RECORDED not in types_seen
+    assert _RT.INFORMATION_RELEASE_CALENDAR_RECORDED not in types_seen
+    assert _RT.SCHEDULED_INDICATOR_RELEASE_RECORDED not in types_seen
+
+
+def test_v1_19_3_unknown_profile_label_rejected():
+    k = _seed_kernel()
+    with pytest.raises(ValueError):
+        run_living_reference_world(
+            k,
+            firm_ids=_FIRM_IDS,
+            investor_ids=_INVESTOR_IDS,
+            bank_ids=_BANK_IDS,
+            profile="rogue_profile",
+        )
+
+
+def test_v1_19_3_monthly_reference_does_not_emit_forbidden_record_types():
+    """The monthly_reference profile must not emit any
+    price / trade / contract / loan-approval / underwriting
+    record types — those are gated for future milestones."""
+    from world.ledger import RecordType as _RT
+
+    k = _seed_kernel()
+    _run_monthly_reference(k)
+    forbidden = {
+        _RT.ORDER_SUBMITTED,
+        _RT.PRICE_UPDATED,
+        _RT.CONTRACT_CREATED,
+        _RT.CONTRACT_STATUS_UPDATED,
+        _RT.CONTRACT_COVENANT_BREACHED,
+        _RT.OWNERSHIP_TRANSFERRED,
+    }
+    seen = {rec.record_type for rec in k.ledger.records}
+    assert not (seen & forbidden)

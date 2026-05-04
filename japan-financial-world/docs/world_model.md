@@ -9950,3 +9950,58 @@ The default sweep is unchanged from v1.18.last:
 ### 128.8 Forward pointer
 
 v1.19.2 will land the CLI exporter (`examples/reference_world/export_run_bundle.py`) wiring the existing v1.16 / v1.17 / v1.18 helpers into a `RunExportBundle` and writing it to disk. v1.19.3 will land the `monthly_reference` run profile and `world/information_release.py` (`InformationReleaseCalendar` book + `ScheduledIndicatorRelease` + `InformationArrivalRecord`). v1.19.4 will land the static UI's read-only **Load local run bundle** affordance. v1.19.last will freeze the v1.19 sequence (docs-only).
+
+### 128.10 v1.19.3 — `monthly_reference` profile + `InformationReleaseCalendar` layer
+
+§128.10 ships the v1.19.3 milestone. v1.19.3 lands [`world/information_release.py`](../world/information_release.py) (`InformationReleaseCalendar` + `ScheduledIndicatorRelease` + `InformationArrivalRecord` + nine closed-set frozensets) and extends [`world/reference_living_world.py`](../world/reference_living_world.py) with a `profile: str = "quarterly_default"` keyword arg. The `monthly_reference` profile reuses the existing v1.16 closed loop on a 12-month synthetic schedule and emits 3-5 information-arrival records per month (total 51 in the default fixture, within the [36, 60] design budget) — a meaningful synthetic difference from running the quarterly loop 12 times.
+
+The module ships:
+
+- three immutable frozen dataclasses: `InformationReleaseCalendar` (calendar shape — `calendar_id` / `calendar_label` / `jurisdiction_scope_label` / `release_cadence_labels` / `indicator_family_labels` / `status` / `visibility` / `metadata`); `ScheduledIndicatorRelease` (one scheduled category per month — `scheduled_release_id` / `calendar_id` / `indicator_family_label` / `release_cadence_label` / `release_importance_label` / `scheduled_month_label` / `scheduled_period_index` / `expected_attention_surface_labels` / `status` / `visibility` / `metadata`); `InformationArrivalRecord` (one synthetic arrival per month — `information_arrival_id` / `calendar_id` / `scheduled_release_id` / `as_of_date` / `indicator_family_label` / `release_cadence_label` / `release_importance_label` / `arrival_status_label` / `affected_context_surface_labels` / `expected_attention_surface_labels` / `reasoning_mode` / `reasoning_policy_id` / `reasoning_slot` / `boundary_flags` / `status` / `visibility` / `metadata`);
+- nine closed-set frozensets — `RELEASE_CADENCE_LABELS` (8 entries: `monthly` / `quarterly` / `meeting_based` / `weekly` / `daily_operational` / `ad_hoc` / `display_only` / `unknown`); `INDICATOR_FAMILY_LABELS` (12 entries — the v1.19.0 design table verbatim); `RELEASE_IMPORTANCE_LABELS` (5: `routine` / `high_attention` / `regime_relevant` / `stress_relevant` / `unknown`); `JURISDICTION_SCOPE_LABELS` (4: `jurisdiction_neutral` / `generic_developed_market` / `generic_emerging_market` / `unknown`); `ARRIVAL_STATUS_LABELS` (5: `arrived` / `delayed` / `missing` / `not_scheduled` / `unknown`); `REASONING_MODE_LABELS` / `REASONING_SLOT_LABELS` (mirrored from v1.18.0); `STATUS_LABELS` / `VISIBILITY_LABELS` (mirrored from v1.18.x);
+- the v1.19.3 hard-naming-boundary `FORBIDDEN_INFORMATION_RELEASE_FIELD_NAMES` frozenset — composes the v1.18.0 actor-decision / canonical-judgment / forbidden-token set with the v1.19.3 Japan-real-data tokens (`real_indicator_value` / `cpi_value` / `gdp_value` / `policy_rate` / `real_release_date` / `boj` / `fomc` / `ecb`) — scanned across every payload + boundary-flag + metadata mapping at construction;
+- the v1.19.0 default boundary-flag set carried on every emitted arrival record (8 entries: `synthetic_only` / `no_price_formation` / `no_trading` / `no_investment_advice` / `no_real_data` / `no_japan_calibration` / `no_llm_execution` / `display_or_export_only`);
+- the append-only `InformationReleaseBook` with `add_calendar` / `add_scheduled_release` / `add_arrival` (each emitting exactly one ledger record per call), `get_*`, and ten `list_*` filter methods (`list_calendars` / `list_scheduled_releases` / `list_releases_by_calendar` / `list_releases_by_indicator_family` / `list_releases_by_cadence` / `list_releases_by_importance` / `list_arrivals` / `list_arrivals_by_calendar` / `list_arrivals_by_indicator_family` / `list_arrivals_by_date` / `list_arrivals_by_importance`);
+- three new `RecordType` enum values: `INFORMATION_RELEASE_CALENDAR_RECORDED` / `SCHEDULED_INDICATOR_RELEASE_RECORDED` / `INFORMATION_ARRIVAL_RECORDED`;
+- the kernel wiring: `WorldKernel.information_releases: InformationReleaseBook` with `field(default_factory=InformationReleaseBook)`, ledger + clock injected through `__post_init__`, **empty by default** so the canonical `quarterly_default` digest is byte-identical to v1.19.1.
+
+The orchestrator extension:
+
+- `run_living_reference_world(..., profile=...)` accepts `quarterly_default` (default, byte-identical to v1.19.1) and `monthly_reference`; unknown profile labels raise `ValueError`;
+- `monthly_reference` defaults `period_dates` to a synthetic 12-month month-end schedule (2026-01-31 through 2026-12-31), idempotently registers the default jurisdiction-neutral synthetic calendar + 51 scheduled releases (the `_DEFAULT_MONTHLY_RELEASE_SPECS` table — central_bank_policy at meeting months 4 / 8 / 12; inflation + market_liquidity every month; labor_market + production_supply on non-quarterly-closing months; consumption_demand + gdp_national_accounts on quarterly-closing months 3 / 6 / 9 / 12), and at each period emits one `InformationArrivalRecord` per scheduled release for that month;
+- `LivingReferencePeriodSummary` is extended with `scheduled_release_ids` and `information_arrival_ids` tuples (empty for `quarterly_default`).
+
+### 128.11 Determinism rules pinned at v1.19.3
+
+- Same kernel seed + same calendar fixture + same regime → byte-identical book snapshots and per-period summary tuples across two kernels (pinned by `test_v1_19_3_monthly_reference_is_deterministic_across_two_kernels`).
+- The `monthly_reference` `living_world_digest` is pinned at **`75a91cfa35cbbc29d321ffab045eb07ce4d2ba77dc4514a009bb4e596c91879d`** by `test_v1_19_3_monthly_reference_living_world_digest_is_pinned`.
+- The `quarterly_default` `living_world_digest` stays byte-identical at **`f93bdf3f4203c20d4a58e956160b0bb1004dcdecf0648a92cc961401b705897c`** (pinned by `test_v1_19_3_quarterly_default_digest_unchanged` and the empty-book trip-wire `test_empty_information_releases_does_not_move_default_living_world_digest`).
+- All ledger events on the `information_releases` book use deterministic `simulation_date` values (the calendar / scheduled-release setup uses `iso_dates[0]`; arrivals use `arrival.as_of_date`). No wall-clock timestamp leaks into the canonical view.
+
+### 128.12 No-mutation invariants pinned at v1.19.3
+
+1. Adding a calendar / scheduled release / arrival record does **not** mutate the `PriceBook` or any other source-of-truth book (pinned by `test_add_calendar_does_not_mutate_pricebook` / `test_add_arrival_does_not_mutate_pricebook` / `test_add_arrival_does_not_mutate_other_source_of_truth_books`).
+2. Wiring an empty `InformationReleaseBook` does **not** move the default-fixture `living_world_digest` (pinned by `test_empty_information_releases_does_not_move_default_living_world_digest`).
+3. The `monthly_reference` profile does **not** emit any forbidden record type (`ORDER_SUBMITTED` / `PRICE_UPDATED` / `CONTRACT_*` / `OWNERSHIP_TRANSFERRED`) — pinned by `test_v1_19_3_monthly_reference_emits_no_forbidden_record_types` and the perf-boundary equivalent.
+4. The `quarterly_default` profile emits **no** `INFORMATION_*_RECORDED` events (pinned by `test_v1_19_3_quarterly_default_emits_no_information_arrival_records`).
+
+### 128.13 Performance boundary at v1.19.3
+
+| Surface                                                                | Value (v1.19.3 = v1.19.1 for `quarterly_default`)                                  |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Per-period record count (`quarterly_default`)                          | **108 / 110** (unchanged)                                                          |
+| Per-run window (`quarterly_default`, 4 periods)                        | **`[432, 480]`** (unchanged)                                                       |
+| Default 4-period sweep (`quarterly_default`)                           | **460 records** (unchanged)                                                        |
+| `living_world_digest` (`quarterly_default`)                            | **`f93bdf3f4203c20d4a58e956160b0bb1004dcdecf0648a92cc961401b705897c`** (unchanged) |
+| `monthly_reference` arrivals per month (default fixture)               | **3-5** (in the [3, 5] design budget)                                              |
+| `monthly_reference` total arrivals (default fixture, 12 months)        | **51** (in the [36, 60] design budget)                                             |
+| `monthly_reference` `living_world_digest`                              | **`75a91cfa35cbbc29d321ffab045eb07ce4d2ba77dc4514a009bb4e596c91879d`**             |
+| Test count (`pytest -q`)                                               | **4494 / 4494**                                                                    |
+
+### 128.14 Test inventory delta
+
+`+88` tests in [`tests/test_information_release.py`](../tests/test_information_release.py); `+13` tests in [`tests/test_living_reference_world.py`](../tests/test_living_reference_world.py); `+3` tests in [`tests/test_living_reference_world_performance_boundary.py`](../tests/test_living_reference_world_performance_boundary.py). Test inventory total moves from **102 / 4390** to **103 / 4494**.
+
+### 128.15 Forward pointer
+
+v1.19.4 will land the static UI's read-only **Load local run bundle** affordance (and an optional stub local server). v1.19.last will freeze the v1.19 sequence (docs-only).

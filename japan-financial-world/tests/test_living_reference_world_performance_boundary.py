@@ -596,3 +596,67 @@ def test_count_expected_living_world_records_scales_linearly_in_periods():
         firms=3, investors=2, banks=2, periods=4,
     )
     assert four_periods == 4 * one_period
+
+
+# ---------------------------------------------------------------------------
+# v1.19.3 monthly_reference profile pins
+# ---------------------------------------------------------------------------
+
+
+def test_v1_19_3_monthly_reference_total_arrival_count_in_36_to_60():
+    """The v1.19.3 ``monthly_reference`` default fixture pins
+    a 12-month synthetic schedule with 3-5 information-arrival
+    records per month, total in [36, 60]. Anything outside this
+    window means the default release fixture has drifted into a
+    denser shape."""
+    k = _seed_kernel()
+    r = run_living_reference_world(
+        k,
+        firm_ids=_FIRM_IDS,
+        investor_ids=_INVESTOR_IDS,
+        bank_ids=_BANK_IDS,
+        profile="monthly_reference",
+    )
+    total_arrivals = sum(
+        len(ps.information_arrival_ids) for ps in r.per_period_summaries
+    )
+    assert 36 <= total_arrivals <= 60, (
+        f"monthly_reference default fixture produced "
+        f"{total_arrivals} arrivals; expected [36, 60]"
+    )
+
+
+def test_v1_19_3_monthly_reference_per_period_arrival_count_in_3_to_5():
+    k = _seed_kernel()
+    r = run_living_reference_world(
+        k,
+        firm_ids=_FIRM_IDS,
+        investor_ids=_INVESTOR_IDS,
+        bank_ids=_BANK_IDS,
+        profile="monthly_reference",
+    )
+    for ps in r.per_period_summaries:
+        n = len(ps.information_arrival_ids)
+        assert 3 <= n <= 5, (
+            f"period {ps.period_id} produced {n} arrivals; "
+            f"expected per-month bound [3, 5]"
+        )
+
+
+def test_v1_19_3_monthly_reference_emits_no_forbidden_record_types():
+    """``monthly_reference`` must remain review-only — no
+    price / trade / contract / lending mutation events."""
+    k = _seed_kernel()
+    run_living_reference_world(
+        k,
+        firm_ids=_FIRM_IDS,
+        investor_ids=_INVESTOR_IDS,
+        bank_ids=_BANK_IDS,
+        profile="monthly_reference",
+    )
+    seen = {rec.record_type for rec in k.ledger.records}
+    leaked = seen & _FORBIDDEN_RECORD_TYPES
+    assert not leaked, (
+        f"monthly_reference must not emit "
+        f"{sorted(t.value for t in leaked)}"
+    )

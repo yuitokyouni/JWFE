@@ -336,6 +336,32 @@ If any of those pins fails, the demo has either grown the
 fixture (intentional but undocumented) or gained a hidden
 quadratic loop (unintended).
 
+## v1.19.3 monthly_reference profile pins
+
+The v1.19.3 milestone adds a `monthly_reference` run profile and an `InformationReleaseCalendar` storage layer ([`world/information_release.py`](../world/information_release.py)). The default `quarterly_default` profile remains byte-identical to v1.18.last; the `monthly_reference` profile is opt-in and runs the existing v1.16 closed loop on a 12-month synthetic schedule with synthetic public-information arrivals.
+
+**Default `quarterly_default` sweep (unchanged from v1.18.last):**
+
+- per-period record count: **108** (period 0) / **110** (periods 1+),
+- per-run window: **`[432, 480]`**,
+- default 4-period sweep total: **460 records**,
+- integration-test `living_world_digest`: **`f93bdf3f4203c20d4a58e956160b0bb1004dcdecf0648a92cc961401b705897c`** (pinned by `tests/test_information_release.py::test_empty_information_releases_does_not_move_default_living_world_digest` and `tests/test_living_reference_world.py::test_v1_19_3_quarterly_default_digest_unchanged`).
+
+**Default `monthly_reference` sweep (v1.19.3 new):**
+
+- 12 monthly periods (synthetic month-end ISO dates),
+- **3-5 information arrivals per month**, total **51** for the default fixture (within the [36, 60] design budget pinned by `tests/test_living_reference_world.py::test_v1_19_3_monthly_reference_arrival_count_in_36_to_60` and the perf-boundary equivalent),
+- per-period record count remains bounded — no daily-economic explosion (the `monthly_reference` profile reuses the same closed-loop machinery as `quarterly_default` plus 3-5 arrival records per period),
+- `living_world_digest` (`monthly_reference`): **`75a91cfa35cbbc29d321ffab045eb07ce4d2ba77dc4514a009bb4e596c91879d`** (pinned by `test_v1_19_3_monthly_reference_living_world_digest_is_pinned`).
+
+**Bounded scale guarantees:**
+
+- the monthly profile does **not** walk a `P x I x F x venue` or `P x I x F x option_count` Cartesian product (the per-period scale stays the v1.16 closed-loop scale plus a constant-bounded arrival count);
+- the monthly profile emits **no** `ORDER_SUBMITTED` / `PRICE_UPDATED` / `CONTRACT_*` / `OWNERSHIP_TRANSFERRED` records (pinned by `test_v1_19_3_monthly_reference_emits_no_forbidden_record_types`);
+- pytest count: **4494 / 4494** passing (+104 from v1.19.1; v1.19.2 is shipped by Agent A in parallel).
+
+If any of these pins fails, either the default monthly fixture has drifted (intentional but undocumented) or a hidden quadratic loop has crept into the orchestrator.
+
 ## v1.18.last freeze pins
 
 The v1.18.last freeze (docs-only on top of the v1.18.0 → v1.18.4
