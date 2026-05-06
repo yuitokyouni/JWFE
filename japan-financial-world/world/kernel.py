@@ -24,6 +24,7 @@ from world.reference_universe import ReferenceUniverseBook
 from world.scenario_applications import ScenarioApplicationBook
 from world.scenario_drivers import ScenarioDriverTemplateBook
 from world.scenario_schedule import ScenarioScheduleBook
+from world.manual_annotations import ManualAnnotationBook
 from world.stress_applications import StressProgramApplicationBook
 from world.stress_programs import StressProgramBook
 from world.balance_sheet import BalanceSheetProjector
@@ -233,6 +234,16 @@ class WorldKernel:
     stress_applications: StressProgramApplicationBook = field(
         default_factory=StressProgramApplicationBook
     )
+    # v1.24.1 — manual-annotation interaction layer storage.
+    # Append-only; emits exactly one
+    # ``MANUAL_ANNOTATION_RECORDED`` ledger event per
+    # successful ``add_annotation(...)`` call. Empty by
+    # default — pinned by
+    # ``tests/test_manual_annotations.py::test_world_kernel_manual_annotations_empty_by_default``
+    # and the existing-profile digest trip-wires.
+    manual_annotations: ManualAnnotationBook = field(
+        default_factory=ManualAnnotationBook
+    )
     routine_engine: RoutineEngine | None = None
     observation_menu_builder: ObservationMenuBuilder | None = None
     # v1.12.3 — read-only evidence resolution service. Stateless;
@@ -288,6 +299,7 @@ class WorldKernel:
             self.scenario_schedule,
             self.stress_programs,
             self.stress_applications,
+            self.manual_annotations,
         ):
             if book.ledger is None:
                 book.ledger = self.ledger

@@ -140,6 +140,11 @@ class RecordType(str, Enum):
     STRESS_PROGRAM_APPLICATION_RECORDED = (
         "stress_program_application_recorded"
     )
+    # v1.24.1 — manual-annotation interaction layer storage
+    # event. Emitted exactly once per successful
+    # ``ManualAnnotationBook.add_annotation(...)`` call. An
+    # empty book emits no record (digest preservation).
+    MANUAL_ANNOTATION_RECORDED = "manual_annotation_recorded"
     STATE_SNAPSHOT_CREATED = "state_snapshot_created"
     WARNING = "warning"
     ERROR = "error"

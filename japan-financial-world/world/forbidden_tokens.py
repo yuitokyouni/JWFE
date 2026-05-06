@@ -271,6 +271,47 @@ FORBIDDEN_TOKENS_V1_22_0_EXPORT_DELTA: frozenset[str] = frozenset(
 
 
 # ---------------------------------------------------------------------------
+# v1.24.0 MANUAL ANNOTATION delta — anti-claim tokens specific
+# to the v1.24 manual-annotation interaction layer.
+#
+# v1.24's binding discipline: manual annotations are
+# human-authored, append-only audit overlays on existing
+# citation-graph records. The v1.24.0 delta forbids any token
+# that would imply automatic / LLM-authored / interaction-
+# inference / causal-proof / impact-scoring semantics. The
+# combined ``FORBIDDEN_MANUAL_ANNOTATION_FIELD_NAMES`` set
+# composes BASE + v1.19.0 / v1.19.3 / v1.20.0 / v1.21.0a /
+# v1.22.0 deltas + this v1.24.0 delta.
+# ---------------------------------------------------------------------------
+
+
+FORBIDDEN_TOKENS_V1_24_0_MANUAL_ANNOTATION_DELTA: frozenset[str] = (
+    frozenset(
+        {
+            # v1.24.0 anti-claim tokens — prevent any field /
+            # label / value / metadata key / payload key /
+            # note_text token from implying that an annotation
+            # was emitted by anything other than a human
+            # reviewer.
+            "auto_annotation",
+            "auto_inference",
+            "automatic_review",
+            "automatic_annotation",
+            "llm_annotation",
+            "llm_authored",
+            "inferred_interaction",
+            "interaction_engine_output",
+            "interaction_engine_label",
+            "causal_effect",
+            "causal_proof",
+            "impact_score",
+            "actor_decision",
+        }
+    )
+)
+
+
+# ---------------------------------------------------------------------------
 # Composed canonical sets
 #
 # These are the canonical re-compositions that the existing
@@ -347,7 +388,26 @@ FORBIDDEN_RUN_EXPORT_FIELD_NAMES: frozenset[str] = (
 )
 
 
+# The v1.24.0 manual-annotation forbidden-name set — composes
+# BASE with the v1.19.0 / v1.19.3 / v1.20.0 / v1.21.0a /
+# v1.22.0 deltas plus the v1.24.0 manual-annotation delta.
+# v1.24.1 storage scans every dataclass field name, payload
+# key, metadata key, label value, and optional ``note_text``
+# value against this composed set at construction time.
+FORBIDDEN_MANUAL_ANNOTATION_FIELD_NAMES: frozenset[str] = (
+    FORBIDDEN_TOKENS_BASE
+    | FORBIDDEN_TOKENS_V1_19_0_RUN_EXPORT_DELTA
+    | FORBIDDEN_TOKENS_V1_19_3_REAL_INDICATOR_DELTA
+    | FORBIDDEN_TOKENS_V1_20_0_REAL_ISSUER_DELTA
+    | FORBIDDEN_TOKENS_V1_20_0_LICENSED_TAXONOMY_DELTA
+    | FORBIDDEN_TOKENS_V1_21_0A_STRESS_DELTA
+    | FORBIDDEN_TOKENS_V1_22_0_EXPORT_DELTA
+    | FORBIDDEN_TOKENS_V1_24_0_MANUAL_ANNOTATION_DELTA
+)
+
+
 __all__ = [
+    "FORBIDDEN_MANUAL_ANNOTATION_FIELD_NAMES",
     "FORBIDDEN_RUN_EXPORT_FIELD_NAMES",
     "FORBIDDEN_STRESS_APPLICATION_FIELD_NAMES",
     "FORBIDDEN_STRESS_PROGRAM_FIELD_NAMES",
@@ -360,4 +420,5 @@ __all__ = [
     "FORBIDDEN_TOKENS_V1_20_0_REAL_ISSUER_DELTA",
     "FORBIDDEN_TOKENS_V1_21_0A_STRESS_DELTA",
     "FORBIDDEN_TOKENS_V1_22_0_EXPORT_DELTA",
+    "FORBIDDEN_TOKENS_V1_24_0_MANUAL_ANNOTATION_DELTA",
 ]
