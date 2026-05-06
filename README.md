@@ -163,7 +163,61 @@ v1.16.last closed-loop freeze, the v1.13.last settlement
 substrate, the v1.12.last attention loop, and the v1.9.last
 public prototype; none of those are modified.
 
-**Latest milestone: v1.20.last Monthly Scenario Reference
+**Latest milestone: v1.21.last Stress Composition Layer
+freeze (shipped, docs-only).** Closes the v1.21 sequence as
+a **thin orchestrator + read-only multiset readout** over
+the existing v1.18 / v1.20 chain. v1.21 is **NOT** a causal-
+route engine, **NOT** an interaction inference engine, and
+**NOT** a composition reducer; it does not infer combined
+stress effects. The shipped sequence is
+**v1.21.0 → v1.21.0a (scope correction) → v1.21.1 (storage:
+[`world/stress_programs.py`](japan-financial-world/world/stress_programs.py))
+→ v1.21.2 (thin orchestrator:
+[`world/stress_applications.py`](japan-financial-world/world/stress_applications.py))
+→ v1.21.3 (read-only multiset readout + deterministic
+markdown summary:
+[`world/stress_readout.py`](japan-financial-world/world/stress_readout.py))
+→ v1.21.last freeze (docs-only)**. v1.21.last itself ships
+only the freeze section in
+[`docs/v1_21_stress_composition_layer.md`](japan-financial-world/docs/v1_21_stress_composition_layer.md),
+the §130.8 freeze marker in
+[`docs/world_model.md`](japan-financial-world/docs/world_model.md),
+the refreshed v1.20-summary roadmap row in
+[`docs/v1_20_monthly_scenario_reference_universe_summary.md`](japan-financial-world/docs/v1_20_monthly_scenario_reference_universe_summary.md),
+this README anchor refresh, and a one-line docstring fix
+on `render_stress_field_summary_markdown(...)` ("9 required
+sections" → "11 sections, 9 pinned by the required-sections
+test"). Pinned at v1.21.last: **`pytest -q` 4865 / 4865**
+(+101 tests vs v1.20.last across v1.21.1 (+35) / v1.21.2
+(+33) / v1.21.3 (+33)); `quarterly_default`
+`living_world_digest` (`f93bdf3f…b705897c`),
+`monthly_reference` `living_world_digest`
+(`75a91cfa…91879d`),
+`scenario_monthly_reference_universe` test-fixture
+`living_world_digest` (`5003fdfa…566eb6`), and the v1.20.4
+CLI bundle digest (`ec37715b…0731aaf`) are **byte-identical**
+to v1.20.last; **0 source-of-truth book mutations**. The
+forbidden-name list (composes v1.18.0 / v1.19.3 / v1.20.0 /
+v1.21.0a forbidden tokens) carries forward unchanged;
+`StressInteractionRule` and the `amplify` / `dampen` /
+`offset` / `coexist` interaction-label family remain
+**deferred to v1.22+ (or never)** and may only ever appear
+as `manual_annotation`-only — never auto-inferred. Hard
+boundary re-pinned at v1.21.last: no causality claims, no
+magnitudes, no probabilities, no aggregate / combined / net
+/ dominant / composite stress output, no interaction auto-
+inference, no price formation, no forecast path, no expected
+return, no target price, no trading / order / execution /
+clearing / settlement, no firm decision, no investor action,
+no bank approval logic, no investment advice, no real data
+ingestion, no Japan calibration, no LLM execution, no LLM
+prose as source-of-truth. **Future optional candidates (NOT
+planned, NOT scoped):** a static UI strip over the v1.21.3
+markdown summary, and a v1.22 manual-annotation-only stress
+interaction layer. Each would require a fresh design pin;
+silent extension is forbidden.
+
+**Earlier concrete code milestone: v1.20.last Monthly Scenario Reference
 Universe freeze (shipped, docs-only).** Closes the v1.20
 sequence as the **first FWE milestone where the engine moves
 from a small closed-loop demo to a richer synthetic
