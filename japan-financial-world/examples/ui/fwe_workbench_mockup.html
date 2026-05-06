@@ -1584,9 +1584,9 @@
       <div class="brand-chip">FWE</div>
       <div class="ribbon-group">
         <button id="btn-run" class="ribbon-btn primary" type="button"
-          title="Static UI run — loads the inline sample manifest and applies the selected (regime, scenario) fixture. The Python engine is not invoked.">Run</button>
+          title="Static UI run — loads the LEGACY inline sample fixture (a v1.16-era snapshot kept only so the workbench loads under file:// without a server) and applies the selected (regime, scenario) fixture. The Python engine is not invoked. For an accurate current-engine demo, use Load local bundle.">Run</button>
         <button id="btn-load-local-bundle" class="ribbon-btn" type="button"
-          title="v1.19.4 — read a local RunExportBundle JSON produced by the v1.19.2 / v1.19.3.1 CLI exporter. Read-only; no engine execution from the browser.">Load local bundle</button>
+          title="Read a local RunExportBundle JSON produced by the v1.20.4 CLI exporter (recommended demo path). Read-only; no engine execution from the browser. Supports the v1.22.1 ``stress_readout`` payload section, which the v1.22.2 Active Stresses strip renders descriptive-only.">Load local bundle</button>
         <input id="input-local-bundle" type="file" accept="application/json,.json"
           style="display:none;" aria-hidden="true" />
         <button id="btn-validate" class="ribbon-btn" type="button"
@@ -1619,7 +1619,7 @@
         <span id="load-status" class="load-status">no sample loaded</span>
         <span class="load-substatus muted">static fixture only · no backend execution</span>
         <span class="load-substatus muted">data source ·
-          <span id="current-data-source" data-source="inline_fixture">inline_fixture</span>
+          <span id="current-data-source" data-source="none" title="``none`` until a button is pressed; ``legacy_inline_fixture`` after Run (a v1.16-era snapshot kept only so the workbench loads under file://); ``local_bundle`` after Load local bundle (v1.20.4+ exporter, supports v1.22.1 ``stress_readout`` payload section).">none</span>
         </span>
       </div>
       <div class="digest">digest · <span id="digest-short">—</span></div>
@@ -3892,7 +3892,7 @@
             </div>
 
             <section class="card" style="margin-top:14px;">
-              <h3 class="card-title">v1.16 → v1.20 milestone trail</h3>
+              <h3 class="card-title">v1.16 → v1.23 milestone trail</h3>
               <table>
                 <thead>
                   <tr><th>Milestone</th><th>What it ships</th></tr>
@@ -3950,6 +3950,18 @@
                     <td class="mono">v1.20.last</td>
                     <td>Monthly Scenario Reference Universe freeze (docs-only) — closes the v1.20 sequence as the first FWE milestone where the engine moves from a small closed-loop demo to a richer synthetic market-like reference universe</td>
                   </tr>
+                  <tr>
+                    <td class="mono">v1.21.x</td>
+                    <td>Stress Composition Layer · StressProgramTemplate / StressStep storage · apply_stress_program thin orchestrator (walks dense step_index order, reuses v1.18.2 apply_scenario_driver) · StressFieldReadout read-only multiset projection + render_stress_field_summary_markdown · ≤ 1 program / run · ≤ 3 steps / program · no aggregate / interaction / outcome inference</td>
+                  </tr>
+                  <tr>
+                    <td class="mono">v1.22.x</td>
+                    <td>Static UI Stress Readout Reflection · descriptive-only stress_readout payload section on RunExportBundle (19-key whitelist, empty-by-default, omitted from JSON when empty) · Active Stresses strip in the existing Universe sheet (no new tab) · read-only static rendering only</td>
+                  </tr>
+                  <tr>
+                    <td class="mono">v1.23.x</td>
+                    <td>Substrate Hardening + Validation Foundation · canonical living-world digest module · composable forbidden-token vocabulary (BASE + per-milestone deltas) · cross-layer metadata stamp constants · STRESS_PROGRAM_RUN_RECORD_CAP runtime cap · validation pin tests (determinism / boundary preservation / citation completeness / partial-application visibility) + Cat 5/6 placeholders</td>
+                  </tr>
                 </tbody>
               </table>
             </section>
@@ -3980,6 +3992,18 @@
                 <tr>
                   <td>Source of truth</td>
                   <td>actual records / digests / counts emitted by the FWE engine, not this file</td>
+                </tr>
+                <tr>
+                  <td>Latest UI delta</td>
+                  <td class="mono">v1.22.2 Active Stresses strip · v1.23.2a layout / Run consolidation · v1.23.2b inline-fixture legacy labelling</td>
+                </tr>
+                <tr>
+                  <td>Latest substrate delta</td>
+                  <td class="mono">v1.23.x substrate hardening + validation foundation (canonical digests, forbidden-token composition, metadata stamp pin, runtime cardinality cap, validation pin tests) — runtime / export / digest unchanged</td>
+                </tr>
+                <tr>
+                  <td>Inline sample fixture</td>
+                  <td>LEGACY (v1.16-era snapshot, kept only so the workbench loads under file:// without a server). For an accurate v1.22.last+ demo, use the Load local bundle button with the v1.20.4 CLI exporter.</td>
                 </tr>
               </table>
             </section>
@@ -4031,8 +4055,9 @@
     "as_of_period": "2026-Q3",
     "per_period_record_count": 83,
     "per_run_window": [324, 372],
-    "fixture_kind": "sample_fixture",
-    "fixture_note": "sample manifest snapshots an earlier engine build (runtime v1.16.last / display v1.17.1); the v1.20.last public-FWE runtime now emits 108 / 110 records per period for quarterly_default ([432, 480] per-run window) and 257 / 261 for the opt-in scenario_monthly_reference_universe profile (3220 / 3241 per-run, well under the 4000 hard guardrail). Use the Load local bundle button + the v1.20.4 CLI for current-engine fixtures.",
+    "fixture_kind": "legacy_sample_fixture",
+    "is_legacy_sample": true,
+    "fixture_note": "LEGACY inline sample fixture — snapshots an earlier engine build (runtime v1.16.last / display v1.17.1). The v1.22.last public-FWE runtime emits 108 / 110 records per period for quarterly_default ([432, 480] per-run window) and 257 / 261 for the opt-in scenario_monthly_reference_universe profile (3220 / 3241 per-run, well under the 4000 hard guardrail). The inline fixture is kept only so the workbench loads under file:// without a server. For an accurate demo, use the Load local bundle button with the v1.20.4 CLI exporter (which also emits the v1.22.1 ``stress_readout`` payload section when a stress program has been applied).",
     "synthetic_only": true
   },
   "overview": {
@@ -5110,8 +5135,25 @@
         }
         var ls = $id('load-status');
         if (ls) {
-          ls.classList.add('ok');
-          ls.textContent = 'sample loaded · ' + (d.manifest.as_of_period || '') + ' · ' + (d.manifest.schema || '');
+          ls.classList.remove('ok', 'warn', 'err');
+          // v1.23.2b — surface the legacy nature of the inline
+          // fixture in the load-status. ``is_legacy_sample`` is
+          // set on the inline manifest so a reviewer cannot
+          // mistake it for a current-engine snapshot. Use the
+          // ``warn`` style so the legacy fixture stands out
+          // against ``ok`` state from a fresh local bundle.
+          var legacy = !!d.manifest.is_legacy_sample;
+          if (legacy) {
+            ls.classList.add('warn');
+            ls.textContent = 'legacy inline fixture · '
+              + (d.manifest.as_of_period || '')
+              + ' · use Load local bundle for current demo';
+          } else {
+            ls.classList.add('ok');
+            ls.textContent = 'sample loaded · '
+              + (d.manifest.as_of_period || '')
+              + ' · ' + (d.manifest.schema || '');
+          }
         }
       }
 
@@ -5145,13 +5187,25 @@
         populateBanks(data);
         populateOutputs(data);
         populateLedger(data);
-        // v1.19.4 — record that the visible state came from the
-        // inline sample manifest (not the inline_fixture default
-        // and not a local bundle).
+        // v1.23.2b — reset the v1.22.2 Active Stresses strip
+        // when loading the legacy inline manifest. The inline
+        // fixture predates the v1.22.1 ``stress_readout``
+        // payload section, so we pass an empty bundle to force
+        // the neutral empty-state. Without this, a user that
+        // first loaded a local bundle with stress data and
+        // then clicked Run would see stale strip entries.
+        if (typeof renderActiveStressesFromBundle === 'function') {
+          renderActiveStressesFromBundle({});
+        }
+        // v1.23.2b — record that the visible state came from
+        // the LEGACY inline sample fixture (a v1.16-era
+        // snapshot kept only so the workbench loads under
+        // file:// without a server). Use Load local bundle
+        // for an accurate v1.22.last+ demo.
         var src = $id('current-data-source');
         if (src) {
-          src.textContent = 'sample_manifest';
-          src.dataset.source = 'sample_manifest';
+          src.textContent = 'legacy_inline_fixture';
+          src.dataset.source = 'legacy_inline_fixture';
         }
 
         // Defensive restore.
@@ -5801,12 +5855,16 @@
           + ' · static fixture · no engine execution',
           'ok'
         );
-        // v1.19.4 — Run mock reads the inline SAMPLE_RUNS
-        // fixture, so the data source returns to "inline_fixture".
+        // v1.23.2b — Run reads the inline SAMPLE_RUNS fixture
+        // (a v1.16-era snapshot, same provenance as the inline
+        // manifest). Both are LEGACY inline data; the data
+        // source is renamed accordingly so a reviewer cannot
+        // mistake either for a current-engine snapshot. Use
+        // Load local bundle for an accurate v1.22.last+ demo.
         var dsEl = $id('current-data-source');
         if (dsEl) {
-          dsEl.textContent = 'inline_fixture';
-          dsEl.dataset.source = 'inline_fixture';
+          dsEl.textContent = 'legacy_inline_fixture';
+          dsEl.dataset.source = 'legacy_inline_fixture';
         }
 
         // Defensive restore: if any rule we missed shifted the
@@ -6055,8 +6113,20 @@
         } else {
           var currentSource = $id('current-data-source')
             .dataset.source;
+          // v1.23.2b — closed-set extension. ``none`` is the
+          // pre-Run default; ``legacy_inline_fixture`` is the
+          // unified Run output (the v1.16-era inline manifest
+          // + SAMPLE_RUNS); ``local_bundle`` is the
+          // canonical v1.20.4+ exporter path. The pre-v1.23.2b
+          // ``inline_fixture`` / ``sample_manifest`` values are
+          // kept in the allowlist for backward compatibility
+          // with bundles produced before the rename.
           var allowedSources = [
-            'inline_fixture', 'sample_manifest', 'local_bundle'
+            'none',
+            'legacy_inline_fixture',
+            'inline_fixture',
+            'sample_manifest',
+            'local_bundle'
           ];
           if (allowedSources.indexOf(currentSource) === -1) {
             failures.push(

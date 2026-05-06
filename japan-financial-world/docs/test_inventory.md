@@ -1776,7 +1776,7 @@ v1.23.1 ships:
 
 No digest movement: the v1.18.last / v1.19.last / v1.20.last / v1.21.last / v1.22.last canonical ``living_world_digest`` values remain byte-identical at v1.23.1.
 
-v1.23.1 test count: 4928
+v1.23.1 test count: 4938
 
 <!-- v1.23.1 test inventory pin: END -->
 
@@ -1796,6 +1796,6 @@ v1.23.2 ships:
 
 Read-only validation only: every pin asserts a property of the audit object, never compares the readout to a real-world series. v1.23.2 ships **no** outcome metric, **no** statistical test, **no** new dataclass, **no** new ledger event, **no** new label vocabulary. All v1.18.last / v1.19.last / v1.20.last / v1.21.last / v1.22.last canonical ``living_world_digest`` values remain byte-identical at v1.23.2.
 
-v1.23.2 test count: 4928
+v1.23.2 test count: 4938
 
 <!-- v1.23.2 test inventory pin: END -->
