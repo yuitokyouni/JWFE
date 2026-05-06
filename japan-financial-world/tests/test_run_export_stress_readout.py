@@ -660,10 +660,11 @@ def test_browser_bundle_remains_static_json_only():
 # ---------------------------------------------------------------------------
 
 
-# v1.20.5 / v1.21.last UI mockup digest is pinned at the file
-# byte level. v1.22.1 must NOT touch
-# ``examples/ui/fwe_workbench_mockup.html`` (UI changes are
-# v1.22.2 territory).
+# v1.22.2 — UI mockup now ships the Active Stresses strip. The
+# v1.22.1 / v1.22.2 export-side discipline is unchanged: the
+# bundle JSON is the **only** input the strip reads, the strip
+# is the **only** new UI region, and the v1.20.5 11-tab ↔ 11-
+# sheet bijection is preserved (no new tab is introduced).
 _UI_MOCKUP_PATH = (
     Path(__file__).resolve().parent.parent
     / "examples"
@@ -672,20 +673,28 @@ _UI_MOCKUP_PATH = (
 )
 
 
-def test_no_ui_files_changed_in_v1_22_1():
-    """v1.22.1 must add no UI changes. The static workbench
-    HTML must contain neither a v1.22 active-stresses strip
-    nor any v1.22-specific marker. The selectors v1.22.2 will
-    add (data-section / data-active-stresses-cell) must be
-    **absent** at v1.22.1."""
+def test_v1_22_2_ui_strip_is_present_and_no_new_tab():
+    """Pin the v1.22.2 UI surface from the export-side test
+    file: the Active Stresses strip selector exists, the
+    required wording is present, and **no new tab is added**
+    (the v1.20.5 11-tab ↔ 11-sheet bijection is preserved).
+
+    Detailed UI rendering / forbidden-wording / partial-badge
+    pin tests live in
+    ``tests/test_ui_active_stresses_strip.py``; this is the
+    cross-file consistency pin between the v1.22.1 export
+    schema and the v1.22.2 UI consumer."""
     assert _UI_MOCKUP_PATH.exists()
     text = _UI_MOCKUP_PATH.read_text(encoding="utf-8")
-    # v1.22.2 selectors and wording must be absent at v1.22.1.
-    assert 'data-section="active-stresses"' not in text
-    assert "data-active-stresses-cell" not in text
-    assert "Active stresses" not in text
-    assert "Read-only stress readout" not in text
-    assert "Multiset projection" not in text
+    # v1.22.2 selectors + required wording present.
+    assert 'data-section="active-stresses"' in text
+    assert "Active stresses" in text
+    assert "Read-only stress readout" in text
+    assert "Multiset projection" in text
+    # 11-tab ↔ 11-sheet bijection preserved (count of
+    # ``sheet-tab`` buttons is the v1.20.5 set; v1.22.2 added
+    # zero tabs).
+    assert text.count('class="sheet-tab') == 11
 
 
 # ---------------------------------------------------------------------------
