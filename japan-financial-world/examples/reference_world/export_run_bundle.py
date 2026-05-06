@@ -449,6 +449,9 @@ def _build_bundle_for_quarterly_default(
     )
     from world.reference_living_world import run_living_reference_world
     from world.run_export import build_run_export_bundle
+    from world.stress_readout_export import (
+        build_stress_readout_export_section,
+    )
 
     kernel = _seed_kernel()
     result = run_living_reference_world(
@@ -490,6 +493,9 @@ def _build_bundle_for_quarterly_default(
         financing={},
         ledger_excerpt=_build_ledger_excerpt(kernel=kernel),
         metadata=_build_metadata(indent=indent),
+        stress_readout=build_stress_readout_export_section(
+            kernel
+        ),
     )
     return bundle, snapshot.digest
 
@@ -522,6 +528,9 @@ def _build_bundle_for_monthly_reference(
         run_living_reference_world,
     )
     from world.run_export import build_run_export_bundle
+    from world.stress_readout_export import (
+        build_stress_readout_export_section,
+    )
 
     kernel = _seed_kernel()
     result = run_living_reference_world(
@@ -579,6 +588,9 @@ def _build_bundle_for_monthly_reference(
                 _build_information_arrival_summary(kernel=kernel)
             ),
         },
+        stress_readout=build_stress_readout_export_section(
+            kernel
+        ),
     )
     return bundle, digest
 
@@ -978,6 +990,9 @@ def _build_bundle_for_scenario_monthly_reference_universe(
         run_living_reference_world,
     )
     from world.run_export import build_run_export_bundle
+    from world.stress_readout_export import (
+        build_stress_readout_export_section,
+    )
 
     kernel = _seed_kernel()
     result = run_living_reference_world(
@@ -1130,6 +1145,9 @@ def _build_bundle_for_scenario_monthly_reference_universe(
             "reference_universe": universe_summary,
             "information_arrival_summary": arrival_summary,
         },
+        stress_readout=build_stress_readout_export_section(
+            kernel
+        ),
     )
     return bundle, digest
 

@@ -168,6 +168,96 @@ FORBIDDEN_RUN_EXPORT_FIELD_NAMES: frozenset[str] = frozenset(
 )
 
 
+# v1.22.1 — keys allowed inside one ``stress_readout`` entry.
+# Whitelist; v1.22.0 design pin (§3.4) lists exactly these 19
+# descriptive-only keys. Adding a key here without re-pinning
+# the design note is a regression.
+STRESS_READOUT_ENTRY_REQUIRED_KEYS: frozenset[str] = frozenset(
+    {
+        "stress_program_application_id",
+        "stress_program_template_id",
+        "as_of_date",
+        "total_step_count",
+        "resolved_step_count",
+        "unresolved_step_count",
+        "active_step_ids",
+        "unresolved_step_ids",
+        "unresolved_reason_labels",
+        "is_partial",
+        "scenario_driver_template_ids",
+        "scenario_application_ids",
+        "scenario_context_shift_ids",
+        "context_surface_labels",
+        "shift_direction_labels",
+        "scenario_family_labels",
+        "source_context_record_ids",
+        "downstream_citation_ids",
+        "warnings",
+    }
+)
+
+
+# v1.22.1 — forbidden tokens in the ``stress_readout`` section.
+# These are checked against every entry's keys and against every
+# string value (separator-bounded match: a token matches when it
+# appears at the boundary of a separator in
+# ``_STRESS_READOUT_VALUE_SEPARATORS``). The set composes the
+# v1.22.0-pinned forbidden vocabulary in
+# ``docs/v1_22_static_ui_stress_readout_reflection.md`` §3.5
+# with the v1.21.0a interaction-label tokens that were deferred
+# to v1.22+ (manual_annotation only — never inferred by a
+# helper).
+FORBIDDEN_STRESS_READOUT_EXPORT_TOKENS: frozenset[str] = (
+    frozenset(
+        {
+            # v1.22.0 outcome / impact / risk language
+            "impact",
+            "outcome",
+            "risk_score",
+            "amplification",
+            "dampening",
+            "offset_effect",
+            "dominant_stress",
+            "net_pressure",
+            "composite_risk",
+            # forecast / prediction / advice
+            "forecast",
+            "expected_response",
+            "prediction",
+            "recommendation",
+            "expected_return",
+            "target_price",
+            # trading verbs (caught at boundary, not substring)
+            "buy",
+            "sell",
+            "order",
+            "trade",
+            "execution",
+            # real data / Japan calibration / LLM
+            "real_data",
+            "japan_calibration",
+            "llm_output",
+            # v1.21.0a aggregate / composite / net / dominant
+            # composition reduction language
+            "aggregate",
+            "combined",
+            "net",
+            "dominant",
+            "composite",
+            # v1.21.0a interaction-label vocabulary (deferred
+            # to v1.22+ as manual_annotation only — never
+            # auto-inferred; never a helper-emitted field)
+            "amplify",
+            "dampen",
+            "offset",
+            "coexist",
+        }
+    )
+)
+
+
+
+
 # v1.19.0 default boundary-flag set. The eight flags below are
 # the binding default carried on every emitted record. Callers
 # can extend the set with additional ``True`` flags but cannot
@@ -291,6 +381,281 @@ def _normalize_payload(
     return out
 
 
+def _scan_value_for_forbidden_stress_readout_tokens(
+    value: Any, *, field_name: str
+) -> None:
+    """Walk a JSON-like value and reject any v1.22.1 forbidden
+    token at any depth.
+
+    Discipline:
+
+    - **Dict keys** are checked with exact-equality (case-
+      sensitive) against
+      :data:`FORBIDDEN_STRESS_READOUT_EXPORT_TOKENS` and
+      :data:`FORBIDDEN_RUN_EXPORT_FIELD_NAMES`. The 19-key
+      whitelist applied to top-level entry keys catches all
+      direct cases; this recursive scan catches forbidden
+      keys nested under metadata-shaped values.
+    - **String values** are checked with case-insensitive
+      whole-string equality. This rejects literal smuggled
+      tokens like ``"impact"`` or ``"forecast"`` while
+      allowing legitimate v1.18.2 closed-set values such as
+      ``"attention_amplify"`` (which contains ``amplify`` as
+      a substring but is **not** an interaction-inference
+      label — it is a single-stress shift direction).
+
+    Whole-string equality is the right semantics: the v1.21.0a
+    forbidden tokens are forbidden as **field names** (a
+    helper-emitted ``interaction_label = "amplify"`` is the
+    target), not as substrings of legitimate values. Upstream
+    v1.18.2 / v1.21.x discipline already prevents free-text
+    smuggling; the v1.22.1 export simply re-pins the rule that
+    no v1.22.1-generated value may equal a forbidden token.
+    """
+    if isinstance(value, str):
+        v_lower = value.lower()
+        for token in FORBIDDEN_STRESS_READOUT_EXPORT_TOKENS:
+            if v_lower == token.lower():
+                raise ValueError(
+                    f"{field_name} contains forbidden token "
+                    f"{token!r} as a string value "
+                    "(v1.22.1 forbidden-token set — the "
+                    "stress_readout export section is "
+                    "descriptive-only and must not surface "
+                    "interaction-inference / outcome / "
+                    "forecast tokens as values)"
+                )
+        return
+    if isinstance(value, Mapping):
+        for k, v in value.items():
+            if isinstance(k, str):
+                if (
+                    k
+                    in FORBIDDEN_STRESS_READOUT_EXPORT_TOKENS
+                ):
+                    raise ValueError(
+                        f"{field_name} contains forbidden key "
+                        f"{k!r} (v1.22.1 forbidden-token set)"
+                    )
+                if k in FORBIDDEN_RUN_EXPORT_FIELD_NAMES:
+                    raise ValueError(
+                        f"{field_name} contains forbidden key "
+                        f"{k!r} (v1.19.0 hard naming boundary)"
+                    )
+            _scan_value_for_forbidden_stress_readout_tokens(
+                v, field_name=field_name
+            )
+        return
+    if isinstance(value, (list, tuple)):
+        for entry in value:
+            _scan_value_for_forbidden_stress_readout_tokens(
+                entry, field_name=field_name
+            )
+        return
+    # bools, ints, floats, None — no string content to scan.
+
+
+def _validate_stress_readout_entry(
+    entry: Any, *, field_name: str
+) -> dict[str, Any]:
+    """Validate a single ``stress_readout`` list entry.
+
+    Binding (v1.22.0 §3.4 / §3.6):
+
+    - entry is a Mapping with exactly the 19 required keys
+      (whitelist; no extra keys; none missing);
+    - the three multiset arrays (context_surface_labels,
+      shift_direction_labels, scenario_family_labels) and the
+      scenario_context_shift_ids list are equal-length parallel
+      arrays;
+    - len(active_step_ids) == resolved_step_count;
+    - len(unresolved_step_ids) == unresolved_step_count;
+    - len(unresolved_reason_labels) == unresolved_step_count;
+    - total_step_count == resolved_step_count + unresolved_step_count;
+    - is_partial == (unresolved_step_count > 0);
+    - no forbidden token at any depth (boundary scan).
+    """
+    if not isinstance(entry, Mapping):
+        raise ValueError(
+            f"{field_name} entries must be Mapping; "
+            f"got {type(entry).__name__}"
+        )
+    keys = set(entry.keys())
+    missing = STRESS_READOUT_ENTRY_REQUIRED_KEYS - keys
+    extra = keys - STRESS_READOUT_ENTRY_REQUIRED_KEYS
+    if missing:
+        raise ValueError(
+            f"{field_name} entry missing required keys: "
+            f"{sorted(missing)!r}"
+        )
+    if extra:
+        raise ValueError(
+            f"{field_name} entry contains unexpected keys: "
+            f"{sorted(extra)!r}"
+        )
+    out = dict(entry)
+
+    # forbidden-token boundary scan
+    _scan_value_for_forbidden_stress_readout_tokens(
+        out, field_name=field_name
+    )
+
+    # type / shape checks
+    for sk in (
+        "stress_program_application_id",
+        "stress_program_template_id",
+        "as_of_date",
+    ):
+        if not isinstance(out[sk], str) or not out[sk]:
+            raise ValueError(
+                f"{field_name} entry {sk!r} must be a "
+                "non-empty string"
+            )
+    for ck in (
+        "total_step_count",
+        "resolved_step_count",
+        "unresolved_step_count",
+    ):
+        v = out[ck]
+        if isinstance(v, bool) or not isinstance(v, int):
+            raise ValueError(
+                f"{field_name} entry {ck!r} must be a "
+                "non-negative int"
+            )
+        if v < 0:
+            raise ValueError(
+                f"{field_name} entry {ck!r} must be >= 0; "
+                f"got {v}"
+            )
+    if not isinstance(out["is_partial"], bool):
+        raise ValueError(
+            f"{field_name} entry 'is_partial' must be bool; "
+            f"got {type(out['is_partial']).__name__}"
+        )
+    for lk in (
+        "active_step_ids",
+        "unresolved_step_ids",
+        "unresolved_reason_labels",
+        "scenario_driver_template_ids",
+        "scenario_application_ids",
+        "scenario_context_shift_ids",
+        "context_surface_labels",
+        "shift_direction_labels",
+        "scenario_family_labels",
+        "source_context_record_ids",
+        "downstream_citation_ids",
+        "warnings",
+    ):
+        v = out[lk]
+        if not isinstance(v, list):
+            raise ValueError(
+                f"{field_name} entry {lk!r} must be a list; "
+                f"got {type(v).__name__}"
+            )
+        for entry_str in v:
+            if not isinstance(entry_str, str) or not entry_str:
+                raise ValueError(
+                    f"{field_name} entry {lk!r} contains a "
+                    "non-string or empty entry"
+                )
+
+    # invariant checks (v1.22.0 §3.6)
+    if (
+        out["resolved_step_count"]
+        + out["unresolved_step_count"]
+        != out["total_step_count"]
+    ):
+        raise ValueError(
+            f"{field_name} entry: "
+            "resolved_step_count + unresolved_step_count must "
+            "equal total_step_count"
+        )
+    if out["is_partial"] != (out["unresolved_step_count"] > 0):
+        raise ValueError(
+            f"{field_name} entry: "
+            "is_partial must equal "
+            "(unresolved_step_count > 0)"
+        )
+    if (
+        len(out["active_step_ids"])
+        != out["resolved_step_count"]
+    ):
+        raise ValueError(
+            f"{field_name} entry: len(active_step_ids) must "
+            "equal resolved_step_count"
+        )
+    if (
+        len(out["unresolved_step_ids"])
+        != out["unresolved_step_count"]
+    ):
+        raise ValueError(
+            f"{field_name} entry: len(unresolved_step_ids) "
+            "must equal unresolved_step_count"
+        )
+    if (
+        len(out["unresolved_reason_labels"])
+        != out["unresolved_step_count"]
+    ):
+        raise ValueError(
+            f"{field_name} entry: "
+            "len(unresolved_reason_labels) must equal "
+            "unresolved_step_count"
+        )
+    n_shifts = len(out["scenario_context_shift_ids"])
+    if (
+        len(out["context_surface_labels"]) != n_shifts
+        or len(out["shift_direction_labels"]) != n_shifts
+        or len(out["scenario_family_labels"]) != n_shifts
+    ):
+        raise ValueError(
+            f"{field_name} entry: parallel arrays "
+            "(scenario_context_shift_ids / "
+            "context_surface_labels / shift_direction_labels "
+            "/ scenario_family_labels) must all be the same "
+            "length"
+        )
+    return out
+
+
+def _normalize_stress_readout(
+    value: (
+        Iterable[Mapping[str, Any]]
+        | tuple[Mapping[str, Any], ...]
+        | None
+    ),
+    *,
+    field_name: str = "stress_readout",
+) -> tuple[dict[str, Any], ...]:
+    """Normalise the v1.22.1 ``stress_readout`` payload section
+    to a tuple of frozen-dict-like entries.
+
+    Cardinality (binding, v1.21.0a):
+    ``len(value) ∈ {0, 1}``. v1.22.1 carries forward the v1.21
+    "≤ 1 program per run" pin; an entry list of length > 1
+    is a regression.
+    """
+    if value is None:
+        return ()
+    if isinstance(value, Mapping):
+        raise ValueError(
+            f"{field_name} must be a list / tuple of entries; "
+            "got a single Mapping (wrap it in a list)"
+        )
+    entries = list(value)
+    if len(entries) > 1:
+        raise ValueError(
+            f"{field_name} cardinality (binding from "
+            "v1.21.0a): at most 1 entry; "
+            f"got {len(entries)}"
+        )
+    return tuple(
+        _validate_stress_readout_entry(
+            e, field_name=field_name
+        )
+        for e in entries
+    )
+
+
 def _normalize_boundary_flags(
     value: Mapping[str, Any] | Iterable[tuple[str, bool]] | None,
     *,
@@ -382,6 +747,13 @@ class RunExportBundle:
     status: str = "exported"
     visibility: str = "public"
     metadata: Mapping[str, Any] = field(default_factory=dict)
+    # v1.22.1 — descriptive-only stress-readout reflection
+    # section. Cardinality 0 or 1 entry. Empty by default;
+    # omitted from ``to_dict`` / ``bundle_to_json`` output when
+    # empty so pre-v1.22 bundles stay byte-identical.
+    stress_readout: tuple[Mapping[str, Any], ...] = field(
+        default_factory=tuple
+    )
 
     REQUIRED_STRING_FIELDS: ClassVar[tuple[str, ...]] = (
         "bundle_id",
@@ -449,14 +821,28 @@ class RunExportBundle:
                 self.boundary_flags, field_name="boundary_flags"
             ),
         )
+        object.__setattr__(
+            self,
+            "stress_readout",
+            _normalize_stress_readout(
+                self.stress_readout, field_name="stress_readout"
+            ),
+        )
 
     # -- serialisation -----------------------------------------------
 
     def to_dict(self) -> dict[str, Any]:
         """Deterministic mapping representation. Same bundle →
         byte-identical dict (insertion-order preserved by
-        Python's dict)."""
-        return {
+        Python's dict).
+
+        v1.22.1: ``stress_readout`` is **omitted** from the
+        output when empty (the default). This preserves
+        byte-identity with pre-v1.22 bundles for every
+        no-stress-program run profile, keeping all v1.21.last
+        digests byte-identical.
+        """
+        out: dict[str, Any] = {
             "bundle_id": self.bundle_id,
             "run_profile_label": self.run_profile_label,
             "regime_label": self.regime_label,
@@ -480,6 +866,11 @@ class RunExportBundle:
             "visibility": self.visibility,
             "metadata": dict(self.metadata),
         }
+        if self.stress_readout:
+            out["stress_readout"] = [
+                dict(e) for e in self.stress_readout
+            ]
+        return out
 
 
 # ---------------------------------------------------------------------------
@@ -511,6 +902,11 @@ def build_run_export_bundle(
     status: str = "exported",
     visibility: str = "public",
     metadata: Mapping[str, Any] | None = None,
+    stress_readout: (
+        Iterable[Mapping[str, Any]]
+        | tuple[Mapping[str, Any], ...]
+        | None
+    ) = None,
 ) -> RunExportBundle:
     """Deterministic builder. Same arguments → byte-identical
     :class:`RunExportBundle` (and therefore byte-identical
@@ -548,6 +944,11 @@ def build_run_export_bundle(
         status=status,
         visibility=visibility,
         metadata=dict(metadata or {}),
+        stress_readout=(
+            tuple(dict(e) for e in stress_readout)
+            if stress_readout
+            else ()
+        ),
     )
 
 
