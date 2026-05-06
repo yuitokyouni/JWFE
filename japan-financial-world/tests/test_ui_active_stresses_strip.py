@@ -61,6 +61,12 @@ from pathlib import Path
 
 import pytest
 
+from _canonical_digests import (
+    MONTHLY_REFERENCE_LIVING_WORLD_DIGEST,
+    QUARTERLY_DEFAULT_LIVING_WORLD_DIGEST,
+    SCENARIO_MONTHLY_REFERENCE_UNIVERSE_DIGEST,
+)
+
 
 _UI_MOCKUP_PATH = (
     Path(__file__).resolve().parent.parent
@@ -745,8 +751,7 @@ def test_no_runtime_modules_are_modified() -> None:
     r1 = _run_default(k1)
     assert (
         living_world_digest(k1, r1)
-        == "f93bdf3f4203c20d4a58e956160b0bb1004dcdecf"
-        "0648a92cc961401b705897c"
+        == QUARTERLY_DEFAULT_LIVING_WORLD_DIGEST
     )
 
     # monthly_reference
@@ -754,8 +759,7 @@ def test_no_runtime_modules_are_modified() -> None:
     r2 = _run_monthly_reference(k2)
     assert (
         living_world_digest(k2, r2)
-        == "75a91cfa35cbbc29d321ffab045eb07ce4d2ba77dc"
-        "4514a009bb4e596c91879d"
+        == MONTHLY_REFERENCE_LIVING_WORLD_DIGEST
     )
 
     # scenario_monthly_reference_universe (v1.20.3 fixture)
@@ -770,6 +774,5 @@ def test_no_runtime_modules_are_modified() -> None:
     )
     assert (
         living_world_digest(k3, r3)
-        == "5003fdfaa45d5b5212130b1158729c692616cf2a8d"
-        "f9b425b226baef15566eb6"
+        == SCENARIO_MONTHLY_REFERENCE_UNIVERSE_DIGEST
     )

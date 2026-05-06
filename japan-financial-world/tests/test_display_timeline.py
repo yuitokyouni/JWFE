@@ -75,6 +75,10 @@ from world.display_timeline import (
     render_regime_comparison_markdown,
 )
 
+from _canonical_digests import (
+    QUARTERLY_DEFAULT_LIVING_WORLD_DIGEST,
+)
+
 
 _MODULE_PATH = (
     Path(__file__).resolve().parent.parent / "world" / "display_timeline.py"
@@ -2674,7 +2678,7 @@ def test_scenario_helpers_do_not_move_default_living_world_digest():
     r = _run_default(k)
     assert (
         living_world_digest(k, r)
-        == "f93bdf3f4203c20d4a58e956160b0bb1004dcdecf0648a92cc961401b705897c"
+        == QUARTERLY_DEFAULT_LIVING_WORLD_DIGEST
     )
 
 

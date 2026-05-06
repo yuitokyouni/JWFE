@@ -87,6 +87,8 @@ from world.scenario_applications import (
 )
 from world.stress_applications import (
     FORBIDDEN_STRESS_APPLICATION_FIELD_NAMES,
+    STRESS_PROGRAM_APPLICATION_ID_METADATA_KEY,
+    STRESS_STEP_ID_METADATA_KEY,
     StressProgramApplicationRecord,
     UnknownStressProgramApplicationError,
 )
@@ -588,19 +590,20 @@ def build_stress_field_readout(
 
     # Build the resolved-step set by reading v1.18.2
     # application records whose
-    # ``metadata["stress_program_application_id"]`` matches
-    # this receipt. The v1.21.2 helper writes that key on
-    # every per-step apply_scenario_driver(...) call.
+    # ``metadata[STRESS_PROGRAM_APPLICATION_ID_METADATA_KEY]``
+    # matches this receipt. The v1.21.2 helper writes that
+    # key on every per-step apply_scenario_driver(...) call;
+    # the metadata-key contract is pinned at v1.23.1.
     v1_18_app_records_by_step: dict[
         str, ScenarioDriverApplicationRecord
     ] = {}
     for app in kernel.scenario_applications.list_applications():
         md = app.metadata or {}
         if (
-            md.get("stress_program_application_id")
+            md.get(STRESS_PROGRAM_APPLICATION_ID_METADATA_KEY)
             == stress_program_application_id
         ):
-            step_id = md.get("stress_step_id")
+            step_id = md.get(STRESS_STEP_ID_METADATA_KEY)
             if isinstance(step_id, str) and step_id:
                 v1_18_app_records_by_step[step_id] = app
 

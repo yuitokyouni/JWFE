@@ -69,6 +69,12 @@ from world.stress_programs import (
     UnknownStressProgramTemplateError,
 )
 
+from _canonical_digests import (
+    MONTHLY_REFERENCE_LIVING_WORLD_DIGEST,
+    QUARTERLY_DEFAULT_LIVING_WORLD_DIGEST,
+    SCENARIO_MONTHLY_REFERENCE_UNIVERSE_DIGEST,
+)
+
 
 _MODULE_PATH = (
     Path(__file__).resolve().parent.parent
@@ -932,7 +938,7 @@ def test_existing_profiles_unchanged_without_explicit_stress_program():
     assert k_q.stress_applications.list_applications() == ()
     assert (
         living_world_digest(k_q, r_q)
-        == "f93bdf3f4203c20d4a58e956160b0bb1004dcdecf0648a92cc961401b705897c"
+        == QUARTERLY_DEFAULT_LIVING_WORLD_DIGEST
     )
 
     # monthly_reference
@@ -941,7 +947,7 @@ def test_existing_profiles_unchanged_without_explicit_stress_program():
     assert k_m.stress_applications.list_applications() == ()
     assert (
         living_world_digest(k_m, r_m)
-        == "75a91cfa35cbbc29d321ffab045eb07ce4d2ba77dc4514a009bb4e596c91879d"
+        == MONTHLY_REFERENCE_LIVING_WORLD_DIGEST
     )
 
 
@@ -962,7 +968,7 @@ def test_existing_profile_unchanged_scenario_monthly_reference_universe():
     assert k.stress_applications.list_applications() == ()
     assert (
         living_world_digest(k, r)
-        == "5003fdfaa45d5b5212130b1158729c692616cf2a8df9b425b226baef15566eb6"
+        == SCENARIO_MONTHLY_REFERENCE_UNIVERSE_DIGEST
     )
 
 

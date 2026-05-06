@@ -55,6 +55,11 @@ from world.scheduler import Scheduler
 from world.state import State
 from world.variables import ReferenceVariableSpec, VariableObservation
 
+from _canonical_digests import (
+    MONTHLY_REFERENCE_LIVING_WORLD_DIGEST,
+    QUARTERLY_DEFAULT_LIVING_WORLD_DIGEST,
+)
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -2642,9 +2647,7 @@ def test_v1_12_9_living_world_digest_pinned():
 
     k = _seed_kernel()
     r = _run_default(k)
-    expected = (
-        "f93bdf3f4203c20d4a58e956160b0bb1004dcdecf0648a92cc961401b705897c"
-    )
+    expected = QUARTERLY_DEFAULT_LIVING_WORLD_DIGEST
     assert living_world_digest(k, r) == expected, (
         "v1.16.3 living_world_digest moved unexpectedly. If the "
         "shift is intentional, update the pinned value here AND "
@@ -4698,7 +4701,7 @@ def test_v1_16_3_pressure_focus_appears_when_period_zero_pressure_constrained():
 
 
 _MONTHLY_REFERENCE_PINNED_DIGEST: str = (
-    "75a91cfa35cbbc29d321ffab045eb07ce4d2ba77dc4514a009bb4e596c91879d"
+    MONTHLY_REFERENCE_LIVING_WORLD_DIGEST
 )
 _MONTHLY_REFERENCE_VALID_CONTEXT_SURFACES: frozenset[str] = frozenset(
     {
@@ -4731,7 +4734,7 @@ def test_v1_19_3_quarterly_default_digest_unchanged():
     r = _run_default(k)
     assert (
         living_world_digest(k, r)
-        == "f93bdf3f4203c20d4a58e956160b0bb1004dcdecf0648a92cc961401b705897c"
+        == QUARTERLY_DEFAULT_LIVING_WORLD_DIGEST
     )
 
 

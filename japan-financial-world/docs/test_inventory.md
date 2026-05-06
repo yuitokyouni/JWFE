@@ -1760,3 +1760,22 @@ If a test fails after this freeze, one of three things is true:
 3. New code intentionally relaxed an invariant. In that case the
    relaxing commit should have updated this inventory and a milestone
    document explaining the decision.
+
+<!-- v1.23.1 test inventory pin: BEGIN -->
+
+## v1.23.1 — Substrate hardening
+
+v1.23.1 ships:
+
+- ``tests/_canonical_digests.py`` — canonical living-world digest module (single source of truth for the four canonical digests);
+- ``world/forbidden_tokens.py`` — composable forbidden-name vocabulary (BASE + per-milestone deltas + canonical composed sets, including the v1.23.1 run-export leak-fix);
+- v1.21.2 ↔ v1.21.3 metadata-stamp contract constants in ``world/stress_applications.py`` (``STRESS_PROGRAM_APPLICATION_ID_METADATA_KEY``, ``STRESS_STEP_ID_METADATA_KEY``);
+- runtime cardinality cap ``STRESS_PROGRAM_RUN_RECORD_CAP = 60`` + ``StressProgramRecordCapExceededError`` trip-wire in ``apply_stress_program(...)``;
+- this v1.23.1 inventory entry + the freshness pin in ``tests/test_test_inventory_currency.py``;
+- the refresh generator at ``examples/tools/refresh_test_inventory.py``.
+
+No digest movement: the v1.18.last / v1.19.last / v1.20.last / v1.21.last / v1.22.last canonical ``living_world_digest`` values remain byte-identical at v1.23.1.
+
+v1.23.1 test count: 4913
+
+<!-- v1.23.1 test inventory pin: END -->

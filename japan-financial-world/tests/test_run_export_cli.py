@@ -51,6 +51,12 @@ import pytest
 
 from world.run_export import FORBIDDEN_RUN_EXPORT_FIELD_NAMES, RunExportBundle
 
+from _canonical_digests import (
+    MONTHLY_REFERENCE_LIVING_WORLD_DIGEST,
+    QUARTERLY_DEFAULT_LIVING_WORLD_DIGEST,
+    V1_20_4_CLI_BUNDLE_DIGEST,
+)
+
 
 # ---------------------------------------------------------------------------
 # Repo paths
@@ -70,8 +76,7 @@ _CLI_MODULE_PATH = (
 
 
 _DEFAULT_FIXTURE_LIVING_WORLD_DIGEST: str = (
-    "f93bdf3f4203c20d4a58e956160b0bb1004dcdecf"
-    "0648a92cc961401b705897c"
+    QUARTERLY_DEFAULT_LIVING_WORLD_DIGEST
 )
 
 
@@ -720,7 +725,7 @@ def test_v1_19_3_1_monthly_reference_does_not_move_quarterly_default_digest(
     r = _run_default(k)
     assert (
         living_world_digest(k, r)
-        == "f93bdf3f4203c20d4a58e956160b0bb1004dcdecf0648a92cc961401b705897c"
+        == QUARTERLY_DEFAULT_LIVING_WORLD_DIGEST
     )
 
 
@@ -771,9 +776,7 @@ def test_v1_19_3_1_executable_profiles_pin_includes_monthly_reference():
 # ---------------------------------------------------------------------------
 
 
-_V1_20_4_PINNED_BUNDLE_DIGEST: str = (
-    "ec37715b8b5532841311bbf14d087cf4dcca731a9dc5de3b2868f32700731aaf"
-)
+_V1_20_4_PINNED_BUNDLE_DIGEST: str = V1_20_4_CLI_BUNDLE_DIGEST
 
 
 def _scenario_universe_invocation(
@@ -1120,7 +1123,7 @@ def test_v1_20_4_scenario_universe_does_not_move_quarterly_default_digest(
     r = _run_default(k)
     assert (
         living_world_digest(k, r)
-        == "f93bdf3f4203c20d4a58e956160b0bb1004dcdecf0648a92cc961401b705897c"
+        == QUARTERLY_DEFAULT_LIVING_WORLD_DIGEST
     )
 
 
@@ -1141,7 +1144,7 @@ def test_v1_20_4_scenario_universe_does_not_move_monthly_reference_digest(
     r = _run_monthly_reference(k)
     assert (
         living_world_digest(k, r)
-        == "75a91cfa35cbbc29d321ffab045eb07ce4d2ba77dc4514a009bb4e596c91879d"
+        == MONTHLY_REFERENCE_LIVING_WORLD_DIGEST
     )
 
 

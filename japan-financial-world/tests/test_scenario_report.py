@@ -41,6 +41,10 @@ from world.display_timeline import FORBIDDEN_DISPLAY_NAMES
 from world.ledger import RecordType
 from world.scenario_drivers import FORBIDDEN_SCENARIO_FIELD_NAMES
 
+from _canonical_digests import (
+    QUARTERLY_DEFAULT_LIVING_WORLD_DIGEST,
+)
+
 
 _MODULE_PATH = (
     Path(__file__).resolve().parent.parent
@@ -250,7 +254,7 @@ def test_run_scenario_report_does_not_move_default_living_world_digest():
     r = _run_default(k)
     assert (
         living_world_digest(k, r)
-        == "f93bdf3f4203c20d4a58e956160b0bb1004dcdecf0648a92cc961401b705897c"
+        == QUARTERLY_DEFAULT_LIVING_WORLD_DIGEST
     )
 
 

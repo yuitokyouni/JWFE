@@ -65,6 +65,12 @@ from world.stress_readout_export import (
     stress_field_readout_to_export_entry,
 )
 
+from _canonical_digests import (
+    MONTHLY_REFERENCE_LIVING_WORLD_DIGEST,
+    QUARTERLY_DEFAULT_LIVING_WORLD_DIGEST,
+    SCENARIO_MONTHLY_REFERENCE_UNIVERSE_DIGEST,
+)
+
 
 # ---------------------------------------------------------------------------
 # Local helpers
@@ -239,16 +245,13 @@ def test_export_bundle_omits_stress_readouts_when_absent():
 
 
 _V1_21_LAST_QUARTERLY_DEFAULT_DIGEST: str = (
-    "f93bdf3f4203c20d4a58e956160b0bb1004dcdecf"
-    "0648a92cc961401b705897c"
+    QUARTERLY_DEFAULT_LIVING_WORLD_DIGEST
 )
 _V1_21_LAST_MONTHLY_REFERENCE_DIGEST: str = (
-    "75a91cfa35cbbc29d321ffab045eb07ce4d2ba77dc"
-    "4514a009bb4e596c91879d"
+    MONTHLY_REFERENCE_LIVING_WORLD_DIGEST
 )
 _V1_21_LAST_SCENARIO_UNIVERSE_FIXTURE_DIGEST: str = (
-    "5003fdfaa45d5b5212130b1158729c692616cf2a8d"
-    "f9b425b226baef15566eb6"
+    SCENARIO_MONTHLY_REFERENCE_UNIVERSE_DIGEST
 )
 
 

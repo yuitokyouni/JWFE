@@ -69,6 +69,11 @@ from world.scenario_schedule import (
 from world.scheduler import Scheduler
 from world.state import State
 
+from _canonical_digests import (
+    MONTHLY_REFERENCE_LIVING_WORLD_DIGEST,
+    QUARTERLY_DEFAULT_LIVING_WORLD_DIGEST,
+)
+
 
 _MODULE_PATH = (
     Path(__file__).resolve().parent.parent
@@ -1008,7 +1013,7 @@ def test_empty_scenario_schedule_does_not_move_quarterly_default_digest():
     r = _run_default(k)
     assert (
         living_world_digest(k, r)
-        == "f93bdf3f4203c20d4a58e956160b0bb1004dcdecf0648a92cc961401b705897c"
+        == QUARTERLY_DEFAULT_LIVING_WORLD_DIGEST
     )
 
 
@@ -1039,7 +1044,7 @@ def test_empty_scenario_schedule_does_not_move_monthly_reference_digest():
     )
     assert (
         living_world_digest(k, r)
-        == "75a91cfa35cbbc29d321ffab045eb07ce4d2ba77dc4514a009bb4e596c91879d"
+        == MONTHLY_REFERENCE_LIVING_WORLD_DIGEST
     )
 
 

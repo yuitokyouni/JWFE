@@ -143,6 +143,40 @@ DEFAULT_STRESS_PROGRAM_APPLICATION_REASONING_POLICY_ID: str = (
 )
 
 
+# v1.23.1 — cross-layer metadata stamp contract (binding).
+#
+# v1.21.2 ``apply_stress_program(...)`` writes these two keys on
+# every per-step v1.18.2 ``apply_scenario_driver(...)`` call so
+# that v1.21.3 ``build_stress_field_readout(...)`` can filter
+# v1.18.2 application records by stress-program-application id
+# / stress-step id at readout-build time. Keeping the key
+# strings as named constants makes a future rename a one-place
+# change. The string values are byte-identical to the v1.21.2
+# inline literals (``"stress_program_application_id"`` and
+# ``"stress_step_id"``); v1.23.1 introduces no new key names.
+STRESS_PROGRAM_APPLICATION_ID_METADATA_KEY: str = (
+    "stress_program_application_id"
+)
+STRESS_STEP_ID_METADATA_KEY: str = "stress_step_id"
+
+
+# v1.21.0a / v1.23.1 — runtime cardinality cap.
+#
+# ``apply_stress_program(...)`` MUST emit at most
+# :data:`STRESS_PROGRAM_RUN_RECORD_CAP` v1.21-added records
+# into the kernel per call (counting the program-level
+# receipt + per-step v1.18.2 application records + per-step
+# v1.18.2 context-shift records the helper produces).
+# Exceeding this cap is a regression; the trip-wire check at
+# the end of ``apply_stress_program`` raises
+# :class:`StressProgramRecordCapExceededError`.
+#
+# The cap counts v1.21/v1.23 stress-added records only — it
+# is independent of the v1.20.x ``manifest.record_count <=
+# 4000`` boundary, which remains binding at the bundle layer.
+STRESS_PROGRAM_RUN_RECORD_CAP: int = 60
+
+
 # Default boundary flags stamped onto every emitted record.
 # Composes the v1.18.2 default 7-flag set with the v1.21.0a
 # additions (no_aggregate_stress_result,
@@ -204,6 +238,14 @@ class UnknownStressProgramApplicationError(
 ):
     """Raised when a stress_program_application_id is not
     found."""
+
+
+class StressProgramRecordCapExceededError(StressApplicationError):
+    """Raised when ``apply_stress_program(...)`` would emit
+    more than :data:`STRESS_PROGRAM_RUN_RECORD_CAP` v1.21-added
+    records in a single call. v1.23.1 trip-wire — protects the
+    v1.21.0a "≤ 60 records added per stress-applied run"
+    binding."""
 
 
 # ---------------------------------------------------------------------------
@@ -773,6 +815,17 @@ def apply_stress_program(
     # them sorted defensively.
     ordered_steps = program.steps_in_ordinal_order()
 
+    # v1.23.1 — runtime cardinality trip-wire setup. Snapshot
+    # the v1.18.2 + v1.21.2 record counts before the per-step
+    # loop so the post-loop check can compute the v1.21-added
+    # delta exactly.
+    sa_book = kernel.scenario_applications
+    app_count_before = len(sa_book.list_applications())
+    shift_count_before = len(sa_book.list_context_shifts())
+    stress_app_count_before = len(
+        kernel.stress_applications.list_applications()
+    )
+
     scenario_application_ids: list[str] = []
     scenario_context_shift_ids: list[str] = []
     unresolved_step_count = 0
@@ -782,8 +835,8 @@ def apply_stress_program(
             "stress_program_template_id": (
                 stress_program_template_id
             ),
-            "stress_step_id": step.stress_step_id,
-            "stress_program_application_id": (
+            STRESS_STEP_ID_METADATA_KEY: step.stress_step_id,
+            STRESS_PROGRAM_APPLICATION_ID_METADATA_KEY: (
                 stress_program_application_id
             ),
             "step_index": step.step_index,
@@ -854,6 +907,34 @@ def apply_stress_program(
     )
 
     kernel.stress_applications.add_application(record)
+
+    # v1.23.1 — runtime cardinality trip-wire. Counts
+    # v1.21-added records only: per-step v1.18.2 application
+    # records, per-step v1.18.2 context-shift records, plus the
+    # one v1.21.2 program-level receipt added above. Pre-snapshot
+    # taken before the per-step loop so existing v1.18.2 records
+    # in the kernel do not contribute to the count.
+    apps_added = (
+        len(sa_book.list_applications()) - app_count_before
+    )
+    shifts_added = (
+        len(sa_book.list_context_shifts()) - shift_count_before
+    )
+    stress_apps_added = (
+        len(kernel.stress_applications.list_applications())
+        - stress_app_count_before
+    )
+    v1_21_added = apps_added + shifts_added + stress_apps_added
+    if v1_21_added > STRESS_PROGRAM_RUN_RECORD_CAP:
+        raise StressProgramRecordCapExceededError(
+            "apply_stress_program emitted "
+            f"{v1_21_added} v1.21-added records "
+            "(scenario_applications + scenario_context_shifts "
+            "+ stress_application receipt) — exceeds the "
+            "v1.21.0a / v1.23.1 binding cap of "
+            f"{STRESS_PROGRAM_RUN_RECORD_CAP}"
+        )
+
     return record
 
 
@@ -862,10 +943,14 @@ __all__ = [
     "DuplicateStressProgramApplicationError",
     "FORBIDDEN_STRESS_APPLICATION_FIELD_NAMES",
     "STATUS_LABELS",
+    "STRESS_PROGRAM_APPLICATION_ID_METADATA_KEY",
     "STRESS_PROGRAM_APPLICATION_STATUS_LABELS",
+    "STRESS_PROGRAM_RUN_RECORD_CAP",
+    "STRESS_STEP_ID_METADATA_KEY",
     "StressApplicationError",
     "StressProgramApplicationBook",
     "StressProgramApplicationRecord",
+    "StressProgramRecordCapExceededError",
     "UnknownStressProgramApplicationError",
     "VISIBILITY_LABELS",
     "apply_stress_program",

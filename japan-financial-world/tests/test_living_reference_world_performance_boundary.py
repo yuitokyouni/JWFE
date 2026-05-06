@@ -39,6 +39,10 @@ from world.scheduler import Scheduler
 from world.state import State
 from world.variables import ReferenceVariableSpec, VariableObservation
 
+from _canonical_digests import (
+    SCENARIO_MONTHLY_REFERENCE_UNIVERSE_DIGEST,
+)
+
 
 # Demo fixture. Mirrors ``tests/test_living_reference_world.py``
 # deliberately so that any drift between the integration tests
@@ -712,9 +716,7 @@ _V1_20_3_RUN_WINDOW_TARGET_MAX: int = 3360
 # v1.20.3 pinned digest. Updated when a v1.20.x storage book or
 # the v1.20.3 orchestrator path meaningfully changes its
 # canonical projection.
-_V1_20_3_PINNED_DIGEST: str = (
-    "5003fdfaa45d5b5212130b1158729c692616cf2a8df9b425b226baef15566eb6"
-)
+_V1_20_3_PINNED_DIGEST: str = SCENARIO_MONTHLY_REFERENCE_UNIVERSE_DIGEST
 
 
 def _seed_v1_20_3_kernel() -> WorldKernel:
