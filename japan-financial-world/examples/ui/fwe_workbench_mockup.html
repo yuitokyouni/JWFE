@@ -1350,6 +1350,148 @@
       margin-top: 8px;
     }
 
+    /* =========================================================
+       v1.22.2 — Active Stresses strip.
+       Read-only reflection of the v1.21.3 stress readout via
+       the v1.22.1 ``bundle.stress_readout`` payload section.
+       Visual discipline (binding):
+         * no bar height (no magnitude encoding)
+         * no score / numeric intensity
+         * no red / green performance encoding
+         * no arrows implying causal propagation
+         * neutral wording only (Active stresses /
+           Read-only stress readout / Context surfaces /
+           Shift directions / Cited records / Downstream
+           citations / Partial application / Multiset
+           projection / Resolved steps / Unresolved steps)
+         * raw canonical labels live in a technical-details
+           area as code-style tokens, never as primary UI
+           text.
+       ========================================================= */
+    .active-stresses-strip {
+      margin-bottom: 14px;
+    }
+
+    .active-stresses-empty {
+      padding: 10px 12px;
+      border: 1px dashed #cdcac1;
+      background: #fafaf6;
+      font-size: 13px;
+      margin-top: 6px;
+    }
+
+    .active-stresses-content {
+      margin-top: 6px;
+    }
+
+    .active-stresses-entry {
+      padding: 10px 12px;
+      border: 1px solid #e1ddd2;
+      background: #fdfdf9;
+      margin-top: 8px;
+    }
+
+    .active-stresses-entry + .active-stresses-entry {
+      margin-top: 12px;
+    }
+
+    .active-stresses-summary {
+      display: grid;
+      grid-template-columns: repeat(
+        auto-fit, minmax(180px, 1fr)
+      );
+      gap: 6px 14px;
+      font-size: 13px;
+    }
+
+    .active-stresses-summary .label {
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      font-size: 11px;
+    }
+
+    .active-stresses-summary .value {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      word-break: break-all;
+    }
+
+    .active-stresses-partial-badge {
+      display: inline-block;
+      padding: 1px 8px;
+      border: 1px solid #b6a06a;
+      background: #fbf6e9;
+      color: #5b4711;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.3px;
+      margin-right: 6px;
+    }
+
+    .active-stresses-details {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: repeat(
+        auto-fit, minmax(220px, 1fr)
+      );
+      gap: 10px 14px;
+    }
+
+    .active-stresses-detail-block {
+      border-left: 2px solid #d8d6cf;
+      padding: 4px 10px;
+    }
+
+    .active-stresses-detail-header {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: var(--muted);
+      margin: 0 0 4px;
+    }
+
+    .active-stresses-multiset-caption {
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .active-stresses-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+
+    .active-stresses-list li {
+      padding: 1px 0;
+      word-break: break-all;
+    }
+
+    .active-stresses-multiset-list li .count {
+      color: var(--muted);
+      margin-left: 4px;
+    }
+
+    .active-stresses-raw-labels {
+      margin-top: 6px;
+      padding: 6px 8px;
+      border: 1px dashed #d8d6cf;
+      background: #f8f7f1;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--muted);
+      word-break: break-all;
+    }
+
+    .active-stresses-raw-labels .header {
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      margin-bottom: 2px;
+    }
+
     /* Causal trace block: scenario template -> scheduled
        application -> applied application -> context shifts ->
        affected sector / firm counts. Renders as a vertical
@@ -2697,6 +2839,48 @@
           </div>
           <div class="subband">Cross-sectional view of the v1.20.1 generic 11-sector reference universe and the v1.20.2 / v1.20.3 scheduled scenario application. Synthetic / generic-sector / opt-in profile, not real-issuer membership; no licensed taxonomy dependency, no real company names, no real sector weights, no investment advice.</div>
           <div class="panel-body">
+
+            <!-- =============================================================== -->
+            <!-- v1.22.2 — Active Stresses strip                                  -->
+            <!-- Read-only reflection of the v1.21.3 stress readout via the      -->
+            <!-- v1.22.1 ``bundle.stress_readout`` payload section. Sits above   -->
+            <!-- the existing v1.20.5 universe profile / sector heatmap. No new  -->
+            <!-- tab. No bar height. No score. No red / green encoding. No       -->
+            <!-- arrows. Renders an empty-state placeholder when the bundle      -->
+            <!-- carries no stress readout (the v1.22.1 omission rule keeps      -->
+            <!-- pre-v1.22 bundles byte-identical).                              -->
+            <!-- =============================================================== -->
+            <section
+              class="card active-stresses-strip"
+              data-section="active-stresses"
+              id="card-active-stresses"
+              aria-live="polite"
+            >
+              <h3 class="card-title">
+                Active stresses
+                <span class="tag">v1.22.2 · Read-only stress readout</span>
+              </h3>
+              <div
+                class="active-stresses-empty muted"
+                id="active-stresses-empty"
+              >
+                No active stress readout in this bundle.
+              </div>
+              <div
+                class="active-stresses-content"
+                id="active-stresses-content"
+                style="display:none;"
+              >
+                <!-- Per-readout entries (v1.21.0a cardinality:
+                     ≤ 1 entry per run; the renderer iterates so a
+                     future relaxation of the cardinality is a no-op
+                     for the UI). -->
+                <div
+                  class="active-stresses-entries"
+                  id="active-stresses-entries"
+                ></div>
+              </div>
+            </section>
 
             <!-- Empty-state card: shown only when no scenario universe
                  bundle has been loaded yet. -->
@@ -5868,6 +6052,23 @@
         if (typeof renderUniverseFromBundle !== 'function') {
           failures.push("renderUniverseFromBundle missing");
         }
+        // v1.22.2 self-check — Active Stresses strip surface.
+        if (!$id('card-active-stresses')) {
+          failures.push("Active Stresses strip missing");
+        }
+        if (!$id('active-stresses-empty')
+            || !$id('active-stresses-content')
+            || !$id('active-stresses-entries')) {
+          failures.push(
+            "Active Stresses strip slots missing"
+          );
+        }
+        if (typeof renderActiveStressesFromBundle
+            !== 'function') {
+          failures.push(
+            "renderActiveStressesFromBundle missing"
+          );
+        }
         if (typeof SENSITIVITY_LABELS === 'undefined'
             || !Array.isArray(SENSITIVITY_LABELS)
             || SENSITIVITY_LABELS.indexOf('low') === -1
@@ -6466,6 +6667,13 @@
         // covers quarterly_default / monthly_reference bundles
         // where ``metadata.reference_universe`` is absent.
         renderUniverseFromBundle(bundle);
+        // v1.22.2 — Active Stresses strip. Reads
+        // ``bundle.stress_readout`` (v1.22.1 descriptive-only
+        // payload section). Renders an empty-state placeholder
+        // when the section is absent or empty (which is the
+        // pre-v1.22 / no-stress case for every existing run
+        // profile). Read-only static rendering only.
+        renderActiveStressesFromBundle(bundle);
       }
 
       // -----------------------------------------------------------------
@@ -6756,6 +6964,451 @@
         setText('trace-affected-summary', affectedSummary);
 
         if (window.scrollX !== sx || window.scrollY !== sy) {
+          window.scrollTo(sx, sy);
+        }
+      }
+
+      // -----------------------------------------------------------------
+      // v1.22.2 — Active Stresses strip renderer.
+      //
+      // Reads ``bundle.stress_readout`` (v1.22.1 descriptive-only
+      // payload section, list of zero or one entry). Renders the
+      // strip in the existing Universe tab above the existing
+      // sector heatmap. **Read-only static rendering only — no
+      // backend, no fetch, no XHR, no eval, no Python execution
+      // from the browser.**
+      //
+      // What this renderer surfaces:
+      //   - as_of_date
+      //   - stress_program_template_id
+      //   - resolved_step_count / total_step_count
+      //   - "Partial application" badge when is_partial is true
+      //     OR unresolved_step_count > 0
+      //   - unresolved_step_count + unresolved_step_ids +
+      //     unresolved_reason_labels (Unresolved steps block)
+      //   - active_step_ids (Resolved steps block)
+      //   - context_surface_labels as a multiset
+      //   - shift_direction_labels as a multiset
+      //   - scenario_family_labels as a multiset
+      //   - source_context_record_ids (Cited records)
+      //   - downstream_citation_ids (Downstream citations)
+      //   - warnings list
+      //   - raw canonical labels (e.g. "attention_amplify")
+      //     surface only inside the "Raw canonical labels"
+      //     technical-details area as code-style tokens — never
+      //     as primary UI prose, and never re-labelled as
+      //     interaction language.
+      //
+      // What this renderer does NOT surface:
+      //   - no impact / outcome / risk_score / forecast /
+      //     prediction / recommendation / expected_return /
+      //     target_price wording
+      //   - no amplify / dampen / offset / coexist interaction
+      //     labels
+      //   - no aggregate / combined / net / dominant / composite
+      //     stress output
+      //   - no bar height, no score, no red / green encoding,
+      //     no arrows implying causal propagation
+      // -----------------------------------------------------------------
+      function _activeStressesMultiset(items) {
+        // Build a multiset list preserving the emission
+        // sequence from the v1.21.3 readout. Repeated items
+        // collapse to "<label> × N" so the multiset shape is
+        // readable without losing the sequence they appeared
+        // in.
+        var out = [];
+        var seen = {};
+        if (!Array.isArray(items)) return out;
+        for (var i = 0; i < items.length; i++) {
+          var label = String(items[i] == null ? '' : items[i]);
+          if (Object.prototype.hasOwnProperty.call(seen, label)) {
+            seen[label].count += 1;
+            continue;
+          }
+          var entry = {
+            label: label,
+            count: 1,
+            emissionIndex: out.length
+          };
+          seen[label] = entry;
+          out.push(entry);
+        }
+        return out;
+      }
+
+      function _appendList(parent, items) {
+        // Render a flat string list as a <ul> using textContent
+        // only. Empty list → render a single em-dash entry so
+        // the block does not collapse silently.
+        var ul = document.createElement('ul');
+        ul.className = 'active-stresses-list';
+        if (!Array.isArray(items) || items.length === 0) {
+          var li = document.createElement('li');
+          li.textContent = '—';
+          li.className = 'muted';
+          ul.appendChild(li);
+        } else {
+          for (var i = 0; i < items.length; i++) {
+            var li2 = document.createElement('li');
+            li2.textContent = String(
+              items[i] == null ? '' : items[i]
+            );
+            ul.appendChild(li2);
+          }
+        }
+        parent.appendChild(ul);
+      }
+
+      function _appendMultisetList(parent, items) {
+        // Render a multiset (label × count) list, preserving
+        // emission order. Empty input → em-dash entry.
+        var ul = document.createElement('ul');
+        ul.className =
+          'active-stresses-list active-stresses-multiset-list';
+        var multiset = _activeStressesMultiset(items);
+        if (multiset.length === 0) {
+          var li = document.createElement('li');
+          li.textContent = '—';
+          li.className = 'muted';
+          ul.appendChild(li);
+        } else {
+          for (var i = 0; i < multiset.length; i++) {
+            var li2 = document.createElement('li');
+            // Label uses textContent only — the canonical
+            // closed-set label is rendered verbatim.
+            li2.textContent = multiset[i].label;
+            if (multiset[i].count > 1) {
+              var span = document.createElement('span');
+              span.className = 'count';
+              span.textContent =
+                ' × ' + String(multiset[i].count);
+              li2.appendChild(span);
+            }
+            ul.appendChild(li2);
+          }
+        }
+        parent.appendChild(ul);
+      }
+
+      function _appendDetailBlock(parent, headerText, opts) {
+        // Helper: build a detail block with a header and
+        // attach to ``parent``. Returns the inner content
+        // container so the caller can populate it. ``opts`` may
+        // include ``caption`` (rendered under the header as a
+        // small multiset caption).
+        var block = document.createElement('div');
+        block.className = 'active-stresses-detail-block';
+        var h = document.createElement('h4');
+        h.className = 'active-stresses-detail-header';
+        h.textContent = headerText;
+        block.appendChild(h);
+        if (opts && opts.caption) {
+          var capDiv = document.createElement('div');
+          capDiv.className = 'active-stresses-multiset-caption';
+          capDiv.textContent = opts.caption;
+          block.appendChild(capDiv);
+        }
+        parent.appendChild(block);
+        return block;
+      }
+
+      function _buildActiveStressesEntry(entry) {
+        // Build a single ``.active-stresses-entry`` block from
+        // one v1.22.1 stress_readout entry. Uses textContent
+        // only — never innerHTML — so user-loaded JSON cannot
+        // smuggle markup.
+        var wrapper = document.createElement('div');
+        wrapper.className = 'active-stresses-entry';
+
+        // Top summary grid.
+        var summary = document.createElement('div');
+        summary.className = 'active-stresses-summary';
+
+        function _addSummaryCell(labelText, valueText, opts) {
+          var cell = document.createElement('div');
+          var labelDiv = document.createElement('div');
+          labelDiv.className = 'label';
+          labelDiv.textContent = labelText;
+          var valueDiv = document.createElement('div');
+          valueDiv.className = 'value';
+          valueDiv.textContent = String(
+            valueText == null ? '—' : valueText
+          );
+          cell.appendChild(labelDiv);
+          cell.appendChild(valueDiv);
+          if (opts && opts.dataAttr) {
+            cell.setAttribute(opts.dataAttr, '');
+          }
+          summary.appendChild(cell);
+          return cell;
+        }
+
+        _addSummaryCell(
+          'as_of_date',
+          entry.as_of_date,
+          { dataAttr: 'data-active-stresses-as-of-date' }
+        );
+        _addSummaryCell(
+          'Stress program',
+          entry.stress_program_template_id,
+          {
+            dataAttr:
+              'data-active-stresses-template-id'
+          }
+        );
+
+        var totalCount = (typeof entry.total_step_count
+          === 'number') ? entry.total_step_count : 0;
+        var resolvedCount = (typeof entry.resolved_step_count
+          === 'number') ? entry.resolved_step_count : 0;
+        var unresolvedCount = (
+          typeof entry.unresolved_step_count === 'number'
+        ) ? entry.unresolved_step_count : 0;
+        _addSummaryCell(
+          'Resolved steps',
+          String(resolvedCount) + ' / ' + String(totalCount),
+          {
+            dataAttr:
+              'data-active-stresses-resolved-counter'
+          }
+        );
+
+        var isPartial = entry.is_partial === true
+          || unresolvedCount > 0;
+        if (isPartial) {
+          var partialCell = document.createElement('div');
+          partialCell.setAttribute(
+            'data-active-stresses-partial-cell', ''
+          );
+          var badge = document.createElement('span');
+          badge.className = 'active-stresses-partial-badge';
+          badge.setAttribute(
+            'data-active-stresses-partial-badge', ''
+          );
+          badge.textContent = 'Partial application';
+          partialCell.appendChild(badge);
+          var unresolvedSpan = document.createElement('span');
+          unresolvedSpan.className = 'mono';
+          unresolvedSpan.setAttribute(
+            'data-active-stresses-unresolved-counter', ''
+          );
+          unresolvedSpan.textContent =
+            'Unresolved steps: ' + String(unresolvedCount);
+          partialCell.appendChild(unresolvedSpan);
+          summary.appendChild(partialCell);
+        }
+
+        wrapper.appendChild(summary);
+
+        // Details grid.
+        var details = document.createElement('div');
+        details.className = 'active-stresses-details';
+
+        // Resolved steps (active_step_ids).
+        var resolvedBlock = _appendDetailBlock(
+          details, 'Resolved steps'
+        );
+        resolvedBlock.setAttribute(
+          'data-active-stresses-resolved-block', ''
+        );
+        _appendList(resolvedBlock, entry.active_step_ids);
+
+        // Unresolved steps (only when partial).
+        if (isPartial) {
+          var unresolvedBlock = _appendDetailBlock(
+            details, 'Unresolved steps'
+          );
+          unresolvedBlock.setAttribute(
+            'data-active-stresses-unresolved-block', ''
+          );
+          _appendList(
+            unresolvedBlock, entry.unresolved_step_ids
+          );
+          var reasonsHeader = document.createElement('h4');
+          reasonsHeader.className =
+            'active-stresses-detail-header';
+          reasonsHeader.style.marginTop = '6px';
+          reasonsHeader.textContent =
+            'Unresolved reason labels';
+          unresolvedBlock.appendChild(reasonsHeader);
+          unresolvedBlock.setAttribute(
+            'data-active-stresses-unresolved-reasons', ''
+          );
+          _appendList(
+            unresolvedBlock,
+            entry.unresolved_reason_labels
+          );
+        }
+
+        // Context surfaces (multiset).
+        var surfBlock = _appendDetailBlock(
+          details,
+          'Context surfaces',
+          { caption: 'Multiset projection' }
+        );
+        surfBlock.setAttribute(
+          'data-active-stresses-context-surfaces', ''
+        );
+        _appendMultisetList(
+          surfBlock, entry.context_surface_labels
+        );
+
+        // Shift directions (multiset).
+        var shiftBlock = _appendDetailBlock(
+          details,
+          'Shift directions',
+          { caption: 'Multiset projection' }
+        );
+        shiftBlock.setAttribute(
+          'data-active-stresses-shift-directions', ''
+        );
+        _appendMultisetList(
+          shiftBlock, entry.shift_direction_labels
+        );
+
+        // Scenario families (multiset).
+        var familyBlock = _appendDetailBlock(
+          details,
+          'Scenario families',
+          { caption: 'Multiset projection' }
+        );
+        familyBlock.setAttribute(
+          'data-active-stresses-scenario-families', ''
+        );
+        _appendMultisetList(
+          familyBlock, entry.scenario_family_labels
+        );
+
+        // Cited records (source_context_record_ids).
+        var citedBlock = _appendDetailBlock(
+          details, 'Cited records'
+        );
+        citedBlock.setAttribute(
+          'data-active-stresses-cited-records', ''
+        );
+        _appendList(
+          citedBlock, entry.source_context_record_ids
+        );
+
+        // Downstream citations.
+        var downstreamBlock = _appendDetailBlock(
+          details, 'Downstream citations'
+        );
+        downstreamBlock.setAttribute(
+          'data-active-stresses-downstream-citations', ''
+        );
+        _appendList(
+          downstreamBlock, entry.downstream_citation_ids
+        );
+
+        // Warnings (when present).
+        var warnings = Array.isArray(entry.warnings)
+          ? entry.warnings : [];
+        if (warnings.length > 0) {
+          var warnBlock = _appendDetailBlock(
+            details, 'Warnings'
+          );
+          warnBlock.setAttribute(
+            'data-active-stresses-warnings', ''
+          );
+          _appendList(warnBlock, warnings);
+        }
+
+        wrapper.appendChild(details);
+
+        // Raw canonical labels — technical-details area only.
+        // The canonical v1.18.2 closed-set ``shift_direction_label``
+        // vocabulary contains tokens like ``attention_amplify``;
+        // those tokens describe a **single-stress** shift on
+        // attention surfaces and are NOT interaction-inference
+        // labels. We expose them here verbatim so a reviewer can
+        // audit the underlying citation, but we never re-render
+        // them as primary UI prose, and we never re-label them
+        // as ``amplified stress`` / ``offset effect`` /
+        // ``dominant stress`` / ``net pressure`` / ``composite
+        // risk`` / ``amplification`` / ``dampening``.
+        var rawBox = document.createElement('div');
+        rawBox.className = 'active-stresses-raw-labels';
+        rawBox.setAttribute(
+          'data-active-stresses-raw-labels', ''
+        );
+        var rawHeader = document.createElement('div');
+        rawHeader.className = 'header';
+        rawHeader.textContent = 'Raw canonical labels';
+        rawBox.appendChild(rawHeader);
+        var rawDirections = Array.isArray(
+          entry.shift_direction_labels
+        ) ? entry.shift_direction_labels : [];
+        var rawSurfaces = Array.isArray(
+          entry.context_surface_labels
+        ) ? entry.context_surface_labels : [];
+        var rawFamilies = Array.isArray(
+          entry.scenario_family_labels
+        ) ? entry.scenario_family_labels : [];
+        var rawDirJoined = rawDirections.join(' · ') || '—';
+        var rawSurfJoined = rawSurfaces.join(' · ') || '—';
+        var rawFamJoined = rawFamilies.join(' · ') || '—';
+        var rawLine1 = document.createElement('div');
+        rawLine1.textContent =
+          'shift_direction_label: ' + rawDirJoined;
+        rawBox.appendChild(rawLine1);
+        var rawLine2 = document.createElement('div');
+        rawLine2.textContent =
+          'context_surface_label: ' + rawSurfJoined;
+        rawBox.appendChild(rawLine2);
+        var rawLine3 = document.createElement('div');
+        rawLine3.textContent =
+          'scenario_family_label: ' + rawFamJoined;
+        rawBox.appendChild(rawLine3);
+        wrapper.appendChild(rawBox);
+
+        return wrapper;
+      }
+
+      function renderActiveStressesFromBundle(bundle) {
+        var sx = window.scrollX || window.pageXOffset || 0;
+        var sy = window.scrollY || window.pageYOffset || 0;
+
+        var emptyEl = $id('active-stresses-empty');
+        var contentEl = $id('active-stresses-content');
+        var entriesEl = $id('active-stresses-entries');
+        if (!emptyEl || !contentEl || !entriesEl) {
+          return;
+        }
+
+        // Wipe any prior render.
+        while (entriesEl.firstChild) {
+          entriesEl.removeChild(entriesEl.firstChild);
+        }
+
+        var section = (bundle && Array.isArray(
+          bundle.stress_readout
+        )) ? bundle.stress_readout : [];
+
+        if (section.length === 0) {
+          emptyEl.style.display = '';
+          contentEl.style.display = 'none';
+          if (window.scrollX !== sx
+              || window.scrollY !== sy) {
+            window.scrollTo(sx, sy);
+          }
+          return;
+        }
+
+        for (var i = 0; i < section.length; i++) {
+          var entry = section[i];
+          if (!entry || typeof entry !== 'object'
+              || Array.isArray(entry)) {
+            continue;
+          }
+          entriesEl.appendChild(
+            _buildActiveStressesEntry(entry)
+          );
+        }
+        emptyEl.style.display = 'none';
+        contentEl.style.display = '';
+        if (window.scrollX !== sx
+            || window.scrollY !== sy) {
           window.scrollTo(sx, sy);
         }
       }
