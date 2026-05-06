@@ -10691,3 +10691,109 @@ If interaction-style annotation is **ever** reconsidered (in v1.22 or beyond), t
 - It MUST NOT replace the multiset readout — the readout remains the authoritative audit; the annotation is a separate layer on top.
 
 The forbidden-name list at v1.21.0a covers the `amplify` / `dampen` / `offset` family in any **non-annotation** context. They may appear only inside this §130.7 deferred-rationale block (which is text-only) and inside the design note's *Deferred: StressInteractionRule* section.
+
+### 130.8 v1.21.last freeze (binding)
+
+§130 is **frozen at v1.21.last** as a docs-only closeout of
+the v1.21 sequence. The v1.21 layer is now operationally
+complete:
+
+- **v1.21.1** shipped storage only —
+  [`world/stress_programs.py`](../world/stress_programs.py)
+  with `StressProgramTemplate` + `StressStep` + the
+  append-only `StressProgramBook` (one ledger record per
+  `add_stress_program(...)`). +35 tests.
+- **v1.21.2** shipped the thin orchestrator —
+  [`world/stress_applications.py`](../world/stress_applications.py)
+  with `StressProgramApplicationRecord` + the append-only
+  `StressApplicationBook` + `apply_stress_program(...)`,
+  which walks `StressStep` entries by dense `step_index`
+  order and calls the v1.18.2 `apply_scenario_driver(...)`
+  helper once per step. Emits exactly **one** program-level
+  receipt; surfaces partial application via
+  `unresolved_step_count` + `unresolved_step_ids` +
+  `unresolved_reason_labels` (closed set:
+  `template_missing` / `unknown_failure`) + warnings. +33
+  tests.
+- **v1.21.3** shipped the read-only multiset readout —
+  [`world/stress_readout.py`](../world/stress_readout.py)
+  with the `StressFieldReadout` frozen dataclass +
+  `build_stress_field_readout(...)` +
+  `render_stress_field_summary_markdown(...)`. **No ledger
+  emission. No kernel mutation. No call to
+  `apply_stress_program` / `apply_scenario_driver`.** The
+  renderer emits 11 markdown sections; the required-sections
+  test pins 9 as load-bearing. +33 tests.
+- **v1.21.last** ships docs-only: this §130.8 freeze
+  marker; the freeze section in
+  [`docs/v1_21_stress_composition_layer.md`](v1_21_stress_composition_layer.md);
+  the refreshed v1.20-summary roadmap row; the refreshed
+  README v1.21 anchor; the docstring fix on
+  `render_stress_field_summary_markdown(...)` ("9 required
+  sections" → "11 sections, 9 pinned by the
+  required-sections test").
+
+**What v1.21 is.** A thin orchestrator + a read-only
+multiset readout over the v1.18 / v1.20 chain. The
+authoritative audit value is the per-program / per-step
+plain-id citations + the per-shift surface / direction /
+family multisets + the per-step resolution state +
+warnings.
+
+**What v1.21 is NOT (binding).**
+
+- v1.21 is **NOT** a causal-route engine.
+- v1.21 is **NOT** an interaction inference engine.
+- v1.21 is **NOT** a composition reducer.
+- v1.21 does **NOT** infer combined stress effects.
+- v1.21 does **NOT** compute magnitude, probability,
+  expected response, predicted outcome, forecasted path,
+  target price, expected return, or any equivalent.
+- v1.21 does **NOT** make a firm decision, an investor
+  action, a bank approval, a trading decision, an order, a
+  trade, an execution, a clearing, a settlement, or an
+  investment recommendation.
+
+**StressInteractionRule re-pin (binding, carried forward
+from §130.7).** `StressInteractionRule` and the
+`amplify` / `dampen` / `offset` / `coexist` /
+`unknown` interaction-label family remain **deferred to
+v1.22+ (or never)**. If interaction-style annotation is
+ever reconsidered, it MUST be `manual_annotation`-only —
+written by a human reviewer with their own analyst id and
+timestamp on the annotation record, citing explicit
+evidence from the v1.21.3 multiset readout. It MUST NEVER
+be inferred by a helper, a classifier, a closed-set rule
+table, an LLM, or any other automated layer. The
+forbidden-name list (composes v1.18.0 / v1.19.3 /
+v1.20.0 / v1.21.0a forbidden tokens) carries forward
+unchanged at v1.21.last; `amplify` / `dampen` / `offset`
+remain forbidden in any non-annotation context.
+
+**Pinned at v1.21.last:**
+
+| Surface                                                                  | Value                                                                          |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| `pytest -q`                                                              | **4865 / 4865 passing**                                                        |
+| Test count delta vs. v1.20.last                                          | +101 tests across v1.21.1 (+35) / v1.21.2 (+33) / v1.21.3 (+33)                |
+| `quarterly_default` `living_world_digest`                                | byte-identical to v1.20.last                                                    |
+| `monthly_reference` `living_world_digest`                                | byte-identical to v1.20.last                                                    |
+| `scenario_monthly_reference_universe` test-fixture `living_world_digest` | byte-identical to v1.20.last                                                    |
+| v1.20.4 CLI export bundle digest                                         | byte-identical to v1.20.last                                                    |
+| Source-of-truth book mutation count                                      | **0** (every pre-existing book's snapshot is byte-identical pre / post v1.21)  |
+
+**Future optional candidates (NOT planned, NOT scoped).**
+None of the following is on the current roadmap; each
+would require a fresh design pin:
+
+- A static UI strip over the v1.21.3 markdown summary
+  (read-only, no engine execution from the browser, no
+  backend, no fetch / XHR).
+- A v1.22 manual-annotation-only stress interaction layer
+  (per the §130.7 carry-forward constraints).
+
+The v1.21 sequence is **complete and frozen**. Subsequent
+work that touches the stress composition layer must
+explicitly re-open scope under a new design pin (a
+v1.22.0a or later correction); silent extension is
+forbidden.

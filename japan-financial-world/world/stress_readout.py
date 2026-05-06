@@ -785,24 +785,53 @@ def render_stress_field_summary_markdown(
     """Deterministic markdown rendering of a
     :class:`StressFieldReadout`. Same readout → same bytes.
 
-    The rendered text:
+    The rendered text emits 11 sections, in this order:
 
-    1. Opens with the program-application summary (cited ids,
-       step count, as-of date).
-    2. Surfaces step resolution prominently — when
-       ``readout.is_partial`` is True, a **PARTIAL APPLICATION**
-       banner appears before any other section, with the
-       per-step reason list.
-    3. Lists the emitted scenario applications.
-    4. Lists the emitted context shifts.
-    5. Surfaces the context-surface multiset preserved in
-       emission order.
-    6. Surfaces the shift-direction multiset preserved in
-       emission order.
-    7. Surfaces the scenario-family multiset preserved in
-       emission order.
-    8. Lists the warnings.
-    9. Closes with the v1.21.3 boundary statement.
+    1. ``## Program application`` — program-application
+       summary (cited ids, step count, as-of date).
+    2. ``## Step resolution`` — surfaces step resolution
+       prominently. When ``readout.is_partial`` is True, a
+       **PARTIAL APPLICATION** banner appears before any
+       other content in this section, with the per-step
+       reason list rendered below the count rows.
+    3. ``## Emitted scenario applications`` — plain-id
+       citation list of v1.18.2
+       :class:`world.scenario_applications.ScenarioDriverApplicationRecord`
+       ids.
+    4. ``## Emitted context shifts`` — plain-id citation
+       list of v1.18.2
+       :class:`world.scenario_applications.ScenarioContextShiftRecord`
+       ids.
+    5. ``## Context surfaces (multiset)`` — closed-set
+       label tuple preserved in emission order.
+    6. ``## Shift directions (multiset)`` — closed-set
+       label tuple preserved in emission order.
+    7. ``## Scenario families (multiset)`` — closed-set
+       label tuple preserved in emission order.
+    8. ``## Cited source context record ids`` — plain-id
+       citation list (de-duped union of every cited
+       v1.18.2 ``affected_context_record_ids`` tuple).
+    9. ``## Downstream citations`` — caller-supplied
+       optional plain-id list (e.g., a future v1.22+
+       consumer can pass v1.15.5 / v1.16.2 / v1.14.5
+       record ids that cite the readout).
+    10. ``## Warnings`` — human-readable warning list,
+        including the partial-application banner + per-step
+        reason warnings when applicable.
+    11. ``## Boundary statement`` — pinned anti-claim block
+        (no causality claim, no magnitude, no aggregate /
+        combined / net / dominant / composite stress
+        result, no interaction inference, no forecast, no
+        recommendation, no real data, no Japan calibration,
+        no LLM execution).
+
+    The required-sections test
+    (:func:`tests.test_stress_readout.test_render_stress_field_summary_markdown_contains_required_sections`)
+    pins the **9 most load-bearing** sections — *Cited
+    source context record ids* and *Downstream citations*
+    are emitted but allowed to be absent in a future minor
+    revision without breaking the test. The renderer's
+    actual section count is 11.
 
     The renderer emits no ``impact`` / ``outcome`` /
     ``amplification`` / ``dampening`` / ``offset effect`` /

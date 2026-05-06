@@ -881,3 +881,189 @@ The `quarterly_default` / `monthly_reference` /
 **byte-identical** to v1.20.last across the entire v1.21
 sequence. Any drift is a regression — never an intended
 upgrade — and must be reverted.
+
+---
+
+## v1.21.last freeze (docs-only)
+
+v1.21.last closes the v1.21 sequence as a **thin orchestrator
++ read-only multiset readout** over the existing v1.18 / v1.20
+chain. v1.21.last itself is **docs-only** on top of the
+v1.21.0a → v1.21.1 → v1.21.2 → v1.21.3 code freezes. No new
+module, no new test, no new ledger event, no new label
+vocabulary, no new run profile, no behavior change, no record
+count change, no digest movement.
+
+### Shipped sequence
+
+| Milestone     | Surface                                                                 | What it shipped                                                                                                                                                                                                                                                                                                                                  |
+| ------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| v1.21.0       | docs only (superseded by v1.21.0a)                                      | Original design that introduced `StressInteractionRule` + auto-inferred `amplify` / `dampen` / `offset` / `coexist` composition labels. **Superseded** by v1.21.0a; preserved only in git history.                                                                                                                                              |
+| v1.21.0a      | docs only                                                                | Scope correction. Defer `StressInteractionRule` to v1.22+ (or never); narrow v1.21 to thin orchestration + read-only multiset readout; remove all aggregate / composite / net / dominant / interaction language; tighten cardinality (≤ 1 program / run, ≤ 3 steps / program, ≤ 60 added records); extend forbidden-name list.                  |
+| v1.21.1       | `world/stress_programs.py` + kernel wiring                               | Storage only: `StressProgramTemplate` + `StressStep` + one append-only `StressProgramBook`. Empty by default. **+35 tests.**                                                                                                                                                                                                                    |
+| v1.21.2       | `world/stress_applications.py` + kernel wiring                           | `StressProgramApplicationRecord` + one append-only `StressProgramApplicationBook` + the thin `apply_stress_program(...)` orchestrator that walks `StressStep` entries by dense `step_index` order and calls the existing v1.18.2 `apply_scenario_driver(...)` once per step. Emits exactly **one** program-level receipt. **+33 tests.** |
+| v1.21.3       | `world/stress_readout.py`                                                | `StressFieldReadout` frozen dataclass + `build_stress_field_readout(...)` read-only helper + `render_stress_field_summary_markdown(...)` deterministic renderer. **No ledger emission.** **No kernel mutation.** **No call to `apply_stress_program` / `apply_scenario_driver`.** Surfaces partial application via `unresolved_step_count` + `unresolved_step_ids` + `unresolved_reason_labels` + `warnings`. **+33 tests.** |
+| **v1.21.last**| docs only (this section)                                                 | Final freeze section in this document; final-status section in `docs/world_model.md` §130; refreshed roadmap row in `docs/v1_20_monthly_scenario_reference_universe_summary.md`; refreshed README v1.21 anchor; the `render_stress_field_summary_markdown` docstring "9 required sections" → "11 sections (9 pinned by the required-sections test)" mismatch fix. |
+
+### What v1.21 is
+
+- A **thin orchestrator** over the existing v1.18.2
+  `apply_scenario_driver(...)` chain.
+- A **read-only multiset readout** that describes what was
+  emitted (per-program + per-step plain-id citations + label
+  tuples preserved in emitted order + per-step resolution
+  state + per-shift surface / direction / family multisets +
+  warnings).
+- A **partial-application surface**: when one or more steps
+  do not resolve (e.g., the cited
+  `scenario_driver_template_id` is missing), the receipt
+  records `unresolved_step_count > 0`, the readout surfaces
+  `unresolved_step_ids` + `unresolved_reason_labels` +
+  warnings, and the markdown renderer puts a **PARTIAL
+  APPLICATION** banner before any other section.
+- A **deterministic markdown audit summary** (same readout →
+  same bytes) suitable for inclusion in a future CLI bundle
+  or downstream review note.
+
+### What v1.21 is NOT (binding)
+
+- v1.21 is **NOT** a causal-route engine. It does not claim
+  any stress causes any outcome.
+- v1.21 is **NOT** an interaction inference engine. It does
+  not classify overlapping stresses as `amplify` / `dampen` /
+  `offset` / `coexist`.
+- v1.21 is **NOT** a composition reducer. The readout
+  preserves multiset order and emits no `aggregate_*` /
+  `combined_*` / `net_*` / `dominant_*` / `composite_*` field.
+- v1.21 does **NOT** infer combined stress effects. The
+  audit value is in the citations + the per-step resolution
+  state — not in any reduction.
+- v1.21 does **NOT** compute magnitude, probability, expected
+  response, predicted outcome, forecasted path, target price,
+  expected return, or any equivalent.
+- v1.21 does **NOT** make a firm decision, an investor
+  action, a bank approval, a trading decision, an order, a
+  trade, an execution, a clearing, a settlement, a financing
+  execution, an investment recommendation, or an investment
+  advice claim.
+- v1.21 does **NOT** ingest real data, depend on a licensed
+  taxonomy, or carry a Japan-specific calibration. The
+  forbidden naming boundary scans every dataclass field
+  name, payload key, metadata key, and module text.
+- v1.21 does **NOT** execute an LLM, accept LLM prose as
+  source-of-truth, or store LLM-generated outputs.
+- v1.21 does **NOT** mutate any source-of-truth book. Every
+  pre-existing book's snapshot is byte-identical pre / post
+  any v1.21 call. The orchestrator writes only to the
+  v1.18.2 `scenario_applications` book (via the existing
+  helper) and the v1.21.2 `stress_applications` book; the
+  readout writes nowhere.
+
+### Final freeze pin (binding)
+
+| Surface                                                                                       | Value                                                                       |
+| --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `pytest -q`                                                                                    | **4865 / 4865 passing**                                                     |
+| `python -m compileall -q world spaces tests examples`                                          | clean                                                                        |
+| `ruff check .`                                                                                 | clean                                                                        |
+| Test count delta vs. v1.20.last                                                                | +101 tests (4764 → 4865) across v1.21.1 (+35) / v1.21.2 (+33) / v1.21.3 (+33) |
+| `quarterly_default` `living_world_digest`                                                      | **`f93bdf3f4203c20d4a58e956160b0bb1004dcdecf0648a92cc961401b705897c`** (byte-identical to v1.20.last) |
+| `monthly_reference` `living_world_digest`                                                      | **`75a91cfa35cbbc29d321ffab045eb07ce4d2ba77dc4514a009bb4e596c91879d`** (byte-identical to v1.20.last) |
+| `scenario_monthly_reference_universe` test-fixture `living_world_digest`                       | **`5003fdfaa45d5b5212130b1158729c692616cf2a8df9b425b226baef15566eb6`** (byte-identical to v1.20.last) |
+| v1.20.4 CLI export bundle digest (`--regime constrained --scenario credit_tightening_driver`) | **`ec37715b8b5532841311bbf14d087cf4dcca731a9dc5de3b2868f32700731aaf`** (byte-identical to v1.20.last) |
+
+### Hard boundary (re-pinned at v1.21.last)
+
+- **No price formation.**
+- **No market price.**
+- **No forecast path.**
+- **No expected return.**
+- **No target price.**
+- **No trading. No order. No execution.**
+- **No recommendation. No investment advice.**
+- **No real data ingestion.**
+- **No Japan calibration.**
+- **No LLM execution. No LLM prose as source-of-truth.**
+- **No direct firm decision. No direct investor action. No
+  bank approval logic.**
+- **No stress magnitude.**
+- **No stress probability weight.**
+- **No aggregate / combined / net / dominant / composite
+  stress output.**
+- **No interaction auto-inference.** Any future
+  interaction-style annotation MUST be `manual_annotation`-
+  only — written by a human reviewer with their own analyst
+  id and timestamp on the annotation record, citing
+  explicit evidence from the multiset readout. It MUST NEVER
+  be inferred by a helper, a closed-set rule table, an LLM,
+  or any other automated layer.
+- **No source-of-truth book mutation.** PriceBook,
+  ContractBook, ConstraintBook, OwnershipBook,
+  InstitutionsBook, MarketEnvironmentBook,
+  FirmFinancialStateBook, InterbankLiquidityStateBook,
+  IndustryConditionBook, MarketConditionBook,
+  InvestorMarketIntentBook, FinancingPathBook — all
+  byte-identical pre / post any v1.21 call.
+
+### Future optional candidates (NOT planned, NOT scoped)
+
+The v1.21 sequence is **complete**. The following are
+**optional candidates** that a future contributor may pick
+up — none is on the current roadmap, none is required for
+v1.22 or later:
+
+- **UI strip over the existing readout.** A future minor
+  milestone could add a small status / summary strip to the
+  v1.20.5 static workbench's Universe tab that renders the
+  v1.21.3 markdown summary verbatim. **Read-only static
+  rendering only — no engine execution from the browser, no
+  backend, no fetch / XHR.** Does not require new Python
+  code; reads the markdown as a `<pre>` block or runs a
+  client-side markdown-to-HTML pass on the user-supplied
+  bundle. The v1.21.3 markdown surface must be byte-stable
+  *before* any UI work begins.
+- **v1.22 manual-annotation-only stress interaction
+  layer.** If interaction-style annotation is ever
+  reconsidered, the binding constraints from v1.21.0a §7
+  carry forward: `manual_annotation`-only, cites explicit
+  evidence, never inferred by a helper, never replaces the
+  multiset readout. The closed-set `amplify` / `dampen` /
+  `offset` / `coexist` vocabulary remains forbidden as a
+  helper-emitted field name; it may appear only in a
+  human-authored annotation record under a v1.22+ design
+  pin.
+
+These are *candidates*, not commitments. The v1.21 sequence
+is frozen as-is.
+
+### Forward pointer (post-v1.21.last)
+
+The v1.21 sequence is now frozen. The next FWE milestone is
+**not scoped** at this layer. Possible future directions
+(none of which are v1.22 commitments):
+
+- **v1.22 Institutional Investor Mandate / Benchmark
+  Pressure** — bounded synthetic mandate / benchmark
+  constraints on the v1.15.5 / v1.16.2 investor-intent
+  layer. Decoupled from the stress composition layer; may
+  ship in parallel.
+- **v1.22 manual-annotation-only stress interaction layer**
+  (see *Future optional candidates* above).
+- **v1.22 UI strip** over the v1.21.3 markdown summary
+  (see *Future optional candidates* above).
+- **v2.0 private JFWE Japan public calibration** — gated;
+  private repo only; would preserve every public-FWE
+  boundary.
+- **Future LLM reasoning policy** — gated by auditability
+  + evidence-refs + source-book immutability + boundary
+  flags. Would replace the v1.18.x rule-based fallback under
+  the same v1.18.0 audit shape.
+- **Future price formation** — gated until the
+  v1.16 / v1.17 / v1.18 / v1.19 / v1.20 / v1.21 surface is
+  operationally legible to a reviewer who has not read this
+  codebase.
+
+The v1.21 sequence is **complete and frozen**. Subsequent
+work that touches the stress composition layer must
+explicitly re-open scope under a new design pin (a v1.22.0a
+or later correction); silent extension is forbidden.
